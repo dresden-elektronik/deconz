@@ -1,0 +1,7 @@
+doc/html
+CMakeLists.txt.user
+*.pro.user*
+*.sublime-*
+*.idea*
+build*
+cred-macos

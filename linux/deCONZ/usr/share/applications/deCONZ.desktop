@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=deCONZ
+Comment=ZigBee monitoring and control
+Exec=/usr/bin/deCONZ-autostart.sh
+Icon=/usr/share/deCONZ/icons/de_logo_48px.png
+Terminal=false
+Type=Application
+Categories=Development;
+StartupNotify=false

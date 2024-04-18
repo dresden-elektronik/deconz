@@ -1,0 +1,400 @@
+/*
+ * Copyright (c) 2013-2024 dresden elektronik ingenieurtechnik gmbh.
+ * All rights reserved.
+ *
+ * The software in this package is published under the terms of the BSD
+ * style license a copy of which has been included with this distribution in
+ * the LICENSE.txt file.
+ *
+ */
+
+#include <QStandardItemModel>
+
+#include "zm_node_info.h"
+#include "ui_zm_node_info.h"
+#include "zm_node.h"
+
+namespace {
+    const char *InfoKeys[] = {
+        "   Common Info",
+        "   Name",
+        "   Manufacturer",
+        "   Model Identifier",
+        "   Type",
+        "   MAC Address",
+        "   NWK Address",
+        "   Node Descriptor",
+        "   Frequency Band",
+        "   User Descriptor",
+        "   Complex Descriptor",
+        "   Manufacturer Code",
+        "   Max Buffer Size",
+        "   Max Incoming Transfer Size",
+        "   Max Outgoing Transfer Size",
+        "   MAC Capabilities",
+        "   Alternate PAN Coordinator",
+        "   Device Type",
+        "   Power Source",
+        "   Receiver On When Idle",
+        "   Security Support",
+        "   Server Mask",
+        "   Primary Trust Center",
+        "   Backup Trust Center",
+        "   Primary Binding Table Cache",
+        "   Backup Binding Table Cache",
+        "   Primary Discovery Cache",
+        "   Backup Discovery Cache",
+        "   Network Manager",
+        "   Descriptor Capabilities",
+        "   Extended Active Endpoint List",
+        "   Extended Simple Descriptor List",
+        "   Power Descriptor",
+        "   Power Mode",
+        "   Power Source",
+        "   Power Level",
+         0
+    };
+
+    enum InfoIndex
+    {
+        IdxCommon = 0,
+            IdxName,
+            IdxManufacturer,
+            IdxModelId,
+            IdxType,
+            IdxExt,
+            IdxNwk,
+
+        IdxNodeDescr, // H1
+            IdxFreqBand,
+            IdxUserDescrAvail,
+            IdxComplexrDescrAvail,
+            IdxManufacturerCode,
+            IdxMaxBufferSize,
+            IdxMaxInTransferSize,
+            IdxMaxOutTransferSize,
+            IdxMacCapabilities, // H2
+                IdxAltPanCoord,
+                IdxDeviceType,
+                IdxMainsPowered,
+                IdxRecvOnWhenIdle,
+                IdxSecurityCapability,
+            IdxServerMask, // H2
+                IdxPriTrustCenter,
+                IdxBakTrustCenter,
+                IdxPriBindCache,
+                IdxBakBindCache,
+                IdxPriDiscovCache,
+                IdxBakDiscovCache,
+                IdxNetMngr,
+            IdxDescrCapabilities,
+                IdxExtEndpointList,
+                IdxExtSimpleDescrList,
+
+        IdxPowerDescr, // H1
+            IdxPowerMode,
+            IdxPowerSource,
+            IdxPowerLevel,
+
+        IdxMax
+    };
+}
+
+zmNodeInfo::zmNodeInfo(QWidget *parent) :
+    QWidget(parent),
+    ui(new Ui::zmNodeInfo)
+{
+    ui->setupUi(this);
+
+    // create new model
+    QStandardItemModel *model = new QStandardItemModel(this);
+
+    for (int row = 0; row < IdxMax; ++row)
+    {
+        m_info[row].key = new QStandardItem(InfoKeys[row]);
+        model->setItem(row, 0, m_info[row].key);
+
+        m_info[row].value = new QStandardItem;
+        model->setItem(row, 1, m_info[row].value);
+    }
+
+    static_assert (IdxMax == 36, "m_info array size doesn't match enum IdMax");
+
+    ui->tableView->setModel(model);
+
+    {
+        std::array<int, 3> headerIdx = { IdxCommon, IdxNodeDescr, IdxPowerDescr };
+
+        // H1
+        // header rows have dark background and bright text
+        for (int row : headerIdx)
+        {
+            m_info[row].key->setBackground(palette().dark());
+            m_info[row].key->setForeground(palette().brightText());
+            m_info[row].value->setBackground(palette().dark());
+        }
+    }
+
+    {
+        std::array<int, 3> headerIdx = { IdxNwk, IdxExt, IdxServerMask };
+
+        QFont fn = font();
+        fn.setStyleHint(QFont::Monospace);
+
+        for (int row : headerIdx)
+        {
+            m_info[row].value->setFont(fn);
+        }
+    }
+
+    setNode(nullptr);
+    ui->tableView->resizeColumnToContents(0);
+}
+
+zmNodeInfo::~zmNodeInfo()
+{
+    delete ui;
+}
+
+
+QString toHexString(uint16_t number)
+{
+    char buf[16];
+    int n = qsnprintf(buf, sizeof(buf), "0x%04x", number);
+    return QString::fromLatin1(buf, n);
+}
+
+QString toHexString(uint64_t number)
+{
+    char buf[24];
+    int n = qsnprintf(buf, sizeof(buf), "0x%016llx", number);
+    return QString::fromLatin1(buf, n);
+}
+
+void zmNodeInfo::setNode(deCONZ::zmNode *data)
+{
+    if (m_data != data)
+    {
+        clear();
+        m_data = data;
+        m_state = Idle;
+        stateCheck();
+    }
+
+    if (!data)
+    {
+        ui->tableView->hide();
+        return;
+    }
+
+    if (!ui->tableView->isVisible())
+    {
+        ui->tableView->show();
+    }
+
+    const deCONZ::NodeDescriptor &nd = m_data->nodeDescriptor();
+
+    const QLatin1String unknownValue("unknown");
+
+    if (!m_data->userDescriptor().isEmpty())
+    {
+        ui->deviceName->setText(m_data->userDescriptor());
+    }
+    else
+    {
+        ui->deviceName->setText(toHexString(m_data->address().ext()));
+    }
+
+    QString manufacturer = m_data->vendor();
+    if (manufacturer.isEmpty())
+    {
+        manufacturer = unknownValue;
+    }
+
+    QString modelId = m_data->modelId();
+    if (modelId.isEmpty())
+    {
+        modelId = unknownValue;
+    }
+
+    ui->deviceName->hide();
+    ui->deviceNameLabel->hide();
+
+    setValue(IdxName, ui->deviceName->text());
+    setValue(IdxManufacturer, manufacturer);
+    setValue(IdxModelId, modelId);
+    setValue(IdxType, m_data->deviceTypeString());
+    setValue(IdxExt, toHexString(m_data->address().ext()));
+    setValue(IdxNwk, toHexString(m_data->address().nwk()));
+
+    setValue(IdxFreqBand, QString(m_data->nodeDescriptor().frequencyBandString()));
+    setValue(IdxUserDescrAvail, nd.hasUserDescriptor());
+    setValue(IdxComplexrDescrAvail, nd.hasComplexDescriptor());
+    setValue(IdxManufacturerCode, toHexString(nd.manufacturerCode()));
+    setValue(IdxMaxBufferSize, QString("%1").arg((uint)nd.maxBufferSize(), 0, 10, QChar('0')));
+    setValue(IdxMaxInTransferSize, QString("%1").arg(nd.maxIncomingTransferSize(), 0, 10, QChar('0')));
+    setValue(IdxMaxOutTransferSize, QString("%1").arg(nd.maxOutgoingTransferSize(), 0, 10, QChar('0')));
+
+    const uint16_t serverMask = static_cast<uint>(m_data->nodeDescriptor().serverMask()) & 0xFFFF;
+
+    setValue(IdxServerMask, toHexString(serverMask));
+
+    setValue(IdxPriTrustCenter, serverMask & zme::PrimaryTrustCenter ? true : false);
+    setValue(IdxBakTrustCenter, serverMask & zme::BackupTrustCenter ? true : false);
+    setValue(IdxPriBindCache,   serverMask & zme::PrimaryBindingTableCache ? true : false);
+    setValue(IdxBakBindCache,   serverMask & zme::BackupBindingTableCache ? true : false);
+    setValue(IdxPriDiscovCache, serverMask & zme::PrimaryDiscoveryCache ? true : false);
+    setValue(IdxBakDiscovCache, serverMask & zme::BackupDiscoveryCache ? true : false);
+    setValue(IdxNetMngr,        serverMask & zme::NetworkManager ? true : false);
+
+    setValue(IdxMacCapabilities, QString("0x%1").arg(m_data->macCapabilities(), 2, 16, QChar('0')));
+    setValue(IdxDeviceType,        (m_data->macCapabilities() & deCONZ::MacDeviceIsFFD ? "FFD" : "RFD"));
+    setValue(IdxAltPanCoord,        m_data->macCapabilities() & deCONZ::MacAlternatePanCoordinator ? true : false);
+    setValue(IdxMainsPowered,      (m_data->macCapabilities() & deCONZ::MacIsMainsPowered ? "Mains" : "Battery"));
+    setValue(IdxRecvOnWhenIdle,     m_data->macCapabilities() & deCONZ::MacReceiverOnWhenIdle ? true : false);
+    setValue(IdxSecurityCapability, m_data->macCapabilities() & deCONZ::MacSecuritySupport ? true : false);
+
+    setValue(IdxExtEndpointList, nd.hasEndpointList());
+    setValue(IdxExtSimpleDescrList, nd.hasSimpleDescriptorList());
+
+    const QLatin1String notAvailableValue("n/a");
+
+    if (m_data->powerDescriptor().isValid())
+    {
+        switch (m_data->powerDescriptor().currentPowerMode())
+        {
+        case deCONZ::ModeOnWhenIdle: setValue(IdxPowerMode, "On When Idle"); break;
+        case deCONZ::ModePeriodic: setValue(IdxPowerMode, "Periodic"); break;
+        case deCONZ::ModeStimulated: setValue(IdxPowerMode, "Stimulated"); break;
+        default: setValue(IdxPowerMode, unknownValue); break;
+        }
+
+        switch (m_data->powerDescriptor().currentPowerSource())
+        {
+        case deCONZ::PowerSourceMains: setValue(IdxPowerSource, "Mains"); break;
+        case deCONZ::PowerSourceDisposable: setValue(IdxPowerSource, "Disposeable"); break;
+        case deCONZ::PowerSourceRechargeable: setValue(IdxPowerSource, "Rechargeable"); break;
+        default: setValue(IdxPowerSource, unknownValue); break;
+        }
+
+        switch (m_data->powerDescriptor().currentPowerLevel())
+        {
+        case deCONZ::PowerLevel100: setValue(IdxPowerLevel, "100%"); break;
+        case deCONZ::PowerLevel66: setValue(IdxPowerLevel, "66%"); break;
+        case deCONZ::PowerLevel33: setValue(IdxPowerLevel, "33%"); break;
+        case deCONZ::PowerLevelCritical: setValue(IdxPowerLevel, "Critical"); break;
+        default: setValue(IdxPowerLevel, unknownValue); break;
+        }
+    }
+    else
+    {
+        setValue(IdxPowerMode, notAvailableValue);
+        setValue(IdxPowerSource, notAvailableValue);
+        setValue(IdxPowerLevel, notAvailableValue);
+    }
+
+    {
+        std::array<int, 3> rowIdx = { IdxPowerMode, IdxPowerSource, IdxPowerLevel };
+
+        auto fgColor = palette().text().color();
+
+        if (!m_data->powerDescriptor().isValid())
+        {
+            fgColor = palette().color(QPalette::Disabled, QPalette::Text);
+        }
+
+
+        for (int row : rowIdx)
+        {
+            m_info[row].key->setForeground(fgColor);
+            m_info[row].value->setForeground(fgColor);
+        }
+    }
+
+    ui->tableView->resizeColumnToContents(0);
+}
+
+void zmNodeInfo::dataChanged(deCONZ::zmNode *data)
+{
+    if (data == m_data)
+    {
+        // refresh view
+        setNode(data);
+    }
+}
+
+void zmNodeInfo::clear()
+{
+    QStandardItemModel *model = static_cast<QStandardItemModel*>(ui->tableView->model());
+
+    if (model)
+    {
+        for (auto &row : m_info)
+        {
+            row.value->setText(QLatin1String(""));
+        }
+
+        QString emptyValue;
+
+        setValue(IdxNwk, emptyValue);
+        setValue(IdxExt, emptyValue);
+        setValue(IdxType, emptyValue);
+        setValue(IdxName, emptyValue);
+        setValue(IdxManufacturer, emptyValue);
+        setValue(IdxModelId, emptyValue);
+
+        setValue(IdxUserDescrAvail, false);
+        setValue(IdxComplexrDescrAvail, false);
+
+        setValue(IdxAltPanCoord, false);
+        setValue(IdxDeviceType, "RFD");
+        setValue(IdxMainsPowered, "Battery");
+        setValue(IdxRecvOnWhenIdle, false);
+        setValue(IdxSecurityCapability, false);
+
+        setValue(IdxFreqBand, QString());
+
+        setValue(IdxPriTrustCenter, false);
+        setValue(IdxBakTrustCenter, false);
+        setValue(IdxPriBindCache, false);
+        setValue(IdxBakBindCache, false);
+        setValue(IdxPriDiscovCache, false);
+        setValue(IdxBakDiscovCache, false);
+        setValue(IdxNetMngr, false);
+
+        setValue(IdxExtEndpointList, false);
+        setValue(IdxExtSimpleDescrList, false);
+
+        setValue(IdxPowerMode, "");
+        setValue(IdxPowerSource, "");
+        setValue(IdxPowerLevel, "");
+    }
+
+    ui->deviceName->clear();
+}
+
+void zmNodeInfo::setValue(size_t idx, const QVariant &value)
+{
+    if (idx < m_info.size())
+    {
+        if (m_info[idx].value != nullptr)
+        {
+            m_info[idx].value->setData(value, Qt::DisplayRole);
+        }
+    }
+}
+
+void zmNodeInfo::stateCheck()
+{
+    switch (m_state)
+    {
+    case Idle:
+        break;
+
+    case Timeout:
+        break;
+
+    default:
+        break;
+    }
+}

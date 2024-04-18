@@ -1,0 +1,88 @@
+#!/bin/bash
+# auto exit on first error
+#set -e
+
+RED=`tput setaf 1`
+GREEN=`tput setaf 2`
+YELLOW=`tput setaf 3`
+BOLD=`tput bold`
+RESET=`tput sgr0`
+
+#echo "preinst: $@"
+
+OS_ID=$(cat /etc/os-release | sed -n 's/^ID=\(.*\)/\1/p')
+OS_VERSION=$(cat /etc/os-release | sed -n 's/^VERSION="[0-9]\s(\(.*\))"/\1/p')
+
+if [ "$OS_ID" = "raspbian" ] && [ "$OS_VERSION" = "wheezy" ]; then
+	echo "Raspbian Wheezy is not supported"
+	exit 1
+fi
+
+if [ "$OS_ID" = "raspbian" ]; then
+
+	WARN_CONF=0
+
+	egrep -q -e "^enable_uart=1" /boot/config.txt 2> /dev/null
+	if [ $? -eq 1 ]; then
+		echo -e "${YELLOW}Important:${RESET} ${BOLD}enable_uart=1${RESET} should be set in /boot/config (RaspBee only)\n"
+		WARN_CONF=1
+	fi
+
+	egrep -q -e "console=serial0" /boot/cmdline.txt 2> /dev/null
+	if [ $? -eq 0 ]; then
+		echo -e "${YELLOW}Important:${RESET} /boot/cmdline must not contain ${BOLD}console=serial0${RESET} (RaspBee only)\n"
+		WARN_CONF=1
+	fi
+
+	if [ $WARN_CONF -eq 1 ]; then
+		echo -e "use raspi-config to configure serial port access as described in user manual (RaspBee only)"
+	fi
+fi
+
+if [ -d "/usr/share/deCONZ/devices" ]; then
+	rm -fr "/usr/share/deCONZ/devices"
+fi
+
+if [ -d "/usr/share/deCONZ/webapp" ]; then
+	rm -fr "/usr/share/deCONZ/webapp"
+fi
+
+# check if we are in a interactive shell
+fd=0 # stdin
+if [[ -t "$fd" || -p /dev/stdin ]]
+then
+	# check Raspbian dependencies
+	if [ "$OS_ID" = "raspbian" ]; then
+		deps=("libqt5core5a" "libqt5network5" "libqt5widgets5" "libqt5gui5" "libqt5qml5" "libqt5serialport5" "libqt5websockets5" "libqt5sql5" "openssl" "libcap2-bin" "sqlite3" "lsof")
+
+	# check Ubuntu dependencies
+	elif [ "$OS_ID" = "ubuntu" ]; then
+		deps=("libqt5core5a" "libqt5network5" "libqt5widgets5" "libqt5gui5" "libqt5qml5" "libqt5serialport5" "libqt5websockets5" "libqt5sql5" "openssl" "libcap2-bin" "sqlite3" "lsof")
+	fi
+
+	ok=1
+	for i in "${deps[@]}"; do
+		dpkg -l $i 2> /dev/null | grep '^ii' > /dev/null
+
+		if [ $? -ne 0 ]; then
+			ok=0
+		fi
+	done
+
+	# show warning if user must install missing dependencies
+	if [ $ok -ne 1 ]; then
+		echo -e "${YELLOW}Attention:${RESET} To install missing dependencies and finish the installation please run:\n\t${BOLD}sudo apt install -f${RESET}\n"
+	fi
+
+fi
+
+# preserve user overwrites if installing from older deconz versions
+overwrites=("deconz-gui.service" "deconz-init.service" "deconz.service" "deconz-update.service" "deconz-wifi.service")
+for i in "${overwrites[@]}"; do
+	if [ -e "/etc/systemd/system/$i" ]; then
+		cp "/etc/systemd/system/$i" "/tmp/etc/systemd/system/${i}.bak"
+	fi
+done
+
+exit 0
+

@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>ActorVfsView</class>
+ <widget class="QDialog" name="ActorVfsView">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>960</width>
+    <height>480</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Data view</string>
+  </property>
+  <property name="windowIcon">
+   <iconset resource="../zm_resources.qrc">
+    <normaloff>:/icons/cryo/32/drive-disk.png</normaloff>:/icons/cryo/32/drive-disk.png</iconset>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayout">
+   <item>
+    <widget class="QLabel" name="topHeader">
+     <property name="text">
+      <string>deCONZ virtual file system of actors.</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QTreeView" name="treeView"/>
+   </item>
+  </layout>
+ </widget>
+ <resources>
+  <include location="../zm_resources.qrc"/>
+ </resources>
+ <connections/>
+</ui>

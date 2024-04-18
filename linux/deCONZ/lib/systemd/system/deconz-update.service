@@ -1,0 +1,10 @@
+[Unit]
+Description=deCONZ: ZigBee gateway -- Update Service
+
+[Service]
+ExecStart=/usr/bin/deCONZ-update2.sh
+Restart=on-failure
+StartLimitInterval=600
+
+[Install]
+WantedBy=multi-user.target

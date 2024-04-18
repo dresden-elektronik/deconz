@@ -1,0 +1,11 @@
+Package: deconz
+Version: 2.04.06
+Section: non-free / misc
+Priority: extra
+Architecture: amd64
+Depends: libqt5core5a, libqt5network5, libqt5widgets5, libqt5gui5, libqt5serialport5, libqt5websockets5, libqt5sql5, libqt5qml5, libcap2-bin, sqlite3, lsof, curl
+Installed-Size: 8260
+Maintainer: Manuel Pietschmann <manuel.pietschmann@dresden-elektronik.de>
+Homepage: http://www.dresden-elektronik.de
+Description: A generic ZigBee monitoring and control tool
+  The deCONZ application allows to monitor and control arbitrary ZigBee PRO based devices.

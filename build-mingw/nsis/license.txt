@@ -1,0 +1,128 @@
+END USER LICENSE AGREEMENT
+
+You ("Customer" or "You") must read this License Agreement (this "Agreement")
+carefully and thoroughly before downloading, installing, and/or using any
+software or content ("Software") provided herewith.
+
+BY DOWNLOADING, INSTALLING AND/OR USING ANY SOFTWARE OR CONTENT, YOU ARE
+CONFIRMING YOUR ACCEPTANCE OF THE TERMS OF THIS AGREEMENT. IF YOU DO NOT AGREE
+TO BE BOUND BY THE TERMS OF THIS AGREEMENT, THEN DO NOT DOWNLOAD,
+INSTALL/COMPLETE INSTALLATION OF, OR USE THE SOFTWARE OR CONTENT.
+
+
+1.  Grant of License.
+dresden elektronik grants Customer a non-exclusive, nontransferable, limited 
+license:
+(a) to internally use the Software as a development platform solely in 
+connection with an dresden elektronik wireless microcontroller product, and 
+(b) to make one copy of the Software solely for backup purposes. Customer shall 
+(a) not use the Software for any purpose other than as specifically authorized 
+herein, and (b) take all necessary steps to protect the Software against 
+disclosure to third parties. Customer must attach this License Agreement to the 
+backup copy which remains the sole property of dresden elektronik.
+
+2.  Title.
+As between the parties, dresden elektronik or dresden elektronik's licensor 
+retains full rights, title, and ownership including all patents, copyrights, 
+trade secrets, trade names, trademarks, and other intellectual property rights 
+in and to the Software. Customer agrees to take all reasonable steps to prevent 
+unauthorized disclosure of the Software.
+
+3.  No Other Rights.
+Except as expressly stated herein, this Agreement does not grant Customer any
+rights to patents, copyrights, trade secrets, trade names, trademarks (whether
+registered or unregistered), or any other rights, franchises, or licenses in
+respect of the Software.  Customer will not, and will have no right to, (a) use,
+copy, reproduce, modify, create derivative works of, sell, distribute, disclose
+or otherwise exploit any Software, except as expressly set forth in Section 1,
+or (b) decompile or otherwise reverse engineer any Software, or otherwise derive
+or attempt to derive the source code of, or any processes, techniques, methods,
+specifications, protocols, algorithms, interfaces, data structures, or other
+information embodied or used in, any such Software. Without limiting the
+generality of the foregoing, Customer will not, and will have no right to, make
+any Software available for execution on or other use with any semiconductor
+products that are not a dresden elektronik wireless microcontroller product.
+
+4.  Warranty Disclaimer.  
+THE SOFTWARE IS PROVIDED TO CUSTOMER "AS IS" AND "WITH ALL FAULTS." 
+dresden elektronik DOES NOT MAKE, AND dresden elektronik HEREBY DISCLAIMS, 
+ANY REPRESENTATIONS OR WARRANTIES OF ANY KIND (WHETHER EXPRESS, IMPLIED, 
+STATUTORY OR OTHERWISE) IN CONNECTION WITH THE SOFTWARE OR ANY OTHER ASPECT 
+OF THIS AGREEMENT, INCLUDING, WITHOUT LIMITATION, ANY IMPLIED WARRANTY OF 
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, TITLE OR NON-
+INFRINGEMENT OF THIRD PARTY RIGHTS, AND ANY WARRANTIES THAT MAY ARISE FROM 
+COURSE OF DEALING, COURSE OF PERFORMANCE OR USAGE OF TRADE. dresden elektronik 
+WILL HAVE NO OBLIGATION UNDER THIS AGREEMENT TO CORRECT ANY BUGS, DEFECTS OR 
+ERRORS IN THE SOFTWARE, PROVIDE ANY UPDATES, UPGRADES OR NEW RELEASES OF THE 
+SOFTWARE, OR OTHERWISE PROVIDE ANY TECHNICAL SUPPORT OR MAINTENANCE FOR THE 
+SOFTWARE.
+
+5.  Notice and Protection.
+Customer will not remove, obscure or alter any trademark, copyright or other
+proprietary rights and ownership notices of dresden elektronik or any of its 
+licensors that appear in any Software, and Customer will reproduce all such 
+trademarks and proprietary rights and ownership notices on all copies of 
+Software made by Customer.
+
+6. Compliance with Laws and Regulations. 
+Each party agrees to comply with all applicable government, state and local 
+laws, regulations and ordinances, including without limitation, the German 
+Government regulations relating to the export of technical data, insofar as 
+such laws, regulations, and ordinances relate to the activities under this 
+Agreement. 
+
+7.  Termination.
+Either dresden elektronik or Customer may terminate this license at any time. 
+The license will automatically terminate if Customer fails to comply with any 
+of the terms and conditions of the license.  Upon termination for any reason, 
+Customer will immediately destroy or return to dresden elektronik the Software, 
+including all documentation and all whole or partial copies of the Software.
+
+8.  LIMITATION OF LIABILITY.
+TO THE EXTENT PERMITTED BY APPLICABLE LAW, IN NO EVENT WILL dresden elektronik 
+BE LIABLE TO CUSTOMER OR ANY THIRD PARTY (WHETHER SUCH LIABILITY IS BASED ON 
+CONTRACT, NEGLIGENCE, STRICT LIABILITY, OTHER TORT THEORY, CONTRIBUTION, BREACH 
+OF WARRANTY, OR OTHER LEGAL OR EQUITABLE THEORY) FOR ANY SPECIAL, INDIRECT,
+INCIDENTAL, EXEMPLARY, PUNITIVE OR CONSEQUENTIAL DAMAGES, OR ANY DAMAGES FOR
+LOSS OF PROFITS, LOSS OR INTERRUPTION OF BUSINESS, OR LOSS OF DATA, ARISING OUT
+OF OR RELATING TO THE SOFTWARE OR ANY OTHER ASPECT OF THIS AGREEMENT, EVEN IF
+dresden elektronik HAS BEEN ADVISED OF OR SHOULD HAVE KNOWN OF THE POSSIBILITY 
+OF SUCH DAMAGES.
+
+TO THE EXTENT PERMITTED BY APPLICABLE LAW, IN NO EVENT WILL dresden elektronik's
+TOTAL LIABILITY ARISING OUT OF OR RELATED TO THE SOFTWARE OR ANY OTHER ASPECT 
+OF THIS AGREEMENT (WHETHER UNDER CONTRACT, NEGLIGENCE, STRICT LIABILITY, 
+CONTRIBUTION, BREACH OF WARRANTY, OR OTHER LEGAL OR EQUITABLE THEORY) EXCEED 
+THE GREATER OF (A) THE AGGREGATE OF ALL LICENSE FEES PAID BY CUSTOMER TO 
+dresden elektronik FOR THE SOFTWARE AND (B) FIVE HUNDRED DOLLARS ($500). 
+WITHOUT LIMITING THE FOREGOING, AND NOTWITHSTANDING ANY PROVISION HEREIN TO THE 
+CONTRARY, dresden elektronik WILL NOT BE LIABLE FOR ANY COSTS OF PROCURING 
+SUBSTITUTE GOODS, SERVICES OR TECHNOLOGY UNDER ANY CIRCUMSTANCES.
+
+9. General.  
+This Agreement shall be governed and construed in accordance with German laws, 
+exclusive of its conflict of law rules. Each party hereby agrees to exclusive 
+jurisdiction and venue in the courts of Dresden (Germany) for all disputes and 
+litigation arising under or relating to this Agreement. If any provision of 
+this Agreement is held to be invalid, illegal or unenforceable, that provision 
+shall be construed in such a manner that it becomes valid and enforceable and 
+so as to reflect most closely the intent of the parties in agreeing upon the 
+provision in the first place, and the remaining provisions of this Agreement 
+shall continue in full force and effect and shall not in any way be affected 
+or impaired by any such determination of invalidity, illegality or 
+unenforceability.
+
+
+THIS AGREEMENT IS THE ENTIRE AND EXCLUSIVE AGREEMENT BETWEEN dresden elektronik 
+AND CUSTOMER AND SUPERSEDES ALL PRIOR ORAL AND WRITTEN AGREEMENTS AND COMMUNI-
+CATIONS BETWEEN THE PARTIES PERTAINING TO THE SUBJECT MATTER OF THIS AGREEMENT. 
+NO DIFFERENT OR ADDITIONAL TERMS WILL BE ENFORCEABLE AGAINST dresden elektronik 
+UNLESS dresden elektronik GIVES ITS EXPRESS WRITTEN CONSENT, INCLUDING AN 
+EXPRESS WAIVER OF THE TERMS OF THIS AGREEMENT.
+
+
+dresden elektronik ingenieurtechnik gmbh
+Enno-Heidebroek-Straße 12
+01237 Dresden
+http://www.dresden-elektronik.de
+wireless@dresden-elektronik.de

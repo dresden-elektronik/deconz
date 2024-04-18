@@ -1,0 +1,11 @@
+Package: deconz
+Version: 1.14.09
+Section: non-free / misc
+Priority: extra
+Architecture: armhf
+Depends: libqtcore4, libqt4-network
+Installed-Size: 6376
+Maintainer: Manuel Pietschmann <manuel.pietschmann@dresden-elektronik.de>
+Homepage: http://www.dresden-elektronik.de
+Description: A generic ZigBee monitoring and control tool
+  The deCONZ application allows to monitor and control arbitrary ZigBee PRO based devices.

@@ -1,0 +1,213 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<zcl>
+<domain name="Manufacturer Specific" useZcl="true" description="">
+
+<cluster id="0xfc00" name="DDEL" mfcode="0x1135">
+		<description>Attributes for determining basic information about a device, setting user device information such as description of location, and enabling a device.</description>
+		<server>
+			<attribute id="0x0000" name="ZCL Version" type="u8" access="r" default="0" required="m"></attribute>
+			<command id="0x01" dir="recv" name="Read EEPROM" required="o" response="0x01">
+				<description>Reads data from EEPROM.</description>
+				<payload>
+					<attribute id="0x0000" name="Offset" type="u16" access="r" default="0" required="m" showas="hex"></attribute>
+					<attribute id="0x0001" name="Length" type="u8" access="r" default="0" required="m"></attribute>
+				</payload>
+			</command>
+			<command id="0x02" dir="recv" name="Write EEPROM" required="o">
+				<description>Writes EEPROM of the device.</description>
+				<payload>
+					<attribute id="0x0000" name="Offset" type="u16" access="r" default="0" required="m" showas="hex"></attribute>
+					<attribute id="0x0001" name="Length" type="u8" access="r" default="0" required="m"></attribute>
+					<attribute id="0x0002" name="Value0" type="u8" access="r" default="0" required="m"></attribute>
+					<attribute id="0x0003" name="Value1" type="u8" access="r" default="0" required="m"></attribute>
+					<attribute id="0x0004" name="Value2" type="u8" access="r" default="0" required="m"></attribute>
+					<attribute id="0x0005" name="Value3" type="u8" access="r" default="0" required="m"></attribute>
+				</payload>
+			</command>
+			<command id="0x03" dir="recv" name="Read RAM" required="o" response="0x03">
+				<description>Reads RAM from the device.</description>
+				<payload>
+					<attribute id="0x0000" name="Offset" type="u16" access="r" default="0" required="m" showas="hex"></attribute>
+					<attribute id="0x0001" name="Length" type="u8" access="r" default="0" required="m"></attribute>
+				</payload>
+			</command>
+			<command id="0x04" dir="recv" name="Write RAM" required="o">
+				<description>Writes RAM of the device.</description>
+				<payload>
+					<attribute id="0x0000" name="Offset" type="u16" access="r" default="0" required="m" showas="hex"></attribute>
+					<attribute id="0x0001" name="Length" type="u8" access="r" default="0" required="m"></attribute>
+					<attribute id="0x0002" name="Value0" type="u8" access="r" default="0" required="m"></attribute>
+					<attribute id="0x0003" name="Value1" type="u8" access="r" default="0" required="m"></attribute>
+					<attribute id="0x0004" name="Value2" type="u8" access="r" default="0" required="m"></attribute>
+					<attribute id="0x0005" name="Value3" type="u8" access="r" default="0" required="m"></attribute>
+				</payload>
+			</command>
+			<command id="0x05" dir="send" name="Assert" required="m">
+				<description>Assert Notification from BitCloud Stack.</description>
+				<payload>
+				<attribute id="0x0000" type="u16" name="Level" showas="hex" required="m" default="0x0000"></attribute>
+				<attribute id="0x0001" type="u16" name="Code" showas="hex" required="m" default="0x0000"></attribute>
+				<attribute id="0x0002" type="u16" name="Line" required="m" default="0x0000"></attribute>
+				</payload>
+			</command>
+			<command id="0x06" dir="recv" name="Read Flash" required="o" response="0x06">
+				<description>Reads data from external flash.</description>
+				<payload>
+					<attribute id="0x0000" name="Offset" type="u32" access="r" default="0" required="m" showas="hex"></attribute>
+					<attribute id="0x0001" name="Length" type="u8" access="r" default="0" required="m"></attribute>
+				</payload>
+			</command>
+		</server>
+		<client>
+			<command id="0x01" dir="recv" name="Read EEPROM response" required="m">
+				<description>The Response to the read EEPROM request.</description>
+				<payload>
+				<attribute id="0x0000" type="enum8" name="Status" required="m" default="0x00" enumeration="ZCL_Status"> </attribute>
+				<attribute id="0x0001" type="u16" name="Offset" showas="hex" required="m" default="0x0000"></attribute>
+				<attribute id="0x0002" name="Length" type="u8" default="0" required="m"></attribute>
+				<attribute id="0x0003" name="data0" type="u8" default="0" showas="hex" required="m"></attribute>
+				<attribute id="0x0004" name="data1" type="u8" default="0" showas="hex" required="m"></attribute>
+				<attribute id="0x0005" name="data2" type="u8" default="0" showas="hex" required="m"></attribute>
+				<attribute id="0x0006" name="data3" type="u8" default="0" showas="hex" required="m"></attribute>
+			</payload>
+			</command>
+			<command id="0x03" dir="recv" name="Read RAM response" required="m">
+				<description>The Response to the read RAM request.</description>
+				<payload>
+				<attribute id="0x0000" type="enum8" name="Status" required="m" default="0x00" enumeration="ZCL_Status"> </attribute>
+				<attribute id="0x0001" type="u16" name="Offset" showas="hex" required="m" default="0x0000"></attribute>
+				<attribute id="0x0002" name="Length" type="u8" default="0" required="m"></attribute>
+				<attribute id="0x0003" name="data0" type="u8" default="0" showas="hex" required="m"></attribute>
+				<attribute id="0x0004" name="data1" type="u8" default="0" showas="hex" required="m"></attribute>
+				<attribute id="0x0005" name="data2" type="u8" default="0" showas="hex" required="m"></attribute>
+				<attribute id="0x0006" name="data3" type="u8" default="0" showas="hex" required="m"></attribute>
+			</payload>
+			</command>
+			<command id="0x06" dir="recv" name="Read Flash response" required="m">
+				<description>The Response to the read Flash request.</description>
+				<payload>
+				<attribute id="0x0000" type="enum8" name="Status" required="m" default="0x00" enumeration="ZCL_Status"> </attribute>
+				<attribute id="0x0001" type="u32" name="Offset" showas="hex" required="m" default="0x00000000"></attribute>
+				<attribute id="0x0002" name="Length" type="u8" default="0" required="m"></attribute>
+				<attribute id="0x0003" name="data0" type="u8" default="0" showas="hex" required="m"></attribute>
+				<attribute id="0x0004" name="data1" type="u8" default="0" showas="hex" required="m"></attribute>
+				<attribute id="0x0005" name="data2" type="u8" default="0" showas="hex" required="m"></attribute>
+				<attribute id="0x0006" name="data3" type="u8" default="0" showas="hex" required="m"></attribute>
+				<attribute id="0x0007" name="data4" type="u8" default="0" showas="hex" required="m"></attribute>
+				<attribute id="0x0008" name="data5" type="u8" default="0" showas="hex" required="m"></attribute>
+				<attribute id="0x0009" name="data6" type="u8" default="0" showas="hex" required="m"></attribute>
+				<attribute id="0x000a" name="data7" type="u8" default="0" showas="hex" required="m"></attribute>
+			</payload>
+			</command>
+		</client>
+</cluster>
+
+<cluster id="0xfcce" name="DDEL2">
+		<description>Attributes for determining basic information about a device, setting user device information such as description of location, and enabling a device.</description>
+		<server>
+			<attribute id="0x0000" name="ZCL Version" type="u8" access="r" default="0" required="m"></attribute>
+			<command id="0x01" dir="recv" name="Read EEPROM" required="o" response="0x01">
+				<description>Reads data from EEPROM.</description>
+				<payload>
+					<attribute id="0x0000" name="Offset" type="u16" access="r" default="0" required="m" showas="hex"></attribute>
+					<attribute id="0x0001" name="Length" type="u8" access="r" default="0" required="m"></attribute>
+				</payload>
+			</command>
+			<command id="0x02" dir="recv" name="Write EEPROM" required="o">
+				<description>Writes EEPROM of the device.</description>
+				<payload>
+					<attribute id="0x0000" name="Offset" type="u16" access="r" default="0" required="m" showas="hex"></attribute>
+					<attribute id="0x0001" name="Length" type="u8" access="r" default="0" required="m"></attribute>
+					<attribute id="0x0002" name="Value0" type="u8" access="r" default="0" required="m"></attribute>
+					<attribute id="0x0003" name="Value1" type="u8" access="r" default="0" required="m"></attribute>
+					<attribute id="0x0004" name="Value2" type="u8" access="r" default="0" required="m"></attribute>
+					<attribute id="0x0005" name="Value3" type="u8" access="r" default="0" required="m"></attribute>
+				</payload>
+			</command>
+			<command id="0x03" dir="recv" name="Read RAM" required="o" response="0x03">
+				<description>Reads RAM from the device.</description>
+				<payload>
+					<attribute id="0x0000" name="Offset" type="u16" access="r" default="0" required="m" showas="hex"></attribute>
+					<attribute id="0x0001" name="Length" type="u8" access="r" default="0" required="m"></attribute>
+				</payload>
+			</command>
+			<command id="0x04" dir="recv" name="Write RAM" required="o">
+				<description>Writes RAM of the device.</description>
+				<payload>
+					<attribute id="0x0000" name="Offset" type="u16" access="r" default="0" required="m" showas="hex"></attribute>
+					<attribute id="0x0001" name="Length" type="u8" access="r" default="0" required="m"></attribute>
+					<attribute id="0x0002" name="Value0" type="u8" access="r" default="0" required="m"></attribute>
+					<attribute id="0x0003" name="Value1" type="u8" access="r" default="0" required="m"></attribute>
+					<attribute id="0x0004" name="Value2" type="u8" access="r" default="0" required="m"></attribute>
+					<attribute id="0x0005" name="Value3" type="u8" access="r" default="0" required="m"></attribute>
+				</payload>
+			</command>
+			<command id="0x05" dir="send" name="Assert" required="m">
+				<description>Assert Notification from BitCloud Stack.</description>
+				<payload>
+				<attribute id="0x0000" type="u16" name="Level" showas="hex" required="m" default="0x0000"></attribute>
+				<attribute id="0x0001" type="u16" name="Code" showas="hex" required="m" default="0x0000"></attribute>
+				<attribute id="0x0002" type="u16" name="Line" required="m" default="0x0000"></attribute>
+				</payload>
+			</command>
+			<command id="0x06" dir="recv" name="Read Flash" required="o" response="0x06">
+				<description>Reads data from external flash.</description>
+				<payload>
+					<attribute id="0x0000" name="Offset" type="u32" access="r" default="0" required="m" showas="hex"></attribute>
+					<attribute id="0x0001" name="Length" type="u8" access="r" default="0" required="m"></attribute>
+				</payload>
+			</command>
+		</server>
+		<client>
+			<command id="0x01" dir="recv" name="Read EEPROM response" required="m">
+				<description>The Response to the read EEPROM request.</description>
+				<payload>
+				<attribute id="0x0000" type="enum8" name="Status" required="m" default="0x00" enumeration="ZCL_Status"> </attribute>
+				<attribute id="0x0001" type="u16" name="Offset" showas="hex" required="m" default="0x0000"></attribute>
+				<attribute id="0x0002" name="Length" type="u8" default="0" required="m"></attribute>
+				<attribute id="0x0003" name="data0" type="u8" default="0" showas="hex" required="m"></attribute>
+				<attribute id="0x0004" name="data1" type="u8" default="0" showas="hex" required="m"></attribute>
+				<attribute id="0x0005" name="data2" type="u8" default="0" showas="hex" required="m"></attribute>
+				<attribute id="0x0006" name="data3" type="u8" default="0" showas="hex" required="m"></attribute>
+			</payload>
+			</command>
+			<command id="0x03" dir="recv" name="Read RAM response" required="m">
+				<description>The Response to the read RAM request.</description>
+				<payload>
+				<attribute id="0x0000" type="enum8" name="Status" required="m" default="0x00" enumeration="ZCL_Status"> </attribute>
+				<attribute id="0x0001" type="u16" name="Offset" showas="hex" required="m" default="0x0000"></attribute>
+				<attribute id="0x0002" name="Length" type="u8" default="0" required="m"></attribute>
+				<attribute id="0x0003" name="data0" type="u8" default="0" showas="hex" required="m"></attribute>
+				<attribute id="0x0004" name="data1" type="u8" default="0" showas="hex" required="m"></attribute>
+				<attribute id="0x0005" name="data2" type="u8" default="0" showas="hex" required="m"></attribute>
+				<attribute id="0x0006" name="data3" type="u8" default="0" showas="hex" required="m"></attribute>
+			</payload>
+			</command>
+			<command id="0x06" dir="recv" name="Read Flash response" required="m">
+				<description>The Response to the read Flash request.</description>
+				<payload>
+				<attribute id="0x0000" type="enum8" name="Status" required="m" default="0x00" enumeration="ZCL_Status"> </attribute>
+				<attribute id="0x0001" type="u32" name="Offset" showas="hex" required="m" default="0x00000000"></attribute>
+				<attribute id="0x0002" name="Length" type="u8" default="0" required="m"></attribute>
+				<attribute id="0x0003" name="data0" type="u8" default="0" showas="hex" required="m"></attribute>
+				<attribute id="0x0004" name="data1" type="u8" default="0" showas="hex" required="m"></attribute>
+				<attribute id="0x0005" name="data2" type="u8" default="0" showas="hex" required="m"></attribute>
+				<attribute id="0x0006" name="data3" type="u8" default="0" showas="hex" required="m"></attribute>
+				<attribute id="0x0007" name="data4" type="u8" default="0" showas="hex" required="m"></attribute>
+				<attribute id="0x0008" name="data5" type="u8" default="0" showas="hex" required="m"></attribute>
+				<attribute id="0x0009" name="data6" type="u8" default="0" showas="hex" required="m"></attribute>
+				<attribute id="0x000a" name="data7" type="u8" default="0" showas="hex" required="m"></attribute>
+			</payload>
+			</command>
+		</client>
+</cluster>
+
+</domain>
+	<profile id="0x0104" name="Home Automation" description="This profile defines device descriptions and standard practices for applications needed in a residential or light commercial environment. Installation scenarios range from a single room to an entire home up to 20,000 square feet (approximately 1850m2)." version="1.0" rev="25" icon="ha.png">
+		<domain-ref name="Manufacturer Specific" low_bound="0000" />
+	</profile>
+	<profile id="0xc05e" name="Light Link" description="This profile defines device descriptions and standard practices for ZigBee Light Link." version="1.0" rev="15" icon="zll.png">
+		<domain-ref name="Manufacturer Specific" low_bound="0000" />
+	</profile>
+
+</zcl>

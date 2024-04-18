@@ -1,0 +1,10 @@
+[Unit]
+Description=deCONZ: ZigBee gateway -- Initialisation
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/deCONZ-init.sh
+StartLimitInterval=600
+
+[Install]
+WantedBy=multi-user.target

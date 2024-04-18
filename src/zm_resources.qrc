@@ -1,0 +1,31 @@
+<RCC>
+    <qresource prefix="/">
+        <file>icons/faenza/gpm-primary-020.png</file>
+        <file>icons/faenza/gpm-primary-040.png</file>
+        <file>icons/faenza/gpm-primary-060.png</file>
+        <file>icons/faenza/gpm-primary-100.png</file>
+        <file>icons/faenza/gpm-primary-charged.png</file>
+        <file>icons/faenza/gpm-primary-000-charging.png</file>
+        <file>icons/de_logo_48px.png</file>
+        <file>icons/de_logo.icns</file>
+        <file>icons/faenza/actions/48/view-refresh.png</file>
+        <file>icons/auto-off.png</file>
+        <file>icons/auto-e.png</file>
+        <file>icons/auto-cre.png</file>
+        <file>icons/auto-cr.png</file>
+        <file>img/welcome.png</file>
+        <file>icons/faenza/text-xml.png</file>
+        <file>icons/discovery.png</file>
+        <file>icons/faenza/preferences-desktop.png</file>
+        <file>icons/faenza/stock_connect.png</file>
+        <file>icons/faenza/stock_disconnect.png</file>
+        <file>icons/faenza/actions/24/view-refresh.png</file>
+        <file>icons/faenza/actions/48/go-jump.png</file>
+        <file>icons/faenza/actions/48/podcast-new.png</file>
+        <file>icons/ddel_claim_186x50.png</file>
+        <file>icons/cryo/32/drive-disk.png</file>
+        <file>icons/cryo/32/drive-disk@2x.png</file>
+        <file>icons/cryo/32/folder.png</file>
+        <file>icons/cryo/32/folder@2x.png</file>
+    </qresource>
+</RCC>

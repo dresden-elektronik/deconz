@@ -1,0 +1,105 @@
+#!/bin/bash
+# auto exit on first error
+#set -e
+
+#echo "postinst: $@"
+
+OS_ID=$(cat /etc/os-release | sed -n 's/^ID=\(.*\)/\1/p')
+OS_VERSION=$(cat /etc/os-release | sed -n 's/^VERSION="[0-9]\s(\(.*\))"/\1/p')
+WDT_SCRIPT=/etc/watchdog.d/test-deconz.sh
+SYSD=/lib/systemd/system
+
+DOCKER=0
+
+cat /proc/1/cgroup | grep docker > /dev/null
+
+if [ $? -eq 0 ]; then
+	DOCKER=1
+fi
+
+# change file owner
+chown root:root $(ls /usr/bin/*deCONZ*)
+chown -R root:root $(find /usr/share/deCONZ)
+chmod 755 $(find /usr/share/deCONZ -type d)
+chown root:root $(ls ${SYSD}/deconz*)
+
+chmod +x $(ls /usr/bin/deCONZ*.sh)
+
+# capability to bind to ports < 1024
+# allow modification of system time
+setcap cap_net_bind_service,cap_sys_time,cap_sys_boot=+ep /usr/bin/deCONZ
+
+
+if [ "$OS_ID" = "raspbian" ]; then
+	# reload unit files
+	systemctl daemon-reload 2> /dev/null
+
+	systemctl --quiet is-active deconz-update 2> /dev/null
+	# temporarely disable update service until refactor
+	if [ $? -eq 0 ]; then
+		# echo "disable systemd deconz-update service"
+		systemctl disable deconz-update 2> /dev/null
+		systemctl stop deconz-update 2> /dev/null
+	fi
+
+	WARN_CONF=0
+
+	egrep -q -e "^enable_uart=1" /boot/config.txt 2> /dev/null
+	if [ $? -eq 1 ]; then
+		echo -e "${YELLOW}Important:${RESET} ${BOLD}enable_uart=1${RESET} should be set in /boot/config (RaspBee only)\n"
+		WARN_CONF=1
+	fi
+
+	egrep -q -e "console=serial0" /boot/cmdline.txt 2> /dev/null
+	if [ $? -eq 0 ]; then
+		echo -e "${YELLOW}Important:${RESET} /boot/cmdline must not contain ${BOLD}console=serial0${RESET} (RaspBee only)\n"
+		WARN_CONF=1
+	fi
+
+	if [ $WARN_CONF -eq 1 ]; then
+		echo -e "use raspi-config to configure serial port as described in documentation (RaspBee only):"
+		echo -e "https://github.com/dresden-elektronik/deconz-rest-plugin#software-requirements"
+	fi
+
+	systemctl -q is-active deconz-wifi 2> /dev/null
+	if [ $? -eq 0 ]; then
+		if [ $DOCKER -eq 0 ]; then
+			systemctl restart deconz-wifi
+		else
+			systemctl stop deconz-wifi
+		fi
+	fi
+fi
+
+if [ "$OS_ID" = "ubuntu" ] && [ -n "$SUDO_USER" ]; then
+	groups $SUDO_USER | grep &>/dev/null 'dialout'
+	if [ $? -ne 0 ]; then
+		# add user to group dialout to allow communication with ConBee
+		gpasswd -a $SUDO_USER "dialout"
+		if [ $? -ne 0 ]; then
+			exit 2
+		fi
+	fi
+fi
+
+if [ -f "$WDT_SCRIPT" ]; then
+	# systemd will handle watchdog
+	systemctl stop watchdog
+	rm -f $WDT_SCRIPT
+fi
+
+# preserve user overwrites if installing from older deconz versions
+overwrites=("deconz-gui.service" "deconz-init.service" "deconz.service" "deconz-update.service" "deconz-wifi.service")
+for i in "${overwrites[@]}"; do
+	# move back user systemd files
+	if [[ ! -e "/etc/systemd/system/$i" && -e "/etc/systemd/system/${i}.bak" ]]; then
+		mv "/etc/systemd/system/${i}.bak" "/etc/systemd/system/${i}"
+	fi
+
+	if [[ -L "/etc/systemd/system/multi-user.target.wants/${i}" && ! -e $(readlink "/etc/systemd/system/multi-user.target.wants/${i}") && -e "$SYSD/${i}" ]]; then
+		# fix dead links
+		ln -sfn "$SYSD/${i}" "/etc/systemd/system/multi-user.target.wants/${i}"
+	fi
+done
+
+exit 0

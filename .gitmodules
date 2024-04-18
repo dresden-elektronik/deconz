@@ -1,0 +1,16 @@
+[submodule "src/plugins/de_web"]
+	path = src/plugins/de_web
+	url = https://github.com/dresden-elektronik/deconz-rest-plugin.git
+	branch = master
+[submodule "src/plugins/std_otau2"]
+	path = src/plugins/std_otau2
+	url = https://github.com/dresden-elektronik/deconz-ota-plugin.git
+[submodule "src/plugins/xbee"]
+	path = src/plugins/xbee
+	url = https://github.com/dresden-elektronik/deconz-xbee-plugin.git
+[submodule "src/3rdparty/actor_model"]
+	path = src/3rdparty/actor_model
+	url = https://git.sr.ht/~cryo/actor_model
+[submodule "src/lib"]
+	path = src/lib
+	url = https://github.com/dresden-elektronik/deconz-lib.git

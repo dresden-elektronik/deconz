@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>NSPrincipalClass</key>
+	<string>NSApplication</string>
+	<key>CFBundleIconFile</key>
+	<string>deconz.icns</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleGetInfoString</key>
+	<string>Zigbee controller.</string>
+	<key>CFBundleSignature</key>
+	<string>????</string>
+	<key>CFBundleExecutable</key>
+	<string>deCONZ</string>
+	<key>CFBundleIdentifier</key>
+	<string>de.phoscon.deconz</string>
+	<key>CFBundleName</key>
+	<string>deCONZ</string>
+	<key>CFBundleDisplayName</key>
+	<string>deCONZ</string>
+	<key>NSHumanReadableCopyright</key>
+	<string>© 2012-2024, dresden elektronik. All rights reserved.
+        </string>
+	<key>CFBundleShortVersionString</key>
+        <string>2.26.1</string>
+	<key>NOTE</key>
+	<string></string>
+</dict>
+</plist>
+
