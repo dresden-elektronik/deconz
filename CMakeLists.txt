@@ -79,7 +79,7 @@ if (PWA_DESTINATION)
     install(DIRECTORY "${CMAKE_BINARY_DIR}/webapp_2016/"
         DESTINATION "${PWA_DESTINATION}")
 
-    install(DIRECTORY "${CMAKE_CURRENT_LIST_DIR}/pwa/"
+    install(DIRECTORY "${CMAKE_BINARY_DIR}/pwa/"
         DESTINATION "${PWA_DESTINATION}/pwa")
 endif()
 

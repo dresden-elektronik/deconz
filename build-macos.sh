@@ -115,3 +115,6 @@ ditto -c -k --sequesterRsrc --keepParent deCONZ.app deconz_${VERSION}-macos_${AR
 
 popd
 
+# keep Info.plist unmodified
+git checkout HEAD -- Info.plist
+
