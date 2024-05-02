@@ -40,6 +40,10 @@ add_subdirectory(lib/sqlite3)
 
 add_subdirectory(src)
 
+# --- build GCFFlasher_internal ----------------------------
+add_subdirectory(src/3rdparty/gcfflasher)
+set_target_properties( GCFFlasher PROPERTIES OUTPUT_NAME "GCFFlasher_internal" )
+
 # --- packageing ------------------------------------------------------
 
 if (APPLE)
@@ -49,11 +53,8 @@ endif()
 if (${CMAKE_HOST_SYSTEM_NAME} MATCHES "Linux")
     set(PWA_DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/deCONZ/webapp")
 
-    install(
-        PROGRAMS
-            "linux/deCONZ/usr/bin/GCFFlasher_internal"
-            "linux/deCONZ/usr/bin/GCFFlasher_internal.bin"
-        DESTINATION "${CMAKE_INSTALL_BINDIR}")
+    install(PROGRAMS "${CMAKE_BINARY_DIR}/src/3rdparty/gcfflasher/GCFFlasher_internal" DESTINATION "${CMAKE_INSTALL_BINDIR}" RENAME "GCFFlasher_internal.bin")
+
     install(DIRECTORY "linux/deCONZ/lib/systemd" DESTINATION "/lib")
     install(FILES "linux/deCONZ/usr/share/applications/deCONZ.desktop" DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/applications")
     install(FILES "src/icons/de_logo_48px.png" DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/deCONZ/icons")
