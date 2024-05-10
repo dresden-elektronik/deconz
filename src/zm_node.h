@@ -144,8 +144,8 @@ public:
     void setWaitState(uint timeoutSec);
     void checkWaitState();
     bool isInWaitState();
-    void setHasDDF(bool hasDDF) { m_hasDDF = hasDDF; }
-    bool hasDDF() const { return m_hasDDF; }
+    void setHasDDF(int hasDDF) { m_hasDDF = hasDDF; }
+    int hasDDF() const { return m_hasDDF; }
 
     std::vector<RoutingTableEntry> &routes() { return m_routes; }
     const std::vector<RoutingTableEntry> &routes() const { return m_routes; }
@@ -169,7 +169,7 @@ private:
     QString m_modelId;
     QString m_vendor;
     bool m_needRejoin;
-    bool m_hasDDF = false;
+    int m_hasDDF = 0;
     int m_battery = -1; // 0–100 or -1 for invalid
 
     struct FetchInfo

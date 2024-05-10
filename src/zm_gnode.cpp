@@ -398,7 +398,7 @@ void zmgNode::paint(QPainter *painter, const QStyleOptionGraphicsItem *option, Q
     pos.ry() += fm.lineSpacing();
     p.drawText(pos, m_name);
 
-    if (m_hasDDF)
+    if (m_hasDDF != 0)
     {
         QPointF pos2 = pos;
         pos2.ry() -= 1;
@@ -414,7 +414,14 @@ void zmgNode::paint(QPainter *painter, const QStyleOptionGraphicsItem *option, Q
         fn.setBold(false);
         p.setFont(fn);
         p.setPen(QPen(QColor(50, 50, 50), 2));
-        p.drawText(pos2, QLatin1String("DDF"));
+        if (m_hasDDF == 1)
+        {
+            p.drawText(pos2, QLatin1String("DDF"));
+        }
+        else if (m_hasDDF == 2)
+        {
+            p.drawText(pos2, QLatin1String("DDB"));
+        }
     }
 
     // IEEE address
@@ -888,7 +895,7 @@ void zmgNode::setLastSeen(qint64 lastSeen)
     }
 }
 
-void zmgNode::setHasDDF(bool hasDDF)
+void zmgNode::setHasDDF(int hasDDF)
 {
     if (m_hasDDF != hasDDF)
     {

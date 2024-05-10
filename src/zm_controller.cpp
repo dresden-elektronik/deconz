@@ -34,6 +34,7 @@
 #include "deconz/zdp_descriptors.h"
 #include "deconz/zdp_profile.h"
 #include "deconz/green_power_controller.h"
+#include "deconz/u_assert.h"
 #include "deconz/u_sstream.h"
 #include "source_routing.h"
 #include "db_nodes.h"
@@ -5608,7 +5609,10 @@ void zmController::onRestNodeUpdated(quint64 extAddress, const QString &item, co
     }
     else if (item == QLatin1String("hasddf"))
     {
-        node->data->setHasDDF(value == QLatin1String("1"));
+        int v = value.toInt();
+        U_ASSERT(v >= 0 && v <= 2);
+
+        node->data->setHasDDF(v);
         if (node->g)
         {
             node->g->setHasDDF(node->data->hasDDF());

@@ -95,7 +95,7 @@ public:
     void setName(const QString &name);
     void setAddress(quint16 nwk, quint64 mac);
     void setLastSeen(qint64 lastSeen);
-    void setHasDDF(bool hasDDF);
+    void setHasDDF(int hasDDF);
     void indicationTick();
 
 signals:
@@ -135,7 +135,7 @@ protected:
     quint16 m_nwkAddressCache = 0;
     qint64 m_lastSeen = 0;
     int m_moveWatcher = -1;
-    bool m_hasDDF = false;
+    int m_hasDDF = 0;
     bool m_needSaveToDatabase;
     int m_selectionCounter = -1;
     QPixmap m_pm;
