@@ -83,12 +83,14 @@ mkdir -p deCONZ.app/Contents/Frameworks
 pushd deCONZ.app/Contents/Frameworks
 
 LIBCRYPTO=$(find /usr/local/Cellar -name 'libcrypto.3.dylib')
-LIBSSL=$(find /usr/local/Cellar -name 'libssl.3.dylib')	&& cp $LIBCRYPTO $LIBSSL .
+LIBSSL=$(find /usr/local/Cellar -name 'libssl.3.dylib')
 
-install_name_tool -change /usr/local/Cellar/openssl@3/3.2.1/lib/libcrypto.3.dylib @loader_path/../Frameworks/libcrypto.3.dylib ./libssl.3.dylib
+cp $LIBCRYPTO $LIBSSL .
+
+install_name_tool -change /usr/local/Cellar/openssl@3/3.3.0/lib/libcrypto.3.dylib @loader_path/../Frameworks/libcrypto.3.dylib ./libssl.3.dylib
 install_name_tool -change /usr/local/opt/openssl@3/lib/libssl.3.dylib @loader_path/../Frameworks/libssl.3.dylib ./libssl.3.dylib
 
-install_name_tool -change /usr/local/Cellar/openssl@3/3.2.1/lib/libcrypto.3.dylib @loader_path/../Frameworks/libcrypto.3.dylib ./libcrypto.3.dylib
+install_name_tool -change /usr/local/Cellar/openssl@3/3.3.0/lib/libcrypto.3.dylib @loader_path/../Frameworks/libcrypto.3.dylib ./libcrypto.3.dylib
 
 codesign -v -f -s "${DEVELOPER_ID_APPLICATION}" libssl.3.dylib
 codesign -v -f -s "${DEVELOPER_ID_APPLICATION}" libcrypto.3.dylib
