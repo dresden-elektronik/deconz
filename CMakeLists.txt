@@ -41,8 +41,10 @@ add_subdirectory(lib/sqlite3)
 add_subdirectory(src)
 
 # --- build GCFFlasher_internal ----------------------------
-#add_subdirectory(src/3rdparty/gcfflasher)
-#set_target_properties( GCFFlasher PROPERTIES OUTPUT_NAME "GCFFlasher_internal" )
+if (${CMAKE_HOST_SYSTEM_NAME} MATCHES "Linux")
+    add_subdirectory(src/3rdparty/gcfflasher)
+    set_target_properties( GCFFlasher PROPERTIES OUTPUT_NAME "GCFFlasher_internal" )
+endif()
 
 # --- packageing ------------------------------------------------------
 
