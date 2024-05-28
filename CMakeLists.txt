@@ -19,6 +19,8 @@ include(GNUInstallDirs)
 
 set(CMAKE_MACOSX_BUNDLE ON)
 
+add_compile_options(-Wno-psabi)
+
 find_package(Git REQUIRED)
 
 # --- reproducable builds via SOURCE_DATE_EPOCH -----------------------
