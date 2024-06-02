@@ -11,14 +11,22 @@ DECONZ_DIR=$ABS_PATH/..
 NSI_SCRIPT=release.nsi
 NSIS="/c/msys64/mingw32/bin/makensis.exe"
 STAGE_DIR=$ABS_PATH/packwin32
-OPENSSL_DIR=/c/Qt/Tools/OpenSSL/Win_x86
+OPENSSL_DIR="$(PWD)/openssl-3/x86"
 
 CMAKE=/c/Qt/Tools/CMake_64/bin
 
-export PATH="$CMAKE:/c/Qt/Tools/mingw810_32/bin:$PATH"
+OPENSSL_ZIP=openssl-3.3.0.zip
+OPENSSL_URL="https://download.firedaemon.com/FireDaemon-OpenSSL/$OPENSSL_ZIP"
 
+if [[ ! -f "$OPENSSL_ZIP" ]]; then
+    curl -L -O $OPENSSL_URL
+    unzip $OPENSSL_ZIP
+fi
 
 rm -rf build
+
+export PATH="$CMAKE:/c/Qt/Tools/mingw810_32/bin:$PATH"
+
 cmake -DBUILD_CHANNEL="" \
     -GNinja \
     -DOPENSSL_ROOT_DIR=$OPENSSL_DIR \
