@@ -5590,6 +5590,7 @@ void zmController::onRestNodeUpdated(quint64 extAddress, const QString &item, co
         if (node->data->userDescriptor() != value)
         {
             node->data->setUserDescriptor(value);
+            node->g->setName(value);
             needRedraw = true;
         }
     }
@@ -5638,6 +5639,7 @@ void zmController::onRestNodeUpdated(quint64 extAddress, const QString &item, co
         if (ok && bat >= 0 && bat <= 100 && node->data->battery() != bat)
         {
             node->data->setBattery(bat);
+            node->g->setBattery(bat);
             needRedraw = true;
         }
     }
@@ -5645,7 +5647,7 @@ void zmController::onRestNodeUpdated(quint64 extAddress, const QString &item, co
     if (needRedraw)
     {
         node->data->setNeedRedraw(false);
-        node->g->updateParameters(node->data);
+        node->g->updateParameters(node->data); // TODO remove, gnode shouldn't know about data node
         node->g->requestUpdate();
         deCONZ::nodeModel()->updateNode(*node);
     }

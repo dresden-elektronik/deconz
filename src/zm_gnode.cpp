@@ -586,34 +586,7 @@ void zmgNode::updateParameters(const deCONZ::zmNode *data)
 
         setAddress(data->address().nwk(), data->address().ext());
         setName(data->userDescriptor());
-
-        int battery = data->battery();
-
-        if (battery != m_battery)
-        {
-            m_battery = battery;
-            if (battery >= 0 && battery <= 100)
-            {
-                if (battery <= 20)
-                {
-                    m_pm = QPixmap(QLatin1String(":/icons/faenza/gpm-primary-020.png"));
-                }
-                else if (battery <= 40)
-                {
-                    m_pm = QPixmap(QLatin1String(":/icons/faenza/gpm-primary-040.png"));
-                }
-                else if (battery <= 60)
-                {
-                    m_pm = QPixmap(QLatin1String(":/icons/faenza/gpm-primary-060.png"));
-                }
-                else
-                {
-                    m_pm = QPixmap(QLatin1String(":/icons/faenza/gpm-primary-100.png"));
-                }
-
-                m_pm = m_pm.scaledToHeight(26);
-            }
-        }
+        setBattery(data->battery());
 
         deCONZ::DeviceType deviceType = deCONZ::UnknownDevice;
 
@@ -667,6 +640,39 @@ void zmgNode::updateParameters(const deCONZ::zmNode *data)
 bool zmgNode::needSaveToDatabase() const
 {
     return m_needSaveToDatabase;
+}
+
+void zmgNode::setBattery(int battery)
+{
+    if (battery != m_battery)
+    {
+        if (battery >= 0 && battery <= 100)
+        {
+            m_battery = battery;
+            if (battery <= 20)
+            {
+                m_pm = QPixmap(QLatin1String(":/icons/faenza/gpm-primary-020.png"));
+            }
+            else if (battery <= 40)
+            {
+                m_pm = QPixmap(QLatin1String(":/icons/faenza/gpm-primary-040.png"));
+            }
+            else if (battery <= 60)
+            {
+                m_pm = QPixmap(QLatin1String(":/icons/faenza/gpm-primary-060.png"));
+            }
+            else
+            {
+                m_pm = QPixmap(QLatin1String(":/icons/faenza/gpm-primary-100.png"));
+            }
+
+            m_pm = m_pm.scaledToHeight(26);
+        }
+        else
+        {
+            m_battery = -1;
+        }
+    }
 }
 
 void zmgNode::setNeedSaveToDatabase(bool needSave)

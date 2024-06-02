@@ -56,7 +56,6 @@ public:
     QRectF boundingRect() const override;
     void paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWidget *widget) override;
 
-    void setData(deCONZ::zmNode *data) { m_data = data; }
     void setOtauActive(const deCONZ::SteadyTimeRef ref)
     {
         if (!isValid(m_otauActiveTime))
@@ -75,6 +74,7 @@ public:
     void updateLink(NodeLink *link);
     void updateParameters(const deCONZ::zmNode *data);
     bool needSaveToDatabase() const;
+    void setBattery(int battery);
     void setNeedSaveToDatabase(bool needSave);
 
     bool ownsSocket(NodeSocket *socket) const;
