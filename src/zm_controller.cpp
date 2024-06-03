@@ -702,7 +702,6 @@ zmController::zmController(zmMaster *master,
     m_deviceWatchdogOk = 0;
     m_fetchZdpDelay = 500;
     m_fetchMgmtLqiDelay = deCONZ::appArgumentNumeric("--mgtmlqi-delay", 3000);
-//    m_fetchMgmtLqiElapsedTime.start();
     m_fetchLqiTickMsCounter.start();
     m_showLqi = false;
     m_apsGroupDelayMs = MinGroupDelay;
@@ -711,7 +710,7 @@ zmController::zmController(zmMaster *master,
 
     _netModel = networks;
     m_devState = deCONZ::NotInNetwork;
-    //m_nodeUID = 1; // 0 is invalid UID
+
     // create ZCL database
     deCONZ::ZclDataBase *zclDb = deCONZ::zclDataBase();
     Q_UNUSED(zclDb);
@@ -775,13 +774,6 @@ zmController::zmController(zmMaster *master,
     m_zombieDelay = 0;
     m_timer = startTimer(TickMs);
     m_timeoutTimer = startTimer(TickMs);
-
-//    // setup APSDE-DATA.confirm
-//    connect(m_master, SIGNAL(apsdeDataConfirm(deCONZ::ApsDataConfirm)),
-//            this, SLOT(onApsdeDataConfirm(deCONZ::ApsDataConfirm)));
-//    // setup APSDE-DATA.indication
-//    connect(m_master, &zmMaster::apsdeDataIndication,
-//            this, &zmController::onApsdeDataIndication);
 
     connect(m_master, &zmMaster::macPoll, this, &zmController::onMacPoll);
 
@@ -1221,11 +1213,6 @@ LinkInfo *zmController::linkInfo(zmgNode *aNode, zmgNode *bNode, deCONZ::DeviceR
     li.b->addLink(li.link);
     m_neighbors.push_back(li);
 
-//    if (!li.link->scene())
-//    {
-//        m_scene->addItem(li.link);
-//    }
-    //li.link->setVisible(true); // to draw
     li.link->updatePosition();
     li.link->setVisible(false); // use link tick
 
@@ -1289,10 +1276,7 @@ void zmController::checkBindingLink(const deCONZ::Binding &binding)
         srcNode->g->addLink(li.link);
         dstNode->g->addLink(li.link);
         m_bindings.append(li);
-//        if (!li.link->scene())
-//        {
-//            m_scene->addItem(li.link);
-//        }
+
         li.link->updatePosition();
     }
 }
@@ -1694,7 +1678,6 @@ void zmController::readParameterResponse(ZM_State_t status, ZM_DataId_t id, cons
             {
                 if (node2.data && node2.g &&
                     node2.data->address().nwk() == 0x0000 &&
-//                    node2.data->nodeDescriptor().manufacturerCode() == VENDOR_DDEL &&
                     node2.data->nodeDescriptor().deviceType() == deCONZ::Coordinator &&
                     node2.data->address().ext() != u64)
                 {
@@ -4247,13 +4230,6 @@ void zmController::onApsdeDataIndication(const deCONZ::ApsDataIndication &ind)
         }
     }
 
-    // force fast sending of next request
-    if (m_apsRequestQueue.empty() && ind.profileId() == ZDP_PROFILE_ID)
-    {
-        // FIXME: fast send of next ZDP request must be placed after last request has setFetched(true)
-        //fetchZdpTick();
-    }
-
     if (ind.profileId() == ZDP_PROFILE_ID)
     {
         uint16_t nwk;
@@ -4321,8 +4297,6 @@ void zmController::onApsdeDataIndication(const deCONZ::ApsDataIndication &ind)
         {
         case ZDP_END_DEVICE_BIND_REQ_CLID:
         {
-            // TODO: react on end device bind request
-            //DBG_Printf(DBG_ZDP, "ZDP End device bind request\n");
         }
             break;
 
@@ -7906,7 +7880,6 @@ void zmController::fetchZdpTick()
 
     if (!fastDiscoverNode && !isValid(node->lastSeen()))
     {
-        //DBG_Printf(DBG_ZDP, "ZDP skip fetch 0x%0llX, invalid last seen [3]\n", node->address().ext());
         return;
     }
 
@@ -8121,38 +8094,12 @@ void zmController::fetchZdpTick()
     if (apsReq.state() == deCONZ::BusyState) // ok
     {
 #if 1
-//        int zdpInQueue = 0;
-        //int zdpInQueuePerNode = 0;
         bool found = false;
 
         // allow only one request per node
 
         for (auto i = m_apsRequestQueue.cbegin(); i != m_apsRequestQueue.cend(); ++i)
         {
-            if (i->profileId() == ZDP_PROFILE_ID)
-            {
-//                zdpInQueue++;
-//                if (zdpInQueue > MaxApsRequestsZdp)
-//                {
-//                    DBG_Printf(DBG_ZDP, "too many ZDP requests %d in queue\n", zdpInQueue);
-//                    return;
-//                }
-#if 0
-                if (node->address().hasNwk() &&
-                    i->dstAddress().hasNwk() &&
-                    node->address().nwk() == i->dstAddress().nwk())
-                {
-                    zdpInQueuePerNode++;
-                    if (zdpInQueuePerNode >= MaxApsRequestsZdpPerNode)
-                    {
-                        DBG_Printf(DBG_ZDP, "too many ZDP requests %d in queue for node 0x%04X\n", zdpInQueuePerNode, node->address().nwk());
-                        node->setWaitState(10);
-                        return;
-                    }
-                }
-#endif
-            }
-
             if (i->state() == deCONZ::BusyState ||
                 i->state() == deCONZ::IdleState ||
                 i->state() == deCONZ::ConfirmedState)
@@ -8203,7 +8150,6 @@ void zmController::fetchZdpTick()
             else if (m_nodes[0].data->address().ext() == apsReq.dstAddress().ext())
             {
                 // commands to own node don't need much attention
-                //apsReq.setDstAddressMode(deCONZ::ApsExtAddress);
                 apsReq.setSendDelay(20);
                 apsReq.setState(deCONZ::IdleState);
             }
@@ -8225,15 +8171,8 @@ void zmController::fetchZdpTick()
         {
             if (!apsReq.dstAddress().isNwkBroadcast())
             {
-                //node->setState(deCONZ::BusyState);
                 node->setWaitState(1);
             }
-
-//            NodeInfo *nodeInfo = getNode(node);
-//            if (nodeInfo && nodeInfo->g)
-//            {
-//                visualizeNodeChanged(nodeInfo, deCONZ::IndicateSend);
-//            }
         }
     }
     else
@@ -8472,16 +8411,9 @@ void zmController::linkTick()
     }
 
     // t0 holds the node which wassn't seen at least
-    //deCONZ::SteadyTimeRef t1 = m_steadyTimeRef;
-
     // t0 now holds the difference
     deCONZ::TimeMs t0 = m_steadyTimeRef - li.linkAgeUnix;
 
-    // if (li.link && !li.link->isVisible())
-    // {
-
-    // }
-    // else
     if (!m_showNeighborLinks)
     {
 
@@ -8609,7 +8541,6 @@ void zmController::linkTick()
         {
             li.link->setVisible(true);
             li.link->updatePosition();
-            //li.link->update();
         }
     }
     else if (li.a && li.b && li.link)
@@ -8628,7 +8559,6 @@ void zmController::linkTick()
     {
         DBG_Printf(DBG_INFO, "remove orphan link\n");
         li.link->hide();
-        //m_scene->removeItem(li.link);
         m_neighborsDead.append(li);
         li.link = 0;
     }
@@ -8936,7 +8866,6 @@ void zmController::deviceDiscoverTick()
                     }
                     else
                     {
-                        //DBG_Printf(DBG_INFO, "remove discovery request duplicate\n");
                         noDuplicate = false;
                         break;
                     }
@@ -8973,55 +8902,6 @@ void zmController::deviceDiscoverTick()
                     // do nothing
                     // return;
                 }
-
-#if 0
-                int seenByNeighbors = 0;
-
-                for (NodeInfo &ni : m_nodes)
-                {
-                    const zmNeighbor *neib = ni.data->getNeighbor(addrPair.bAddr);
-                    if (!ni.data || !neib || !isValid(neib->lastSeen()))
-                    {
-                        continue;
-                    }
-                    else if (m_steadyTimeRef - neib->lastSeen() < deCONZ::TimeSeconds{45 * 60})
-                    {
-                        seenByNeighbors++;
-                    }
-                }
-
-                if (seenByNeighbors > 1)
-                {
-                    DBG_Printf(DBG_INFO, "create node " FMT_MAC " seen by %d neighbors\n", addrPair.bAddr.ext(), seenByNeighbors);
-                }
-                else if (deCONZ::master()->netState() == deCONZ::InNetwork)
-                {
-                    int count = 0;
-                    for (const deCONZ::ApsDataRequest &req : m_apsRequestQueue)
-                    {
-                        if (req.profileId() == ZDP_PROFILE_ID && !req.confirmed())
-                        {
-                            count++;
-                        }
-                    }
-
-                    if (count > 2)
-                    {
-                        DBG_Printf(DBG_INFO, "device discover rotate, too busy (%d ZDP requests in que)\n", count);
-                        m_deviceDiscoverQueue.push_back(addrPair);
-
-                        for (const deCONZ::ApsDataRequest &req : m_apsRequestQueue)
-                        {
-                            if (req.profileId() == ZDP_PROFILE_ID && !req.confirmed())
-                            {
-                                DBG_Printf(DBG_INFO, "\t cl 0x%04X tp " FMT_MAC " 0x%04X\n", req.clusterId(), req.dstAddress().ext(), req.dstAddress().nwk());
-                            }
-                        }
-
-                        return;
-                    }
-                }
-#endif
 
                 // create a new node
                 if (!node)
@@ -9220,10 +9100,7 @@ int zmController::zclCommandRequest(const Address &address,
     // set correct HA profile adressing instead of ZLL profile
     if (simpleDescriptor.profileId() == ZLL_PROFILE_ID)
     {
-        //if (cluster.id() != 0x1000) // but not ZLL commissioning cluster
-        {
-            apsReq.setProfileId(HA_PROFILE_ID);
-        }
+        apsReq.setProfileId(HA_PROFILE_ID);
     }
 
     deCONZ::ApsTxOptions txOptions;
@@ -9239,9 +9116,6 @@ int zmController::zclCommandRequest(const Address &address,
             }
         }
     }
-    // txOptions |= deCONZ::ApsTxSecurityEnabledTransmission;
-    // txOptions |= deCONZ::ApsTxUseNwk;
-    // txOptions |= deCONZ::ApsTxFragmentationPermitted;
 
     apsReq.setTxOptions(txOptions);
     apsReq.setRadius(0);
@@ -9252,7 +9126,6 @@ int zmController::zclCommandRequest(const Address &address,
     {
         deCONZ::notifyUser(tr("Can't send ZCL command we don't have a compatible endpoint"));
         apsReq.setSrcEndpoint(0x00);
-//        return false;
     }
     else
     {
@@ -9849,11 +9722,7 @@ void zmController::setAutoFetching()
     {
         m_autoFetch = enabled;
         QList<deCONZ::RequestId> items;
-    //    items.append(deCONZ::ReqIeeeAddr);
-    //    items.append(deCONZ::ReqNwkAddr);
         items.append(deCONZ::ReqNodeDescriptor);
-        //items.append(deCONZ::ReqPowerDescriptor);
-        //items.append(deCONZ::ReqUserDescriptor);
         items.append(deCONZ::ReqActiveEndpoints);
         items.append(deCONZ::ReqSimpleDescriptor);
         items.append(deCONZ::ReqMgmtLqi);
