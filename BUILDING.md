@@ -26,7 +26,7 @@ Optional create Debian `.deb` package
 
 ```
 cd build
-cpack -G "DEB;TGZ" .
+cpack -G DEB .
 ```
 
 
