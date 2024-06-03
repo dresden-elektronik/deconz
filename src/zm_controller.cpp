@@ -5190,13 +5190,7 @@ void zmController::onApsdeDataIndication(const deCONZ::ApsDataIndication &ind)
 
                         DBG_Printf(DBG_ZDP, "  ED value: %d (0x%02X)\n", ed, uint8_t(ed & 0xFF));
                     }
-                }
-
-                if (_nodeModel && node->g)
-                {
-                    _nodeModel->updateNode(*node);
-                    node->g->requestUpdate();
-                }
+                }               
             }
         }
             break;
