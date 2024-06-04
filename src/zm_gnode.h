@@ -93,6 +93,7 @@ public:
     int selectionOrder() const { return m_selectionCounter; }
     void requestUpdate();
     void setName(const QString &name);
+    const QString &name() const { return m_name; }
     void setAddress(quint16 nwk, quint64 mac);
     void setLastSeen(qint64 lastSeen);
     void setHasDDF(int hasDDF);

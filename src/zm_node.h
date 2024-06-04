@@ -75,13 +75,9 @@ public:
 
     bool updatedClusterAttribute(SimpleDescriptor *simpleDescriptor, ZclCluster *cluster, ZclAttribute *attribute);
     // basic cluster
-    const QString &vendor() const { return m_vendor; }
-    const QString &modelId() const { return m_modelId; }
-    const QString &swVersion() const { return m_swVersion; }
+
     uint32_t swVersionNum() const { return m_swVersionNum; }
     void setAddress(const deCONZ::Address &addr);
-    void setVendor(const QString &vendor) { m_vendor = vendor; }
-    void setModelId(const QString &modelId) { m_modelId = modelId; }
     void setVersion(const QString &version);
 
     int battery() const { return m_battery; }
@@ -164,10 +160,7 @@ private:
     Address m_parentAddr;
     PowerDescriptor m_powerDescr;
     // fields from basic cluster
-    QString m_swVersion;
     uint32_t m_swVersionNum = 0;
-    QString m_modelId;
-    QString m_vendor;
     bool m_needRejoin;
     int m_hasDDF = 0;
     int m_battery = -1; // 0–100 or -1 for invalid

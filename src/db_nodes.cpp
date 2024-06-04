@@ -443,7 +443,7 @@ void zmController::loadNodesFromDb()
             }
         }
 
-        deCONZ::nodeModel()->addNode(node);
+        deCONZ::nodeModel()->addNode(dbNode.extAddr, dbNode.nwkAddr);
         m_nodes.push_back(node);
     }
 

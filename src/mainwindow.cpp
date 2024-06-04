@@ -1840,7 +1840,7 @@ void MainWindow::deleteNodesActionTriggered()
         zmgNode *node = qgraphicsitem_cast<zmgNode*>(item);
         if (node && node->data())
         {
-            const auto nodeName = node->data()->userDescriptor();
+            const QString &nodeName = node->name();
             const QString extAddr = QString::fromLatin1(node->data()->extAddressString().c_str());
 
             QMessageBox dlg(QMessageBox::NoIcon,
@@ -1909,7 +1909,7 @@ void MainWindow::addSourceRouteActionTriggered()
 
     for (auto *g : nodes)
     {
-        DBG_Printf(DBG_INFO, "%s selection order: %d\n", qPrintable(g->data()->userDescriptor()), g->selectionOrder());
+        DBG_Printf(DBG_INFO, "%s selection order: %d\n", qPrintable(g->name()), g->selectionOrder());
     }
 
     m_controller->addSourceRoute(nodes);

@@ -230,10 +230,8 @@ void zmNode::setAddress(const Address &addr)
 
 void zmNode::setVersion(const QString &version)
 {
-    if (!version.isEmpty() && m_swVersion != version)
+    if (!version.isEmpty())
     {
-         m_swVersion = version;
-
          if (nodeDescriptor().manufacturerCode() == 0x1135)
          {
              int idx = version.indexOf('.');

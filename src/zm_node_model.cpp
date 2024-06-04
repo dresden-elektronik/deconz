@@ -9,27 +9,56 @@
  */
 
 #include <QFont>
-#include "zm_node.h"
+#include <QStringList>
+#include <vector>
 #include "zm_node_model.h"
 
 namespace deCONZ {
 
-NodeModel::NodeModel(QObject *parent) :
-    QAbstractTableModel(parent)
+class NodeModelEntry
 {
-    m_devState = UnknownState;
-    m_sectionNames.append(QLatin1String("MAC"));
-    m_sectionNames.append(QLatin1String("NWK"));
-    m_sectionNames.append(QLatin1String("Name"));
-    m_sectionNames.append(QLatin1String("Model"));
-    m_sectionNames.append(QLatin1String("Vendor"));
-    m_sectionNames.append(QLatin1String("Version"));
+public:
+    QString macAddress;
+    QString nwkAddress;
+    QString name;
+    QString model;
+    QString vendor;
+    QString version;
+    uint64_t mac;
+    uint16_t nwk;
+};
+
+class NodeModelPrivate
+{
+public:
+    std::vector<NodeModelEntry> entries;
+    QStringList m_sectionNames;
+    State m_devState;
+};
+
+NodeModel::NodeModel(QObject *parent) :
+    QAbstractTableModel(parent),
+    d_ptr2(new NodeModelPrivate)
+{
+    d_ptr2->m_devState = UnknownState;
+    d_ptr2->m_sectionNames.append(QLatin1String("MAC"));
+    d_ptr2->m_sectionNames.append(QLatin1String("NWK"));
+    d_ptr2->m_sectionNames.append(QLatin1String("Name"));
+    d_ptr2->m_sectionNames.append(QLatin1String("Model"));
+    d_ptr2->m_sectionNames.append(QLatin1String("Vendor"));
+    d_ptr2->m_sectionNames.append(QLatin1String("Version"));
+}
+
+NodeModel::~NodeModel()
+{
+    delete d_ptr2;
+    d_ptr2 = nullptr;
 }
 
 int NodeModel::rowCount(const QModelIndex &parent) const
 {
     Q_UNUSED(parent);
-    return m_nodes.size();
+    return (int)d_ptr2->entries.size();
 }
 
 int NodeModel::columnCount(const QModelIndex &parent) const
@@ -43,40 +72,36 @@ QVariant NodeModel::data(const QModelIndex &index, int role) const
     if (!index.isValid())
         return QVariant();
 
-    if (index.row() >= m_nodes.size())
+    if (index.row() >= d_ptr2->entries.size())
         return QVariant();
 
     if (role == Qt::DisplayRole /*|| role == Qt::EditRole*/)
     {
-        NodeInfo node = m_nodes[index.row()];
+        const NodeModelEntry &entry = d_ptr2->entries[index.row()];
 
         if (index.column() == MacAddressColumn)
         {
-            if (node.data->address().hasExt())
-                return toQLatin1String(node.data->extAddressString());
-            else return QLatin1String("Unknown");
+            return entry.macAddress;
         }
         else if (index.column() == NwkAddressColumn)
         {
-            if (node.data->address().hasNwk())
-                return QString("0x%1").arg(node.data->address().nwk(), int(4), int(16), QChar('0'));
-            else return QLatin1String("Unknown");
+            return entry.nwkAddress;
         }
         else if (index.column() == NameColumn)
         {
-            return node.data->userDescriptor();
+            return entry.name;
         }
         else if (index.column() == VendorColumn)
         {
-            return node.data->vendor();
+            return entry.vendor;
         }
         else if (index.column() == ModelIdColumn)
         {
-            return node.data->modelId();
+            return entry.model;
         }
         else if (index.column() == VersionColumn)
         {
-            return node.data->swVersion();
+            return entry.version;
         }
     }
     else if (role == Qt::FontRole)
@@ -103,41 +128,118 @@ QVariant NodeModel::headerData(int section, Qt::Orientation orientation, int rol
 {
     if (orientation == Qt::Horizontal && role == Qt::DisplayRole)
     {
-        if (section >= 0 && section < m_sectionNames.size())
-            return m_sectionNames[section];
+        if (section >= 0 && section < d_ptr2->m_sectionNames.size())
+            return d_ptr2->m_sectionNames[section];
     }
     return QVariant();
 }
 
-void NodeModel::addNode(NodeInfo node)
+void NodeModel::addNode(uint64_t extAddr, uint16_t nwkAddr)
 {
-    if (!m_nodes.contains(node))
+    if (extAddr == 0)
     {
-        beginInsertRows(QModelIndex(), m_nodes.size(), m_nodes.size());
-        m_nodes.append(node);
-        endInsertRows();
+        return;
+    }
+
+    for (size_t i = 0; i < d_ptr2->entries.size(); i++)
+    {
+        if (d_ptr2->entries[i].mac == extAddr)
+        {
+            return;
+        }
+    }
+
+    int row = (int)d_ptr2->entries.size();
+    beginInsertRows(QModelIndex(), row, row);
+
+    NodeModelEntry entry;
+    entry.mac = extAddr;
+    entry.nwk = nwkAddr;
+    entry.macAddress = QString("0x%1").arg(extAddr, int(16), int(16), QChar('0'));;
+    entry.nwkAddress = QString("0x%1").arg(nwkAddr, int(4), int(16), QChar('0'));
+
+    d_ptr2->entries.push_back(entry);
+
+    endInsertRows();
+}
+
+void NodeModel::removeNode(uint64_t extAddr)
+{
+    for (size_t i = 0; i < d_ptr2->entries.size(); i++)
+    {
+        if (d_ptr2->entries[i].mac == extAddr)
+        {
+            beginRemoveRows(QModelIndex(), i, i);
+            d_ptr2->entries[i] = d_ptr2->entries.back();
+            d_ptr2->entries.pop_back();
+            endRemoveRows();
+            return;
+        }
     }
 }
 
-void NodeModel::removeNode(NodeInfo node)
+void NodeModel::setData(uint64_t extAddr, Column column, const QVariant &data)
 {
-    int idx = m_nodes.indexOf(node);
-    if (idx >= 0)
+    for (size_t i = 0; i < d_ptr2->entries.size(); i++)
     {
-        beginRemoveRows(QModelIndex(), idx, idx);
-        m_nodes.removeOne(node);
-        endRemoveRows();
+        NodeModelEntry &entry = d_ptr2->entries[i];
+        if (entry.mac == extAddr)
+        {
+
+            bool updated = false;
+            if (column == NwkAddressColumn && entry.nwk != data.toUInt())
+            {
+                    entry.nwk = data.toUInt();
+                    entry.nwkAddress = QString("0x%1").arg(entry.nwk, int(4), int(16), QChar('0'));
+                    updated = true;
+            }
+
+            if (column == ModelIdColumn && entry.model != data.toString())
+            {
+                entry.model = data.toString();
+                updated = true;
+            }
+
+            if (column == VendorColumn && entry.vendor != data.toString())
+            {
+                entry.vendor = data.toString();
+                updated = true;
+            }
+
+            if (column == NameColumn && entry.name != data.toString())
+            {
+                entry.name = data.toString();
+                updated = true;
+            }
+
+            if (column == VersionColumn && entry.version != data.toString())
+            {
+                entry.version = data.toString();
+                updated = true;
+            }
+
+            if (updated)
+            {
+                QModelIndex topLeft = index((int)i, column, QModelIndex());
+                QModelIndex bottomRight = index((int)i, column, QModelIndex());
+                emit dataChanged(topLeft, bottomRight, { Qt::DisplayRole });
+            }
+            return;
+        }
     }
 }
 
-void NodeModel::updateNode(NodeInfo node)
+QVariant NodeModel::data(uint64_t extAddr, Column column) const
 {
-    int idx = m_nodes.indexOf(node);
-    if (idx >= 0)
+    for (size_t i = 0; i < d_ptr2->entries.size(); i++)
     {
-        QModelIndex index = createIndex(idx, 0, node.id);
-        emit dataChanged(index, index);
+        if (d_ptr2->entries[i].mac == extAddr)
+        {
+            return data(index((int)i, column, QModelIndex()), Qt::DisplayRole);
+        }
     }
+
+    return QVariant();
 }
 
 
@@ -145,9 +247,10 @@ QModelIndex NodeModel::index(int row, int column, const QModelIndex &parent) con
 {
     Q_UNUSED(parent);
 
-    if (column >=  0 && column < MaxColumn && row >= 0 && row < m_nodes.size())
+    if (column >= 0 && column < MaxColumn && row >= 0 && row < (int)d_ptr2->entries.size())
     {
-        return createIndex(row, column);
+        const NodeModelEntry &entry = d_ptr2->entries[row];
+        return createIndex(row, column, nullptr);
     }
 
     return QModelIndex();
@@ -155,9 +258,9 @@ QModelIndex NodeModel::index(int row, int column, const QModelIndex &parent) con
 
 void NodeModel::setDeviceState(State state)
 {
-    if (m_devState != state)
+    if (d_ptr2->m_devState != state)
     {
-        m_devState = state;
+        d_ptr2->m_devState = state;
         beginResetModel();
 
         endResetModel();

@@ -13,6 +13,7 @@
 #include "zm_node_info.h"
 #include "ui_zm_node_info.h"
 #include "zm_node.h"
+#include "zm_node_model.h"
 
 namespace {
     const char *InfoKeys[] = {
@@ -192,26 +193,31 @@ void zmNodeInfo::setNode(deCONZ::zmNode *data)
         ui->tableView->show();
     }
 
+    uint64_t extAddr = data->address().ext();
+    deCONZ::NodeModel *nModel = deCONZ::nodeModel();
+
     const deCONZ::NodeDescriptor &nd = m_data->nodeDescriptor();
 
     const QLatin1String unknownValue("unknown");
 
-    if (!m_data->userDescriptor().isEmpty())
+    QString nodeName = nModel->data(extAddr, deCONZ::NodeModel::NameColumn).toString();
+
+    if (!nodeName.isEmpty())
     {
-        ui->deviceName->setText(m_data->userDescriptor());
+        ui->deviceName->setText(nodeName);
     }
     else
     {
         ui->deviceName->setText(toHexString(m_data->address().ext()));
     }
 
-    QString manufacturer = m_data->vendor();
+    QString manufacturer = nModel->data(extAddr, deCONZ::NodeModel::VendorColumn).toString();
     if (manufacturer.isEmpty())
     {
         manufacturer = unknownValue;
     }
 
-    QString modelId = m_data->modelId();
+    QString modelId = nModel->data(extAddr, deCONZ::NodeModel::ModelIdColumn).toString();
     if (modelId.isEmpty())
     {
         modelId = unknownValue;

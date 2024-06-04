@@ -582,10 +582,8 @@ void zmgNode::updateParameters(const deCONZ::zmNode *data)
 {
     if (data)
     {
-//      m_name = data->extAddressString().c_str();
-
         setAddress(data->address().nwk(), data->address().ext());
-        setName(data->userDescriptor());
+        // setName(data->userDescriptor());
         setBattery(data->battery());
 
         deCONZ::DeviceType deviceType = deCONZ::UnknownDevice;
@@ -884,6 +882,11 @@ void zmgNode::setAddress(quint16 nwk, quint64 mac)
     if (nwk != m_nwkAddressCache)
     {
         m_nwkAddressCache = nwk;
+
+        if (m_name.isEmpty() || (m_name.size() == 6 && m_name.startsWith("0x")))
+        {
+            setName(QString()); // ugly, but force refresh NWK address as name
+        }
     }
 
     if (mac != m_extAddressCache)

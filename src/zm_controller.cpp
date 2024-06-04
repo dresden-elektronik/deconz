@@ -1377,7 +1377,6 @@ void zmController::nodeKeyPressed(deCONZ::zmNode *dnode, int key)
             event.setType(deCONZ::NodeDataChanged);
             event.setNode(node->data);
             emit notify(event);
-            deCONZ::nodeModel()->updateNode(*node);
         }
         else if (key == deCONZ::NodeKeyDelete)
         {
@@ -2789,18 +2788,18 @@ void zmController::addSourceRoute(const std::vector<zmgNode *> gnodes)
 
     if (ret == 0)
     {
-        DBG_Printf(DBG_INFO, "source route added to %s\n", qPrintable(dest->data()->userDescriptor()));
+        DBG_Printf(DBG_INFO, "source route added to %s\n", dest->data()->extAddressString().c_str());
         m_routes.push_back(sr);
         emit sourceRouteChanged(sr);
     }
     else if (ret == 1)
     {
-        DBG_Printf(DBG_INFO, "source route updated for %s\n", qPrintable(dest->data()->userDescriptor()));
+        DBG_Printf(DBG_INFO, "source route updated for %s\n", dest->data()->extAddressString().c_str());
         emit sourceRouteChanged(sr);
     }
     else
     {
-        DBG_Printf(DBG_INFO, "failed to add source route to %s\n", qPrintable(dest->data()->userDescriptor()));
+        DBG_Printf(DBG_INFO, "failed to add source route to %s\n", dest->data()->extAddressString().c_str());
     }
 
     if (ret == 0 || ret == 1)
@@ -3734,8 +3733,6 @@ void zmController::onApsdeDataConfirm(const deCONZ::ApsDataConfirm &confirm)
                     }
                         break;
                     }
-
-                    // deCONZ::nodeModel()->updateNode(*node);
                 }
 
                 if (confirm.status() != deCONZ::ApsSuccessStatus)
@@ -5555,26 +5552,21 @@ void zmController::onRestNodeUpdated(quint64 extAddress, const QString &item, co
 
     if (item == QLatin1String("name"))
     {
-        if (node->data->userDescriptor() != value)
+        if (node->g->name() != value)
         {
-            node->data->setUserDescriptor(value);
             node->g->setName(value);
+            deCONZ::nodeModel()->setData(extAddress, NodeModel::NameColumn, value);
             needRedraw = true;
         }
     }
     else if (item == QLatin1String("version"))
     {
-        if (node->data->swVersion() != value)
-        {
-            node->data->setVersion(value);
-        }
+        node->data->setVersion(value);
+        deCONZ::nodeModel()->setData(extAddress, NodeModel::VersionColumn, value);
     }
     else if (item == QLatin1String("modelid"))
     {
-        if (node->data->modelId() != value)
-        {
-            node->data->setModelId(value);
-        }
+        deCONZ::nodeModel()->setData(extAddress, NodeModel::ModelIdColumn, value);
     }
     else if (item == QLatin1String("hasddf"))
     {
@@ -5589,10 +5581,7 @@ void zmController::onRestNodeUpdated(quint64 extAddress, const QString &item, co
     }
     else if (item == QLatin1String("vendor"))
     {
-        if (node->data->vendor() != value)
-        {
-            node->data->setVendor(value);
-        }
+        deCONZ::nodeModel()->setData(extAddress, NodeModel::VendorColumn, value);
     }
     else if (item == QLatin1String("deleted"))
     {
@@ -5617,7 +5606,6 @@ void zmController::onRestNodeUpdated(quint64 extAddress, const QString &item, co
         node->data->setNeedRedraw(false);
         node->g->updateParameters(node->data); // TODO remove, gnode shouldn't know about data node
         node->g->requestUpdate();
-        deCONZ::nodeModel()->updateNode(*node);
     }
 }
 
@@ -5744,7 +5732,7 @@ NodeInfo zmController::createNode(const Address &addr, deCONZ::MacCapabilities m
     DBG_Printf(DBG_INFO, "CTRL create node %s, nwk: 0x%04X\n", info.data->extAddressString().c_str(), info.data->address().nwk());
 
     info.id = m_nodes.size();
-    deCONZ::nodeModel()->addNode(info);
+    deCONZ::nodeModel()->addNode(addr.ext(), addr.nwk());
     NodeEvent event(NodeEvent::NodeAdded, info.data);
     emit nodeEvent(event);
 
@@ -5816,7 +5804,7 @@ void zmController::deleteNode(NodeInfo *node, NodeRemoveMode finally)
 
             if (finally == NodeRemoveFinally)
             {
-                deCONZ::nodeModel()->removeNode(cpy);
+                deCONZ::nodeModel()->removeNode(cpy.data->address().ext());
                 // remove all binding links for this node
                 // one per iteration
                 bool found = true;
@@ -5865,8 +5853,6 @@ void zmController::deleteNode(NodeInfo *node, NodeRemoveMode finally)
             }
             else
             {
-                deCONZ::nodeModel()->updateNode(cpy);
-
                 if (finally == NodeRemoveHide)
                 {
                     if (cpy.g)
@@ -6554,10 +6540,6 @@ void zmController::zclReadAttributesResponse(NodeInfo *node, const deCONZ::ApsDa
 
                 if (node->data->updatedClusterAttribute(simpleDescr, cluster, attr))
                 {
-                    if (ind.clusterId() == 0x0000 && ind.profileId() == HA_PROFILE_ID)
-                    {
-                        deCONZ::nodeModel()->updateNode(*node);
-                    }
                 }
 
                 event.addAttributeId(id);
@@ -7779,15 +7761,21 @@ void zmController::fetchZdpTick()
     {
         // quirk mode for Xiami QBKG03LM, with wrong "rx on when idle"
         // repair node descriptor
-        // TODO(mpi): do we need this anymore with DDF in place?
-        if (!node->nodeDescriptor().isNull() && node->nodeDescriptor().manufacturerCode_t() == 0x1037_mfcode && node->modelId().startsWith(QLatin1String("lumi.ctrl_neutral")))
+        // TODO(mpi): do we need this anymore with DDF in place? (this and the string compare is done quite often)
+#if 0 // keeping the code for now, if it comes up again it needs to be dealed with from DDF
+        if (!node->nodeDescriptor().isNull() && node->nodeDescriptor().manufacturerCode_t() == 0x1037_mfcode)
         {
-            NodeDescriptor nd = node->nodeDescriptor();
-            nd.setMacCapabilities(nd.macCapabilities() | deCONZ::MacReceiverOnWhenIdle);
-            node->setMacCapabilities(nd.macCapabilities());
-            NodeEvent event(NodeEvent::UpdatedNodeDescriptor, node);
-            emit nodeEvent(event);
+            QString modelId = deCONZ::nodeModel()->data(node->address().ext(), NodeModel::ModelIdColumn).toString();
+            if (modelId.startsWith(QLatin1String("lumi.ctrl_neutral")))
+            {
+                NodeDescriptor nd = node->nodeDescriptor();
+                nd.setMacCapabilities(nd.macCapabilities() | deCONZ::MacReceiverOnWhenIdle);
+                node->setMacCapabilities(nd.macCapabilities());
+                NodeEvent event(NodeEvent::UpdatedNodeDescriptor, node);
+                emit nodeEvent(event);
+            }
         }
+#endif
 
         m_fetchCurNode++;
         return;
@@ -9513,6 +9501,7 @@ void zmController::checkAddressChange(const Address &address, NodeInfo *node)
                 emit nodeEvent(e);
                 visualizeNodeChanged(node, deCONZ::IndicateDataUpdate);
                 queueSaveNodesState();
+                deCONZ::nodeModel()->setData(address.ext(), NodeModel::NwkAddressColumn, address.nwk());
             }
         }
         else
@@ -9566,8 +9555,6 @@ void zmController::visualizeNodeChanged(NodeInfo *node, deCONZ::Indication indic
         event.setType(deCONZ::NodeDataChanged);
         event.setNode(node->data);
         emit notify(event);
-
-        deCONZ::nodeModel()->updateNode(*node);
     }
 }
 

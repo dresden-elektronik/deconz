@@ -12,22 +12,29 @@
 #define ZM_NODE_MODEL_H
 
 #include <QAbstractTableModel>
-#include <QStringList>
-#include "deconz/types.h"
-#include "zm_node.h"
+#include <deconz/types.h>
 
 namespace deCONZ
 {
 
 class NodeModel;
+class NodeModelPrivate;
 
 NodeModel *nodeModel();
+
+/*
+ * TODO(mpi): Refactor for GUI separation
+ *
+ *    - The deCONZ::NodeModel must only be part of the GUI
+ *    - Remove from deCONZ::Controller
+ */
 
 class NodeModel : public QAbstractTableModel
 {
     Q_OBJECT
 public:
-    enum Columns {
+    enum Column
+    {
         MacAddressColumn,
         NwkAddressColumn,
         NameColumn,
@@ -38,9 +45,11 @@ public:
         MaxColumn
     };
     explicit NodeModel(QObject *parent = 0);
-    void addNode(NodeInfo node);
-    void removeNode(NodeInfo node);
-    void updateNode(NodeInfo node);
+    ~NodeModel();
+    void addNode(uint64_t extAddr, uint16_t nwkAddr);
+    void removeNode(uint64_t extAddr);
+    void setData(uint64_t extAddr, Column column, const QVariant &data);
+    QVariant data(uint64_t extAddr, Column column) const;
     int rowCount(const QModelIndex &parent = QModelIndex()) const;
     int columnCount(const QModelIndex &parent = QModelIndex()) const;
     QVariant data(const QModelIndex &index, int role) const;
@@ -50,13 +59,8 @@ public:
 public Q_SLOTS:
     void setDeviceState(State state);
 
-signals:
-    void dataChanged(const QModelIndex &topLeft, const QModelIndex &bottomRight);
-
 private:
-    QList<NodeInfo> m_nodes;
-    QStringList m_sectionNames;
-    State m_devState;
+    NodeModelPrivate *d_ptr2 = nullptr;
 };
 
 }  // namespace deCONZ
