@@ -88,7 +88,6 @@ enum CommonMessageIds
 };
 
 // provide global access
-deCONZ::NodeModel *_nodeModel = 0;
 zmNetDescriptorModel *_netModel = 0;
 deCONZ::SteadyTimeRef m_steadyTimeRef;
 
@@ -155,11 +154,6 @@ namespace deCONZ {
 zmController *controller()
 {
     return static_cast<zmController*>(deCONZ::ApsController::instance());
-}
-
-NodeModel *nodeModel()
-{
-    return _nodeModel;
 }
 
 zmNetDescriptorModel *netModel()
@@ -714,7 +708,6 @@ zmController::zmController(zmMaster *master,
     // create ZCL database
     deCONZ::ZclDataBase *zclDb = deCONZ::zclDataBase();
     Q_UNUSED(zclDb);
-    _nodeModel = new deCONZ::NodeModel(this);
 
     m_fetchCurNode = 0;
     m_linkViewMode = LinkShowLqi;
@@ -831,7 +824,6 @@ zmController::~zmController()
     storeSourceRoutingConfig(&config);
 
      _netModel = nullptr;
-    _nodeModel = nullptr;
     _apsCtrl = nullptr;
 }
 

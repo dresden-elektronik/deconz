@@ -101,6 +101,7 @@ static const int MaxConnectionTimeoutBootloaderOnly = 60;
 static SourceRouteInfo *_sourceRouteInfo = nullptr;
 static zmClusterInfo *_clusterInfo = nullptr;
 static zmNodeInfo *_nodeInfo = nullptr;
+static deCONZ::NodeModel *_nodeModel = nullptr;
 static zmBindDropbox *_bindDropBox = nullptr;
 static zmNetEdit *_netEdit = nullptr;
 static SendToDialog *_sendToDialog = nullptr;
@@ -148,6 +149,11 @@ zmNodeInfo *nodeInfo()
     return _nodeInfo;
 }
 
+NodeModel *nodeModel()
+{
+    return _nodeModel;
+}
+
 zmBindDropbox *bindDropBox()
 {
     Q_ASSERT(_bindDropBox);
@@ -190,6 +196,8 @@ MainWindow::MainWindow(QWidget *parent) :
     m_devUpdateCanditate = false;
     m_devEnum = new deCONZ::DeviceEnumerator(this);
     m_autoConnIdx = 0;
+
+    _nodeModel = new deCONZ::NodeModel(this);
 
     if (!gHeadlessVersion)
     {
@@ -539,9 +547,7 @@ MainWindow::~MainWindow()
     _nodeInfo = nullptr;
     _bindDropBox = nullptr;
     _netEdit = nullptr;
-//    delete ui;
-//    m_master->stop();
-//    m_masterThread->exit();
+    _nodeModel = nullptr;
     _mainWindow = nullptr;
     delete ui;
     ui = nullptr;
