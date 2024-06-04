@@ -3792,6 +3792,7 @@ void zmController::onApsdeDataConfirm(const deCONZ::ApsDataConfirm &confirm)
     visualizeNodeIndication(node, indication);
 }
 
+#if 0
 int checkDirectNeighbor(const deCONZ::ApsDataIndication &ind, std::vector<NodeInfo> &nodes)
 {
     if (!ind.srcAddress().hasNwk())
@@ -3834,6 +3835,7 @@ int checkDirectNeighbor(const deCONZ::ApsDataIndication &ind, std::vector<NodeIn
         return 2;
     }
 }
+#endif
 
 static deCONZ::ZclCluster *addMissingCluster(NodeInfo *node, SimpleDescriptor *sd, const deCONZ::ApsDataIndication &ind, const deCONZ::ZclFrame &zclFrame)
 {
@@ -3942,7 +3944,8 @@ void zmController::onApsdeDataIndication(const deCONZ::ApsDataIndication &ind)
         m_apsGroupIndicationTimeRef = m_steadyTimeRef;
     }
 
-    checkDirectNeighbor(ind, m_nodes);
+    // TODO(mpi): Remove, following does nothing other than iterating over all nodes and print some info
+    // checkDirectNeighbor(ind, m_nodes);
 
     char srcAddrStr[24];
 
