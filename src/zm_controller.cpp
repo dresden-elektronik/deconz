@@ -9452,19 +9452,21 @@ bool zmController::sendForceChildRejoin(deCONZ::zmNode *node)
 
 const deCONZ::SimpleDescriptor *zmController::getCompatibleEndpoint(const deCONZ::SimpleDescriptor &other)
 {
-    // search compatible endpoint (with proper profile id)
-    NodeInfo &srcNode = m_nodes.front(); // self
-    // TODO first node isn't always own node
-    for (auto &sd : srcNode.data->simpleDescriptors())
+    if (!m_nodes.empty())
     {
-        if (sd.profileId() == other.profileId())
+        // search compatible endpoint (with proper profile id)
+        NodeInfo &srcNode = m_nodes.front(); // self
+        for (auto &sd : srcNode.data->simpleDescriptors())
         {
-            return &sd;
-        }
-        // the ZLL profile shall be compatible with HA profile
-        else if (other.profileId() == ZLL_PROFILE_ID && sd.profileId() == HA_PROFILE_ID)
-        {
-            return &sd;
+            if (sd.profileId() == other.profileId())
+            {
+                return &sd;
+            }
+            // the ZLL profile shall be compatible with HA profile
+            else if (other.profileId() == ZLL_PROFILE_ID && sd.profileId() == HA_PROFILE_ID)
+            {
+                return &sd;
+            }
         }
     }
 
