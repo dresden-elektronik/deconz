@@ -78,8 +78,6 @@ zmgNode::zmgNode(deCONZ::zmNode *data, QGraphicsItem *parent) :
     m_sockets[NeighborSocket] = new NodeSocket(NodeSocket::LookLeft, this);
     m_sockets[DataSocket] = new NodeSocket(NodeSocket::LookLeft, this);
 
-    updateParameters(data);
-
     m_epBox = new zmgEndpointBox(this);
     m_epBox->moveBy(0, m_height + 2);
     m_epBox->setVisible(m_epDropDownVisible);
@@ -147,6 +145,7 @@ void zmgNode::toggleEndpointDropdown()
        }
     }
 
+    m_dirty = true;
     checkVisible();
 }
 
@@ -180,6 +179,7 @@ void zmgNode::updated(deCONZ::RequestId id)
             }
         }
 
+        m_dirty = true;
         requestUpdate();
     }
         break;
@@ -578,26 +578,11 @@ void zmgNode::updateLink(NodeLink *link)
 }
 
 // TODO wip zmgNode should not know anything about deCONZ::zmNode
-void zmgNode::updateParameters(const deCONZ::zmNode *data)
+void zmgNode::updateParameters()
 {
-    if (data)
+    if (m_data) // TODO set from outside
     {
-        setAddress(data->address().nwk(), data->address().ext());
-        // setName(data->userDescriptor());
-        setBattery(data->battery());
-
-        deCONZ::DeviceType deviceType = deCONZ::UnknownDevice;
-
-        if      (data->isRouter()) deviceType = deCONZ::Router;
-        else if (data->isEndDevice()) deviceType = deCONZ::EndDevice;
-        else if (data->isCoordinator()) deviceType = deCONZ::Coordinator;
-
-        if (deviceType != m_deviceType)
-        {
-            m_deviceType = deviceType;
-        }
-
-        m_isZombie = data->isZombie();
+        m_isZombie = m_data->isZombie();
     }
 
     if (m_nodeState == ComplexState)
@@ -625,6 +610,7 @@ void zmgNode::updateParameters(const deCONZ::zmNode *data)
                 prepareGeometryChange();
                 m_width = w;
                 m_height = h;
+                m_epBox->setPos(0, m_height + 2);
             }
         }
     }
@@ -670,6 +656,8 @@ void zmgNode::setBattery(int battery)
         {
             m_battery = -1;
         }
+
+        m_dirty = true;
     }
 }
 
@@ -858,7 +846,11 @@ NodeLink *zmgNode::link(int i)
 
 void zmgNode::requestUpdate()
 {
-//    DBG_Printf(DBG_INFO, "gnode request update\n");
+    if (m_dirty)
+    {
+        updateParameters();
+        m_dirty = false;
+    }
     update();
 }
 
@@ -869,11 +861,13 @@ void zmgNode::setName(const QString &name)
         if (m_name != name)
         {
             m_name = name;
+            m_dirty = true;
         }
     }
     else
     {
         m_name = "0x" + QString("%1").arg(m_nwkAddressCache, 4, 16, QLatin1Char('0')).toUpper();
+        m_dirty = true;
     }
 }
 
@@ -887,12 +881,23 @@ void zmgNode::setAddress(quint16 nwk, quint64 mac)
         {
             setName(QString()); // ugly, but force refresh NWK address as name
         }
+        m_dirty = true;
     }
 
     if (mac != m_extAddressCache)
     {
         m_extAddress.clear();
         m_extAddressCache = mac;
+        m_dirty = true;
+    }
+}
+
+void zmgNode::setDeviceType(deCONZ::DeviceType type)
+{
+    if (m_deviceType != type)
+    {
+        m_deviceType = type;
+        m_dirty = true;
     }
 }
 

@@ -237,14 +237,14 @@ static NodeInfo DB_CreateNodeInfo(const DB_Node &dbNode, int nodeId)
         addr.setNwk(static_cast<quint16>(dbNode.nwkAddr));
 
     node.data->setAddress(addr);
+    node.g->setAddress(addr.nwk(), addr.ext());
 
     QPointF p;
     p.setX(dbNode.sceneX);
     p.setY(dbNode.sceneY);
+    node.g->setDeviceType(node.data->deviceType());
     node.g->setPos(p);
-    node.g->updateParameters(node.data);
     node.g->show();
-    node.g->requestUpdate();
 
     for (const auto &sd : dbNode.simpleDescriptors)
     {
@@ -252,8 +252,8 @@ static NodeInfo DB_CreateNodeInfo(const DB_Node &dbNode, int nodeId)
 
         node.data->setSimpleDescriptor(sd);
         node.g->updated(deCONZ::ReqSimpleDescriptor);
-        node.g->requestUpdate();
     }
+    node.g->requestUpdate();
 
     return node;
 }

@@ -142,6 +142,7 @@ public:
     bool isInWaitState();
     void setHasDDF(int hasDDF) { m_hasDDF = hasDDF; }
     int hasDDF() const { return m_hasDDF; }
+    deCONZ::DeviceType deviceType() const;
 
     std::vector<RoutingTableEntry> &routes() { return m_routes; }
     const std::vector<RoutingTableEntry> &routes() const { return m_routes; }

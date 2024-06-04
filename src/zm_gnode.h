@@ -72,7 +72,6 @@ public:
     bool hasLink(NodeLink *link);
     void updateLinks();
     void updateLink(NodeLink *link);
-    void updateParameters(const deCONZ::zmNode *data);
     bool needSaveToDatabase() const;
     void setBattery(int battery);
     void setNeedSaveToDatabase(bool needSave);
@@ -95,6 +94,7 @@ public:
     void setName(const QString &name);
     const QString &name() const { return m_name; }
     void setAddress(quint16 nwk, quint64 mac);
+    void setDeviceType(deCONZ::DeviceType type);
     void setLastSeen(qint64 lastSeen);
     void setHasDDF(int hasDDF);
     void indicationTick();
@@ -112,6 +112,8 @@ protected:
     void mouseReleaseEvent(QGraphicsSceneMouseEvent *event) override;
     void mouseDoubleClickEvent(QGraphicsSceneMouseEvent *event) override;
     void keyPressEvent(QKeyEvent *event) override;
+
+    void updateParameters();
 
 protected:
     deCONZ::SteadyTimeRef m_otauActiveTime{};
@@ -144,6 +146,7 @@ protected:
     int m_height;
     int m_battery = -1;
     bool m_isZombie = false;
+    bool m_dirty = false;
     deCONZ::DeviceType m_deviceType = deCONZ::UnknownDevice;
 };
 

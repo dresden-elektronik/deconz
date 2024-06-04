@@ -572,6 +572,17 @@ bool zmNode::isInWaitState()
     return (m_state == deCONZ::WaitState);
 }
 
+DeviceType zmNode::deviceType() const
+{
+    deCONZ::DeviceType type = deCONZ::UnknownDevice;
+
+    if      (isRouter())      type = deCONZ::Router;
+    else if (isEndDevice())   type = deCONZ::EndDevice;
+    else if (isCoordinator()) type = deCONZ::Coordinator;
+
+    return type;
+}
+
 /*!
     Incremtns the retry count for \p item.
 

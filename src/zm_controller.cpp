@@ -1647,7 +1647,8 @@ void zmController::readParameterResponse(ZM_State_t status, ZM_DataId_t id, cons
                 node->g->setLastSeen(m_steadyTimeRef.ref);
                 checkAddressChange(node->data->address());
 
-                node->g->updateParameters(node->data);
+                node->g->setAddress(addr2.nwk(), addr2.ext());
+                node->g->setDeviceType(node->data->deviceType());
                 node->g->requestUpdate();
 
                 if (node != &m_nodes[0])
@@ -1762,6 +1763,7 @@ void zmController::readParameterResponse(ZM_State_t status, ZM_DataId_t id, cons
                     {
                         addr.setNwk(0x0000);
                         node->data->setAddress(addr);
+                        node->g->setAddress(addr.nwk(), addr.ext());
                         node->g->requestUpdate();
                     }
                 }
@@ -4489,6 +4491,7 @@ void zmController::onApsdeDataIndication(const deCONZ::ApsDataIndication &ind)
                         node->data->setNodeDescriptor(nd);
                         node->data->setMacCapabilities(nd.macCapabilities());
                         node->data->setFetched(ReqNodeDescriptor, true);
+                        node->g->setDeviceType(node->data->deviceType());
                         node->g->requestUpdate(); // redraw
 
                         NodeEvent event(NodeEvent::UpdatedNodeDescriptor, node->data);
@@ -5603,7 +5606,6 @@ void zmController::onRestNodeUpdated(quint64 extAddress, const QString &item, co
     if (needRedraw)
     {
         node->data->setNeedRedraw(false);
-        node->g->updateParameters(node->data); // TODO remove, gnode shouldn't know about data node
         node->g->requestUpdate();
     }
 }
@@ -5701,6 +5703,8 @@ NodeInfo zmController::createNode(const Address &addr, deCONZ::MacCapabilities m
     m_saveNodesTimer->start(1000 * 10);
 
     info.data->setAddress(addr);
+    info.g->setAddress(addr.nwk(), addr.ext());
+    info.g->setDeviceType(info.data->deviceType());
 
     // XBees don't provide a user descriptor, at least we could show a human readable "XBee"
     if ((info.data->address().ext() & 0x0013a20000000000LLU) == 0x0013a20000000000LLU)
@@ -5715,7 +5719,6 @@ NodeInfo zmController::createNode(const Address &addr, deCONZ::MacCapabilities m
         m_scene->addItem(info.g);
     }
     info.g->show();
-    info.g->updateParameters(info.data);
     info.g->requestUpdate();
 
     if (addr.hasExt() && (addr.ext() != 0))
@@ -9496,7 +9499,7 @@ void zmController::checkAddressChange(const Address &address, NodeInfo *node)
                 DBG_Printf(DBG_INFO, "%s 0x%04X nwk changed to 0x%04X\n",
                        node->data->extAddressString().c_str(), node->data->address().nwk(), address.nwk());
                 node->data->setAddress(address);
-                node->g->updateParameters(node->data);
+                node->g->setAddress(address.nwk(), address.ext());
                 node->g->requestUpdate();
                 NodeEvent e(NodeEvent::UpdatedNodeAddress, node->data);
                 emit nodeEvent(e);
