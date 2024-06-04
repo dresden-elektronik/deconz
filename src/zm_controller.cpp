@@ -4152,7 +4152,11 @@ void zmController::onApsdeDataIndication(const deCONZ::ApsDataIndication &ind)
 
         if (ind.version() >= 3 && node->data->macCapabilities() != 0 && node->data->isEndDevice())
         {
-            if (ind.srcAddress().nwk() == ind.previousHop())
+            if (ind.previousHop() == 0)
+            {
+                // TODO(erh) this seems to be a bug in ConBee III firmware
+            }
+            else if (ind.srcAddress().nwk() == ind.previousHop())
             {
                 DBG_Printf(DBG_INFO_L2, "APS-DATA.indication from child 0x%04X\n", ind.srcAddress().nwk());
                 verifyChildNode(node);
