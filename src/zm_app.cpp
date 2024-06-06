@@ -97,5 +97,5 @@ void zmApp::eventQueueIdle()
 {
     AM_Tick(&main_mq.queue);
 
+    d_ptr->httpServer->processClients();
 }
-

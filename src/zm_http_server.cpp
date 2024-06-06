@@ -21,6 +21,8 @@
 #include "zm_master.h"
 #include "deconz/dbg_trace.h"
 #include "deconz/http_client_handler.h"
+#include "deconz/n_tcp.h"
+#include "deconz/u_memory.h"
 #include "deconz/util.h"
 
 #ifdef Q_OS_WIN
@@ -39,6 +41,7 @@ public:
     bool useHttps = false;
     QString serverRoot;
     uint16_t serverPort;
+    N_TcpSocket tcpHttp;
 
     std::vector<deCONZ::HttpClientHandler*> clientHandlers;
     std::vector<zmHttpClient::CacheItem> m_cache;
@@ -186,10 +189,30 @@ HttpServer::HttpServer(QObject *parent) :
     {
         DBG_Printf(DBG_ERROR, "HTTP Server failed to start\n");
     }
+
+    U_memset(&d->tcpHttp, 0, sizeof(d->tcpHttp));
+
+#if 0 // TODO this is only a local test setup for new TCP implementation
+    {
+        if (N_TcpInit(&d->tcpHttp, N_AF_IPV4))
+        {
+            N_Address addr;
+            addr.af = N_AF_IPV4;
+
+            if (N_TcpBind(&d->tcpHttp, &addr, 6655))
+            {
+                if (N_TcpListen(&d->tcpHttp, 10))
+                {
+                }
+            }
+        }
+    }
+#endif
 }
 
 HttpServer::~HttpServer()
 {
+    N_TcpClose(&d->tcpHttp);
     httpInstance = nullptr;
     delete d;
     d = 0;
@@ -322,14 +345,24 @@ const QString &HttpServer::serverRoot() const
     return d->serverRoot;
 }
 
-void HttpServer::setUseAppCache(bool useAppCache)
+void HttpServer::processClients()
 {
-    d->useAppCache = useAppCache;
-}
+    N_TcpSocket client;
 
-bool HttpServer::useAppCache() const
-{
-    return d->useAppCache;
+    if (N_TcpCanRead(&d->tcpHttp))
+    {
+        if (N_TcpAccept(&d->tcpHttp, &client))
+        {
+            const char *dummyRsp =
+                "HTTP/1.1 200 OK\r\n"
+                "Content-Length: 12\r\n"
+                "Connection: close\r\n"
+                "\r\n"
+                "Hello deCONZ";
+            N_TcpWrite(&client, dummyRsp, qstrlen(dummyRsp));
+            N_TcpClose(&client);
+        }
+    }
 }
 
 void HttpServer::clientConnected()
