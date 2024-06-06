@@ -8,20 +8,16 @@
  *
  */
 
-#ifdef USE_ACTOR_MODEL
 #include <stdlib.h> /* malloc, free */
 #include <QAbstractEventDispatcher>
 #include <actor/service.h>
 #include <actor/plugin_loader.h>
-#endif
 
 #include <deconz/atom_table.h>
 #include "zm_app.h"
 #include "zm_http_server.h"
 
 bool gHeadlessVersion = false;
-
-#ifdef USE_ACTOR_MODEL
 
 #define MAX_MAIN_MQ_MESSAGAES 512
 
@@ -49,13 +45,10 @@ void AM_Free(void *ptr)
     }
 }
 
-#endif /* USE_ACTOR_MODEL */
-
 class AppPrivate
 {
 public:
     deCONZ::HttpServer *httpServer;
-    int dummy;
 };
 
 zmApp::zmApp(int &argc, char **argv) :
@@ -64,7 +57,6 @@ zmApp::zmApp(int &argc, char **argv) :
 {
     AT_Init(1 << 15);
 
-#ifdef USE_ACTOR_MODEL
     struct am_message_queue *mq;
 
     AM_Init();
@@ -84,20 +76,16 @@ zmApp::zmApp(int &argc, char **argv) :
     {
         connect(eventDispatcher(), &QAbstractEventDispatcher::awake,
                 this, &zmApp::eventQueueIdle);
+    }
 
     d_ptr->httpServer = new deCONZ::HttpServer(this);
-    }
-#endif
 }
 
 zmApp::~zmApp()
 {
-#ifdef USE_ACTOR_MODEL
     AM_UnloadPlugins();
     AM_Shutdown();
     AM_Destroy();
-
-#endif
 
     AT_Destroy();
 
@@ -107,8 +95,7 @@ zmApp::~zmApp()
 
 void zmApp::eventQueueIdle()
 {
-#ifdef USE_ACTOR_MODEL
     AM_Tick(&main_mq.queue);
-#endif
+
 }
 
