@@ -22,6 +22,7 @@ namespace deCONZ {
 class zmHttpClient : public QTcpSocket
 {
     Q_OBJECT
+
 public:
     enum Constants
     {
@@ -65,7 +66,6 @@ private:
     std::vector<char> m_headerBuf;
     std::array<deCONZ::HttpClientHandler*, MaxHandlers> m_handlers{};
     std::vector<CacheItem> &m_cache;
-    bool m_useAppCache;
 };
 
 #endif // ZM_HTTP_CLIENT_H

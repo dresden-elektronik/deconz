@@ -37,6 +37,7 @@ class HttpClientHandler;
 class HttpServer : public QTcpServer
 {
     Q_OBJECT
+
 public:
     explicit HttpServer(QObject *parent = 0);
     ~HttpServer();
@@ -46,8 +47,7 @@ public:
     //void handleHttpsClient(int socketDescriptor);
     void setServerRoot(const QString &root);
     const QString &serverRoot() const;
-    void setUseAppCache(bool useAppCache);
-    bool useAppCache() const;
+    void processClients();
 
 public slots:
     void clientConnected();

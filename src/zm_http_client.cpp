@@ -54,7 +54,6 @@ zmHttpClient::zmHttpClient(std::vector<CacheItem> &cache, QObject *parent) :
     m_cache(cache)
 {
     m_clientState = ClientIdle;
-    m_useAppCache = false;
     m_headerBuf.reserve(MAX_HTTP_HEADER_LENGTH);
 
     connect(this, SIGNAL(readyRead()),
@@ -68,7 +67,6 @@ zmHttpClient::zmHttpClient(std::vector<CacheItem> &cache, QObject *parent) :
     DBG_Assert(server != nullptr);
     if (server)
     {
-        m_useAppCache = server->useAppCache();
         m_serverRoot = server->serverRoot();
         DBG_Assert(!m_serverRoot.isEmpty());
 
@@ -657,11 +655,7 @@ int zmHttpClient::handleHttpFileRequest(const QHttpRequestHeader &hdr)
     }
     else if (path.endsWith(QLatin1String("appcache")))
     {
-        contentType = HttpContentAppCache;
-        if (!m_useAppCache)
-        {
-            contentType = nullptr;
-        }
+        contentType = nullptr; // don't use this anymre
     }
     else if (path.endsWith(QLatin1String("manifest.json")))
     {

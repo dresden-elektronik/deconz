@@ -37,7 +37,6 @@ class HttpServerPrivate
 {
 public:
     bool useHttps = false;
-    bool useAppCache = false;
     QString serverRoot;
     uint16_t serverPort;
 
@@ -66,21 +65,13 @@ HttpServer::HttpServer(QObject *parent) :
 #endif
 
     d->serverPort = HTTP_SERVER_PORT;
-    bool useAppCache = true;
+
     QString serverRoot;
     QString listenAddress("0.0.0.0");
     QString configPath = deCONZ::getStorageLocation(deCONZ::ConfigLocation);
     QSettings config(configPath, QSettings::IniFormat);
 
     bool ok = false;
-    if (config.contains("http/appcache"))
-    {
-        useAppCache = config.value("http/appcache").toBool();
-    }
-    else
-    {
-        config.setValue("http/appcache", useAppCache);
-    }
 
     if (config.contains("http/port"))
     {
@@ -166,7 +157,6 @@ HttpServer::HttpServer(QObject *parent) :
 
 
     setServerRoot(serverRoot);
-    setUseAppCache(useAppCache);
 
     std::vector<quint16> ports;
     ports.push_back(d->serverPort);
@@ -374,7 +364,7 @@ void HttpServer::updateFileWatcher()
     }
     QDir dir(d->serverRoot);
     QStringList filter;
-    filter << "*.html" << "*.appcache";
+    filter << "*.html";
     QStringList files = dir.entryList(filter);
 
     auto i = files.constBegin();
