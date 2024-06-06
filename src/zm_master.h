@@ -19,12 +19,6 @@
 #include "deconz/touchlink_controller.h"
 #include "common/zm_protocol.h"
 
-#ifdef Q_OS_WIN
-    #define HTTP_SERVER_PORT 80
-#else
-    #define HTTP_SERVER_PORT 8080
-#endif
-
 /*!
     \brief The master is communication partner to the device.
  */
@@ -153,9 +147,6 @@ public:
     int startInterpanMode(uint8_t channel);
     int sendInterpanRequest(const deCONZ::TouchlinkRequest &req);
 
-    quint16 httpServerPort() const;
-    const QString &httpServerRoot() const;
-    int registerHttpClientHandler(deCONZ::HttpClientHandler *handler);
     int firmwareVersionRequest();
     int unlockMaxNodes();
     uint16_t maxNodes() const { return m_maxNodes; }
@@ -252,8 +243,6 @@ private:
     int m_packetCounter;
     deCONZ::ApsDataIndication m_ind;
     int m_readParamCount;
-    quint16 m_httpServerPort;
-    deCONZ::HttpServer *m_httpServer;
     uint16_t m_maxNodes;
     MasterEvent m_taskTimerEvent;
     int m_taskTimerLine;

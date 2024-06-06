@@ -1232,7 +1232,7 @@ void MainWindow::loadPluginsStage2()
             deCONZ::HttpClientHandler *handler = dynamic_cast<deCONZ::HttpClientHandler*>(ifaceNode);
             if (handler)
             {
-                deCONZ::master()->registerHttpClientHandler(handler);
+                deCONZ::registerHttpClientHandler(handler);
             }
         }
     }

@@ -23,6 +23,14 @@
 #include "deconz/http_client_handler.h"
 #include "deconz/util.h"
 
+#ifdef Q_OS_WIN
+    #define HTTP_SERVER_PORT 80
+#else
+    #define HTTP_SERVER_PORT 8080
+#endif
+
+static deCONZ::HttpServer *httpInstance = nullptr;
+
 namespace deCONZ {
 
 class HttpServerPrivate
@@ -31,6 +39,8 @@ public:
     bool useHttps = false;
     bool useAppCache = false;
     QString serverRoot;
+    uint16_t serverPort;
+
     std::vector<deCONZ::HttpClientHandler*> clientHandlers;
     std::vector<zmHttpClient::CacheItem> m_cache;
     QFileSystemWatcher *fsWatcher = nullptr;
@@ -40,6 +50,7 @@ HttpServer::HttpServer(QObject *parent) :
     QTcpServer(parent),
     d(new HttpServerPrivate)
 {
+    httpInstance = this;
     d->serverRoot = "/";
     connect(this, SIGNAL(newConnection()),
             this, SLOT(clientConnected()));
@@ -53,10 +64,143 @@ HttpServer::HttpServer(QObject *parent) :
     connect(d->fsWatcher, SIGNAL(directoryChanged(QString)),
             this, SLOT(updateFileWatcher()));
 #endif
+
+    d->serverPort = HTTP_SERVER_PORT;
+    bool useAppCache = true;
+    QString serverRoot;
+    QString listenAddress("0.0.0.0");
+    QString configPath = deCONZ::getStorageLocation(deCONZ::ConfigLocation);
+    QSettings config(configPath, QSettings::IniFormat);
+
+    bool ok = false;
+    if (config.contains("http/appcache"))
+    {
+        useAppCache = config.value("http/appcache").toBool();
+    }
+    else
+    {
+        config.setValue("http/appcache", useAppCache);
+    }
+
+    if (config.contains("http/port"))
+    {
+        d->serverPort = config.value("http/port").toUInt(&ok);
+    }
+
+    if (config.contains("http/listen"))
+    {
+        listenAddress = config.value("http/listen", "0.0.0.0").toString();
+    }
+
+    listenAddress = deCONZ::appArgumentString("--http-listen", listenAddress);
+
+    if (!ok)
+    {
+        d->serverPort = HTTP_SERVER_PORT;
+    }
+
+    d->serverPort = deCONZ::appArgumentNumeric("--http-port", d->serverPort);
+
+#ifdef Q_OS_LINUX
+    if (d->serverPort <= 1024)
+    {
+        // NOTE: use setcap to enable ports below 1024 on the command line:
+        // setcap cap_net_bind_service=+ep /usr/bin/deCONZ
+
+        // check if this process is allowed to use privileged ports
+#ifdef USE_LIBCAP
+        bool changePort = true;
+        cap_t caps = cap_get_proc();
+
+        if (caps != NULL)
+        {
+            cap_flag_value_t effective;
+            cap_flag_value_t permitted;
+
+            cap_get_flag(caps, CAP_NET_BIND_SERVICE, CAP_EFFECTIVE, &effective);
+            cap_get_flag(caps, CAP_NET_BIND_SERVICE, CAP_PERMITTED, &permitted);
+
+            if ((effective == CAP_SET) || (permitted == CAP_SET))
+            {
+                changePort = false;
+            }
+
+            cap_free(caps);
+        }
+#else
+        bool changePort = false; // assume it works
+#endif // USE_LIBCAP
+
+        if (changePort)
+        {
+            DBG_Printf(DBG_INFO, "HTTP server at port %u not allowed, use port %u instead\n", d->serverPort, HTTP_SERVER_PORT);
+            d->serverPort = HTTP_SERVER_PORT;
+        }
+    }
+#endif // Q_OS_LINUX
+
+    config.setValue("http/port", d->serverPort);
+
+    serverRoot = deCONZ::appArgumentString("--http-root", "");
+
+    if (serverRoot.isEmpty())
+    {
+#ifdef Q_OS_LINUX
+        serverRoot = "/usr/share/deCONZ/webapp/";
+#endif
+#ifdef __APPLE__
+        QDir dir(qApp->applicationDirPath());
+        dir.cdUp();
+        dir.cd("Resources");
+        serverRoot = dir.path() + "/webapp/";
+#endif
+#ifdef Q_OS_WIN
+        serverRoot = QCoreApplication::applicationDirPath() + QLatin1String("/plugins/de_web/");
+#endif
+    }
+
+    if (!QFile::exists(serverRoot))
+    {
+        DBG_Printf(DBG_ERROR, "Server root directory %s doesn't exist\n", qPrintable(serverRoot));
+    }
+
+
+    setServerRoot(serverRoot);
+    setUseAppCache(useAppCache);
+
+    std::vector<quint16> ports;
+    ports.push_back(d->serverPort);
+    ports.push_back(80);
+    ports.push_back(8080);
+    ports.push_back(8090);
+    ports.push_back(9042);
+
+
+
+    for (size_t i = 0; i < ports.size(); i++)
+    {
+        if (listen(QHostAddress(listenAddress), ports[i]))
+        {
+            d->serverPort = serverPort();
+            DBG_Printf(DBG_INFO, "HTTP Server listen on address %s, port: %u, root: %s\n", qPrintable(listenAddress), serverPort(), qPrintable(serverRoot));
+            break;
+        }
+        else
+        {
+            DBG_Printf(DBG_ERROR, "HTTP Server listen on address %s, port: %u error: %s\n", qPrintable(listenAddress), ports[i], qPrintable(errorString()));
+        }
+    }
+
+
+    if (!isListening())
+    {
+        DBG_Printf(DBG_ERROR, "HTTP Server failed to start\n");
+    }
 }
 
 HttpServer::~HttpServer()
 {
+    httpInstance = nullptr;
     delete d;
     d = 0;
 }
@@ -242,6 +386,36 @@ void HttpServer::updateFileWatcher()
     }
 #endif
 #endif // ! ARCH_ARM
+}
+
+uint16_t httpServerPort()
+{
+    if (httpInstance)
+    {
+        return httpInstance->serverPort();
+    }
+
+    return 0;
+}
+
+QString httpServerRoot()
+{
+    if (httpInstance)
+    {
+        return httpInstance->serverRoot();
+    }
+
+    return QString();
+}
+
+int registerHttpClientHandler(deCONZ::HttpClientHandler *handler)
+{
+    if (httpInstance && handler)
+    {
+        return httpInstance->registerHttpClientHandler(handler);
+    }
+
+    return -1;
 }
 
 } // namespace deCONZ

@@ -2905,6 +2905,13 @@ void zmController::removeBinding(const Binding &binding)
     }
 }
 
+namespace deCONZ
+{
+    // forward declarations
+    extern QString httpServerRoot();
+    extern uint16_t httpServerPort();
+}
+
 uint16_t zmController::getParameter(U16Parameter parameter)
 {
     if (!_netModel)
@@ -2923,7 +2930,7 @@ uint16_t zmController::getParameter(U16Parameter parameter)
         return net.ownAddress().nwk();
 
     case ParamHttpPort:
-        return deCONZ::master()->httpServerPort();
+        return deCONZ::httpServerPort();
 
     default:
         DBG_Printf(DBG_ERROR, "Unknown 16-bit parameter %d\n", (int)parameter);
@@ -3008,7 +3015,7 @@ QString zmController::getParameter(StringParameter parameter)
     switch (parameter)
     {
     case deCONZ::ParamHttpRoot:
-        return deCONZ::master()->httpServerRoot();
+        return deCONZ::httpServerRoot();
 
     case deCONZ::ParamDeviceName:
         if (!deCONZ::master()->deviceName().isEmpty())

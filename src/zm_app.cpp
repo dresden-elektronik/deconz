@@ -17,6 +17,7 @@
 
 #include <deconz/atom_table.h>
 #include "zm_app.h"
+#include "zm_http_server.h"
 
 bool gHeadlessVersion = false;
 
@@ -53,6 +54,7 @@ void AM_Free(void *ptr)
 class AppPrivate
 {
 public:
+    deCONZ::HttpServer *httpServer;
     int dummy;
 };
 
@@ -82,6 +84,8 @@ zmApp::zmApp(int &argc, char **argv) :
     {
         connect(eventDispatcher(), &QAbstractEventDispatcher::awake,
                 this, &zmApp::eventQueueIdle);
+
+    d_ptr->httpServer = new deCONZ::HttpServer(this);
     }
 #endif
 }

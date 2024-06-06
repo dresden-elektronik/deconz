@@ -34,7 +34,6 @@
 #include "zm_global.h"
 #include "zm_master.h"
 #include "zm_master_com.h"
-#include "zm_http_server.h"
 
 #ifndef ARRAY_SIZE
 #define ARRAY_SIZE(x)            (sizeof(x) / sizeof((x)[0]))
@@ -520,139 +519,7 @@ zmMaster::zmMaster(QObject *parent) :
     Master.zllState = ZLL_NET_NOT_CONNECTED;
     Master.instance = this;
 
-    // http server
-    m_httpServer = 0;
-    m_httpServerPort = HTTP_SERVER_PORT;
-    bool useAppCache = true;
-    QString serverRoot;
-    QString listenAddress("0.0.0.0");
-    QString configPath = deCONZ::getStorageLocation(deCONZ::ConfigLocation);
-    QSettings config(configPath, QSettings::IniFormat);
 
-    bool ok = false;
-    if (config.contains("http/appcache"))
-    {
-        useAppCache = config.value("http/appcache").toBool();
-    }
-    else
-    {
-        config.setValue("http/appcache", useAppCache);
-    }
-
-    if (config.contains("http/port"))
-    {
-        m_httpServerPort = config.value("http/port").toUInt(&ok);
-    }
-
-    if (config.contains("http/listen"))
-    {
-        listenAddress = config.value("http/listen", "0.0.0.0").toString();
-    }
-
-    listenAddress = deCONZ::appArgumentString("--http-listen", listenAddress);
-
-    if (!ok)
-    {
-        m_httpServerPort = HTTP_SERVER_PORT;
-    }
-
-    m_httpServerPort = deCONZ::appArgumentNumeric("--http-port", m_httpServerPort);
-
-#ifdef Q_OS_LINUX
-    if (m_httpServerPort <= 1024)
-    {
-        // NOTE: use setcap to enable ports below 1024 on the command line:
-        // setcap cap_net_bind_service=+ep /usr/bin/deCONZ
-
-        // check if this process is allowed to use privileged ports
-#ifdef USE_LIBCAP
-        bool changePort = true;
-        cap_t caps = cap_get_proc();
-
-        if (caps != NULL)
-        {
-            cap_flag_value_t effective;
-            cap_flag_value_t permitted;
-
-            cap_get_flag(caps, CAP_NET_BIND_SERVICE, CAP_EFFECTIVE, &effective);
-            cap_get_flag(caps, CAP_NET_BIND_SERVICE, CAP_PERMITTED, &permitted);
-
-            if ((effective == CAP_SET) || (permitted == CAP_SET))
-            {
-                changePort = false;
-            }
-
-            cap_free(caps);
-        }
-#else
-        bool changePort = false; // assume it works
-#endif // USE_LIBCAP
-
-        if (changePort)
-        {
-            DBG_Printf(DBG_INFO, "HTTP server at port %u not allowed, use port %u instead\n", m_httpServerPort, HTTP_SERVER_PORT);
-            m_httpServerPort = HTTP_SERVER_PORT;
-        }
-    }
-#endif // Q_OS_LINUX
-
-    config.setValue("http/port", m_httpServerPort);
-
-    serverRoot = deCONZ::appArgumentString("--http-root", "");
-
-    if (serverRoot.isEmpty())
-    {
-#ifdef Q_OS_LINUX
-        serverRoot = "/usr/share/deCONZ/webapp/";
-#endif
-#ifdef __APPLE__
-        QDir dir(qApp->applicationDirPath());
-        dir.cdUp();
-        dir.cd("Resources");
-        serverRoot = dir.path() + "/webapp/";
-#endif
-#ifdef Q_OS_WIN
-        serverRoot = QCoreApplication::applicationDirPath() + QLatin1String("/plugins/de_web/");
-#endif
-    }
-
-    if (!QFile::exists(serverRoot))
-    {
-        DBG_Printf(DBG_ERROR, "Server root directory %s doesn't exist\n", qPrintable(serverRoot));
-    }
-
-    m_httpServer = new deCONZ::HttpServer(this);
-    m_httpServer->setServerRoot(serverRoot);
-    m_httpServer->setUseAppCache(useAppCache);
-
-    std::vector<quint16> ports;
-    ports.push_back(m_httpServerPort);
-    ports.push_back(80);
-    ports.push_back(8080);
-    ports.push_back(8090);
-    ports.push_back(9042);
-
-    if (m_httpServer)
-    {
-        for (size_t i = 0; i < ports.size(); i++)
-        {
-            if (m_httpServer->listen(QHostAddress(listenAddress), ports[i]))
-            {
-                m_httpServerPort = m_httpServer->serverPort();
-                DBG_Printf(DBG_INFO, "HTTP Server listen on address %s, port: %u, root: %s\n", qPrintable(listenAddress), m_httpServer->serverPort(), qPrintable(serverRoot));
-                break;
-            }
-            else
-            {
-                DBG_Printf(DBG_ERROR, "HTTP Server listen on address %s, port: %u error: %s\n", qPrintable(listenAddress), ports[i], qPrintable(m_httpServer->errorString()));
-            }
-        }
-    }
-
-    if (!m_httpServer->isListening())
-    {
-        DBG_Printf(DBG_ERROR, "HTTP Server failed to start\n");
-    }
 
     m_taskTimer = new QTimer(this);
     m_taskTimer->setInterval(TimeoutDelay);
@@ -1939,36 +1806,6 @@ int zmMaster::sendInterpanRequest(const deCONZ::TouchlinkRequest &req)
     taskHandler(EVENT_ITEM_ADDED);
 
     return 0;
-}
-
-quint16 zmMaster::httpServerPort() const
-{
-    if (m_httpServer)
-    {
-        return m_httpServerPort;
-    }
-
-    return 0;
-}
-
-const QString &zmMaster::httpServerRoot() const
-{
-    if (m_httpServer)
-    {
-        return m_httpServer->serverRoot();
-    }
-
-    return m_emptyString;
-}
-
-int zmMaster::registerHttpClientHandler(deCONZ::HttpClientHandler *handler)
-{
-    if (m_httpServer && handler)
-    {
-        return m_httpServer->registerHttpClientHandler(handler);
-    }
-
-    return -1;
 }
 
 int zmMaster::firmwareVersionRequest()
