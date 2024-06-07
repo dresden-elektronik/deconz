@@ -8,6 +8,7 @@
  *
  */
 
+#include <QCoreApplication>
 #include <QDir>
 #include <QSsl>
 #include <QSslKey>
