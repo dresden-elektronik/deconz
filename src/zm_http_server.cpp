@@ -195,10 +195,10 @@ HttpServer::HttpServer(QObject *parent) :
 
 #if 0 // TODO this is only a local test setup for new TCP implementation
     {
-        if (N_TcpInit(&d->tcpHttp, N_AF_IPV4))
+        if (N_TcpInit(&d->tcpHttp, N_AF_IPV6))
         {
             N_Address addr;
-            addr.af = N_AF_IPV4;
+            addr.af = N_AF_IPV6;
 
             if (N_TcpBind(&d->tcpHttp, &addr, 6655))
             {
@@ -361,6 +361,20 @@ void HttpServer::processClients()
                 "\r\n"
                 "Hello deCONZ";
             N_TcpWrite(&client, dummyRsp, qstrlen(dummyRsp));
+
+            char dummyBuf[128];
+
+            for (int wait = 0; wait < 5000;) /* stupid way to wait until peer closes connection, TODO timeout */
+            {
+                if (N_TcpCanRead(&client) == 0)
+                {
+                    wait++;
+                    continue;
+                }
+
+                if (N_TcpRead(&client, &dummyBuf[0], sizeof(dummyBuf)) <= 0)
+                    break;
+            }
             N_TcpClose(&client);
         }
     }
