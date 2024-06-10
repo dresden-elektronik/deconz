@@ -10,31 +10,53 @@
 
 #include <QCoreApplication>
 #include <QDir>
-#include <QSsl>
-#include <QSslKey>
 #include <QFile>
 #include <QFileSystemWatcher>
 #include <QSettings>
 #include "zm_http_server.h"
 #include "zm_http_client.h"
 #include "zm_https_client.h"
-#include "zm_controller.h"
-#include "zm_master.h"
 #include "deconz/dbg_trace.h"
 #include "deconz/http_client_handler.h"
+#include "deconz/n_ssl.h"
 #include "deconz/n_tcp.h"
+#include "deconz/u_assert.h"
 #include "deconz/u_memory.h"
 #include "deconz/util.h"
 
-#ifdef Q_OS_WIN
+// enabled only during tests for new SSL implementation
+// #define TEST_SSL_IMPL
+
+#define NCLIENT_HANDLE_INDEX_MASK 0xFFFF
+#define NCLIENT_HANDLE_EVOLUTION_SHIFT 17
+#define NCLIENT_HANDLE_IS_SSL_FLAG 0x10000 // bit 17
+
+
+#ifdef PL_WINDOWS
     #define HTTP_SERVER_PORT 80
 #else
     #define HTTP_SERVER_PORT 8080
 #endif
 
+static uint16_t handleEvolution;
+static unsigned clientIter;
 static deCONZ::HttpServer *httpInstance = nullptr;
+static deCONZ::HttpServerPrivate *privHttpInstance = nullptr;
 
 namespace deCONZ {
+
+/*! The NClient can be either HTTP or HTTPS.
+ *
+ * A HTTP client only uses sock.tcp, and HTTPS the whole sock N_SslSocket object.
+ */
+struct NClient
+{
+    unsigned handle = 0;
+    unsigned writePos = 0;
+    std::vector<char> writeBuf;
+    std::vector<char> readBuf;
+    N_SslSocket sock;
+};
 
 class HttpServerPrivate
 {
@@ -42,23 +64,59 @@ public:
     bool useHttps = false;
     QString serverRoot;
     uint16_t serverPort;
-    N_TcpSocket tcpHttp;
+    N_SslSocket httpsSock;
+
+    std::vector<NClient> clients;
 
     std::vector<deCONZ::HttpClientHandler*> clientHandlers;
     std::vector<zmHttpClient::CacheItem> m_cache;
     QFileSystemWatcher *fsWatcher = nullptr;
 };
 
+int HttpSend(unsigned handle, const void *buf, unsigned len)
+{
+    U_ASSERT(buf);
+    U_ASSERT(len);
+    U_ASSERT(privHttpInstance);
+    deCONZ::HttpServerPrivate *d = privHttpInstance;
+
+    unsigned index;
+
+    if (!buf || len == 0)
+        return 0;
+
+    for (index = 0; index < d->clients.size(); index++)
+    {
+        if (d->clients[index].handle == handle)
+            break;
+    }
+    if (d->clients.size() <= index)
+        return 0;
+
+    NClient &cli = d->clients[index];
+    size_t beg = cli.writeBuf.size();
+
+    cli.writeBuf.resize(beg + len);
+    U_ASSERT(beg + len <= cli.writeBuf.size());
+    U_memcpy(&cli.writeBuf[beg], buf, len);
+
+    return 1;
+}
+
 HttpServer::HttpServer(QObject *parent) :
     QTcpServer(parent),
     d(new HttpServerPrivate)
 {
     httpInstance = this;
+    privHttpInstance = d;
+
+    N_SslInit();
+
     d->serverRoot = "/";
     connect(this, SIGNAL(newConnection()),
             this, SLOT(clientConnected()));
 
-#if defined(QT_DEBUG)
+#ifdef DECONZ_DEBUG_BUILD
     d->fsWatcher = new QFileSystemWatcher(this);
     connect(d->fsWatcher, SIGNAL(directoryChanged(QString)),
             this, SLOT(clearCache()));
@@ -96,7 +154,7 @@ HttpServer::HttpServer(QObject *parent) :
 
     d->serverPort = deCONZ::appArgumentNumeric("--http-port", d->serverPort);
 
-#ifdef Q_OS_LINUX
+#ifdef PL_LINUX
     if (d->serverPort <= 1024)
     {
         // NOTE: use setcap to enable ports below 1024 on the command line:
@@ -132,7 +190,7 @@ HttpServer::HttpServer(QObject *parent) :
             d->serverPort = HTTP_SERVER_PORT;
         }
     }
-#endif // Q_OS_LINUX
+#endif // PL_LINUX
 
     config.setValue("http/port", d->serverPort);
 
@@ -140,7 +198,7 @@ HttpServer::HttpServer(QObject *parent) :
 
     if (serverRoot.isEmpty())
     {
-#ifdef Q_OS_LINUX
+#ifdef PL_LINUX
         serverRoot = "/usr/share/deCONZ/webapp/";
 #endif
 #ifdef __APPLE__
@@ -149,7 +207,7 @@ HttpServer::HttpServer(QObject *parent) :
         dir.cd("Resources");
         serverRoot = dir.path() + "/webapp/";
 #endif
-#ifdef Q_OS_WIN
+#ifdef PL_WINDOWS
         serverRoot = QCoreApplication::applicationDirPath() + QLatin1String("/plugins/de_web/");
 #endif
     }
@@ -159,7 +217,6 @@ HttpServer::HttpServer(QObject *parent) :
         DBG_Printf(DBG_ERROR, "Server root directory %s doesn't exist\n", qPrintable(serverRoot));
     }
 
-
     setServerRoot(serverRoot);
 
     std::vector<quint16> ports;
@@ -168,8 +225,6 @@ HttpServer::HttpServer(QObject *parent) :
     ports.push_back(8080);
     ports.push_back(8090);
     ports.push_back(9042);
-
-
 
     for (size_t i = 0; i < ports.size(); i++)
     {
@@ -185,27 +240,38 @@ HttpServer::HttpServer(QObject *parent) :
         }
     }
 
-
     if (!isListening())
     {
         DBG_Printf(DBG_ERROR, "HTTP Server failed to start\n");
     }
 
-    U_memset(&d->tcpHttp, 0, sizeof(d->tcpHttp));
+    U_memset(&d->httpsSock, 0, sizeof(d->httpsSock));
 
 #if 0 // TODO this is only a local test setup for new TCP implementation
     {
-        if (N_TcpInit(&d->tcpHttp, N_AF_IPV6))
+        if (N_TcpInit(&d->httpsSock.tcp, N_AF_IPV6))
         {
             N_Address addr;
             addr.af = N_AF_IPV6;
 
-            if (N_TcpBind(&d->tcpHttp, &addr, 6655))
+            if (N_TcpBind(&d->httpsSock.tcp, &addr, 6655))
             {
-                if (N_TcpListen(&d->tcpHttp, 10))
+                if (N_TcpListen(&d->httpsSock.tcp, 10))
                 {
                 }
             }
+        }
+    }
+#endif
+
+#ifdef TEST_SSL_IMPL
+    {
+        N_Address addr{};
+        addr.af = N_AF_IPV6;
+        uint16_t port = 6655;
+
+        if (N_SslServerInit(&d->httpsSock, &addr, port))
+        {
         }
     }
 #endif
@@ -213,8 +279,9 @@ HttpServer::HttpServer(QObject *parent) :
 
 HttpServer::~HttpServer()
 {
-    N_TcpClose(&d->tcpHttp);
+    N_TcpClose(&d->httpsSock.tcp);
     httpInstance = nullptr;
+    privHttpInstance = nullptr;
     delete d;
     d = 0;
 }
@@ -239,12 +306,7 @@ int HttpServer::registerHttpClientHandler(HttpClientHandler *handler)
     return 0;
 }
 
-#if QT_VERSION < 0x050000
-
-  void HttpServer::incomingConnection(int socketDescriptor)
-#else
-  void HttpServer::incomingConnection(qintptr socketDescriptor)
-#endif
+void HttpServer::incomingConnection(qintptr socketDescriptor)
 {
     if (d->useHttps)
     {
@@ -265,65 +327,12 @@ void HttpServer::handleHttpClient(int socketDescriptor)
 
     sock->setSocketOption(QTcpSocket::LowDelayOption, 1);
     int lowDelay = sock->socketOption(QTcpSocket::LowDelayOption).toInt();
-    //DBG_Assert(lowDelay == 1);
 
     for (auto *handler : d->clientHandlers)
     {
         sock->registerClientHandler(handler);
     }
 }
-
-#if 0
-void HttpServer::handleHttpsClient(int socketDescriptor)
-{
-    zmHttpsClient *sock = new zmHttpsClient(this);
-    if (sock->setSocketDescriptor(socketDescriptor))
-    {
-//        sock->addCaCertificates("TODO.cert");
-        QString privKeyFile = "server.key";
-        QString localCertFile = "server.csr";
-
-        sock->setLocalCertificate(localCertFile);
-
-        QFile file(privKeyFile);
-
-         file.open(QIODevice::ReadOnly);
-         if (!file.isOpen()) {
-             DBG_Printf(DBG_ERROR, "server.key not found\n");
-            sock->disconnectFromHost();
-            return;
-         }
-
-        QSslKey key(&file, QSsl::Rsa, QSsl::Pem, QSsl::PrivateKey, "");
-        sock->setPrivateKey(key);
-        sock->startServerEncryption();
-        if (!sock->waitForEncrypted(2000))
-        {
-            DBG_Printf(DBG_ERROR, "SSL: %s\n", qPrintable(sock->errorString()));
-        }
-        else
-        {
-            DBG_Printf(DBG_ERROR, "SSL OK: %s\n", qPrintable(sock->peerAddress().toString()));
-        }
-    }
-    else
-    {
-        DBG_Printf(DBG_ERROR, "setSocketDescriptor failed: %s\n", qPrintable(sock->errorString()));
-    }
-    //addPendingConnection(sock);
-    emit newConnection();
-
-    std::list<deCONZ::HttpClientHandler*>::iterator i = d->clientHandlers.begin();
-    std::list<deCONZ::HttpClientHandler*>::iterator end = d->clientHandlers.end();
-
-    for (; i != end; ++i)
-    {
-        sock->registerClientHandler(*i);
-    }
-
-// TODO: generate self signed certificate http://www.akadia.com/services/ssh_test_certificate.html
-}
-#endif
 
 void HttpServer::setServerRoot(const QString &root)
 {
@@ -348,11 +357,12 @@ const QString &HttpServer::serverRoot() const
 
 void HttpServer::processClients()
 {
+#if 0
     N_TcpSocket client;
 
-    if (N_TcpCanRead(&d->tcpHttp))
+    if (N_TcpCanRead(&d->httpsSock.tcp))
     {
-        if (N_TcpAccept(&d->tcpHttp, &client))
+        if (N_TcpAccept(&d->httpsSock.tcp, &client))
         {
             const char *dummyRsp =
                 "HTTP/1.1 200 OK\r\n"
@@ -378,6 +388,97 @@ void HttpServer::processClients()
             N_TcpClose(&client);
         }
     }
+#endif
+
+#ifdef TEST_SSL_IMPL
+    static N_SslSocket clientSock;
+
+    if (N_SslAccept(&d->httpsSock, &clientSock))
+    {
+        DBG_Printf(DBG_INFO, "TCP accept\n");
+
+        NClient cli;
+
+        if (++handleEvolution >= 0x7FFF) // 15-bit counter
+            handleEvolution = 0;
+
+        // handle: 15-bit evolution | SSL flag | 16-bit index
+        cli.handle = handleEvolution;
+        cli.handle <<= NCLIENT_HANDLE_EVOLUTION_SHIFT;
+        cli.handle |= NCLIENT_HANDLE_IS_SSL_FLAG;
+        cli.handle += d->clients.size();
+
+        U_memcpy(&cli.sock, &clientSock, sizeof(clientSock));
+
+        d->clients.push_back(cli);
+    }
+
+    if (d->clients.empty())
+        return;
+
+    if (d->clients.size() <= clientIter)
+        clientIter = 0;
+
+    NClient &cli = d->clients[clientIter];
+    clientIter++;
+
+    if (cli.handle & NCLIENT_HANDLE_IS_SSL_FLAG)
+    {
+        if (N_SslHandshake(&cli.sock) == 0)
+            return;
+
+        if (N_SslCanRead(&cli.sock))
+        {
+            char buf[2048];
+            int n = N_SslRead(&cli.sock, buf, sizeof(buf) - 1);
+            if (n == 0)
+            {
+                DBG_Printf(DBG_INFO, "TCP done\n");
+            }
+            else if (n > 0 && (unsigned)n < sizeof(buf))
+            {
+                buf[n] = '\0';
+                size_t beg = cli.readBuf.size();
+
+                cli.readBuf.reserve(beg + n + 1);
+                cli.readBuf.resize(beg + n);
+                U_ASSERT(beg + n + 1 <= cli.readBuf.capacity());
+                U_memcpy(&cli.readBuf[beg], buf, n + 1);
+
+                DBG_Printf(DBG_INFO, "%s\n", buf);
+
+
+                const char *dummyRsp =
+                    "HTTP/1.1 200 OK\r\n"
+                    "Content-Length: 14\r\n"
+                    "Connection: close\r\n"
+                    "\r\n"
+                    "Hello deCONZ\r\n";
+
+                HttpSend(cli.handle, dummyRsp, qstrlen(dummyRsp));
+            }
+        }
+
+        if (cli.writePos < cli.writeBuf.size())
+        {
+            unsigned len = cli.writeBuf.size() - cli.writePos;
+            int n = N_SslWrite(&cli.sock, &cli.writeBuf[cli.writePos], len);
+
+            if (n > 0)
+            {
+                DBG_Printf(DBG_INFO, "TCP written %d bytes\n", n);
+                cli.writePos += n;
+
+                if (cli.writeBuf.size() <= cli.writePos)
+                {
+                    // all done
+                    cli.writePos = 0;
+                    cli.writeBuf.clear();
+                }
+            }
+        }
+    }
+#endif // TEST_SSL_IMPL
 }
 
 void HttpServer::clientConnected()
@@ -388,8 +489,6 @@ void HttpServer::clientConnected()
     {
         connect(sock, SIGNAL(disconnected()),
                 sock, SLOT(deleteLater()));
-
-//        DBG_Printf(DBG_INFO, "HTTP client connected %s:%u\n", qPrintable(sock->peerAddress().toString()), sock->peerPort());
     }
 }
 
@@ -404,8 +503,9 @@ void HttpServer::clearCache()
 
 void HttpServer::updateFileWatcher()
 {
+#ifdef DECONZ_DEBUG_BUILD
 #ifndef ARCH_ARM
-#if defined(Q_OS_WIN) || defined(Q_OS_LINUX)
+#if defined(PL_WINDOWS) || defined(PL_LINUX)
     if (!d->fsWatcher)
     {
         return;
@@ -424,6 +524,7 @@ void HttpServer::updateFileWatcher()
     }
 #endif
 #endif // ! ARCH_ARM
+#endif // DECONZ_DEBUG_BUILD
 }
 
 uint16_t httpServerPort()
