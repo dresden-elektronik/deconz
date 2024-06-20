@@ -135,7 +135,7 @@ protected:
     QString m_name;
     QString m_extAddress;
     quint64 m_extAddressCache = 0;
-    quint16 m_nwkAddressCache = 0;
+    quint16 m_nwkAddressCache = 0xFFFF;
     qint64 m_lastSeen = 0;
     int m_moveWatcher = -1;
     int m_hasDDF = 0;
