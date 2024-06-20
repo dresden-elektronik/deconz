@@ -231,8 +231,6 @@ void zmgNode::paint(QPainter *painter, const QStyleOptionGraphicsItem *option, Q
 
     Q_UNUSED(widget)
 
-//    DBG_Printf(DBG_INFO, "gnode paint\n");
-
     static const QColor nodeColor(NODE_COLOR);
     static const QColor nodeColorSelected = nodeColor.lighter(104);
     static const QColor nodeColorNeutral(160, 160, 160);
@@ -251,6 +249,7 @@ void zmgNode::paint(QPainter *painter, const QStyleOptionGraphicsItem *option, Q
 
     const QColor *m_color = &nodeColorNeutral;
 
+    const int rheight = option->rect.height();
     const int tooOld = 60 * 1000 * 30; // 30 minutes
     qint64 ageSeconds = tooOld;
 
@@ -297,7 +296,6 @@ void zmgNode::paint(QPainter *painter, const QStyleOptionGraphicsItem *option, Q
 
     p.setBrush(nodeShadowColor);
     p.setPen(QPen(nodeShadowColor, 1.8));
-    //p.drawRoundedRect(QRectF(option->rect).adjusted(1.8, 1.8, -1.0, shadowY), roundBorder, roundBorder);
     p.drawRoundedRect(QRectF(option->rect).adjusted(1.5, 1.5, -1, -1), roundBorder, roundBorder);
 
     // surface
@@ -371,7 +369,6 @@ void zmgNode::paint(QPainter *painter, const QStyleOptionGraphicsItem *option, Q
         }
     }
 
-    QPointF pos = boundingRect().topLeft();
     QFont fn;
     fn.setPointSize(NamePointSize);
     fn.setWeight(QFont::Bold);
@@ -394,33 +391,25 @@ void zmgNode::paint(QPainter *painter, const QStyleOptionGraphicsItem *option, Q
         p.setPen(QPen(textColorDark, 2));
     }
 
-    pos.rx() += NamePad;
-    pos.ry() += fm.lineSpacing();
-    p.drawText(pos, m_name);
+    QRect rectName = option->rect.adjusted(NamePad, fm.capHeight() * 3 / 8, -2 * ToggleSize, 0);
+    rectName.setHeight(fm.capHeight() * 2);
+
+    // p.fillRect(rectName, Qt::cyan);
+    p.drawText(rectName, Qt::AlignVCenter, m_name);
 
     if (m_hasDDF != 0)
     {
-        QPointF pos2 = pos;
-        pos2.ry() -= 1;
-
-#if (QT_VERSION < QT_VERSION_CHECK(5, 11, 0))
-    pos2.rx() += fm.width(m_name) + 12.0f;
-
-#else
-    pos2.rx() += fm.horizontalAdvance(m_name) + 12.0f;
-#endif
-
         fn.setPointSize(8);
         fn.setBold(false);
         p.setFont(fn);
         p.setPen(QPen(QColor(50, 50, 50), 2));
         if (m_hasDDF == 1)
         {
-            p.drawText(pos2, QLatin1String("DDF"));
+            p.drawText(rectName, Qt::AlignVCenter | Qt::AlignRight, QLatin1String("DDF"));
         }
         else if (m_hasDDF == 2)
         {
-            p.drawText(pos2, QLatin1String("DDB"));
+            p.drawText(rectName, Qt::AlignVCenter | Qt::AlignRight, QLatin1String("DDB"));
         }
     }
 
@@ -430,14 +419,16 @@ void zmgNode::paint(QPainter *painter, const QStyleOptionGraphicsItem *option, Q
     fn.setPointSize(MacPointSize);
     p.setFont(fn);
     fm = QFontMetrics(fn);
-    pos.rx() -= NamePad * 0.4;
-    pos.ry() += fm.lineSpacing() * 1.25;
     p.setPen(QPen(QColor(50, 50, 50), 2));
     if (m_extAddress.isEmpty())
     {
         m_extAddress = QString(QLatin1String("%1")).arg(m_extAddressCache, 16, 16, QLatin1Char('0')).toUpper();
     }
-    p.drawText(pos, m_extAddress);
+
+    QRect macRect = option->rect.adjusted(m_indRect.x() + m_indRect.width() + 4, option->rect.height() / 2, 0, 0);
+    // p.fillRect(macRect, Qt::yellow);
+
+    p.drawText(macRect, Qt::AlignVCenter, m_extAddress);
 
     if (!m_pm.isNull())
     {
@@ -594,9 +585,11 @@ void zmgNode::updateParameters()
             fn.setWeight(QFont::Bold);
             QFontMetrics fm(fn);
 
-            QRect bb = fm.boundingRect(m_name);
+            QString placeHolder = m_name + "DDF_M";
+
+            QRect bb = fm.boundingRect(placeHolder);
             int w = bb.width();
-            w += (2 * NamePad);
+            w += NamePad + ToggleSize;
             int h = bb.height() * 2.4;
 
             if (w < 220)
