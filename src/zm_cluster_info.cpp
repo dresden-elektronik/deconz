@@ -862,10 +862,8 @@ void zmClusterInfo::showAttributes()
     }
     else
     {
-        for (uint i = 0; i < cluster->attributes().size(); i++)
+        for (const auto &attr : cluster->attributes())
         {
-            const deCONZ::ZclAttribute &attr =  cluster->attributes()[i];
-
             if (discoveredOnly && !attr.isAvailable())
             {
                 continue;
@@ -888,24 +886,26 @@ void zmClusterInfo::showAttributes()
                 m_attrModel->setRowCount(m_attrModel->rowCount() + 1);
             }
 
-            m_attrModel->setData(m_attrModel->index(i, 0), aid);
-            m_attrModel->item(i, 0)->setData((uint)attr.id());
+            m_attrModel->setData(m_attrModel->index(row, 0), aid);
+            m_attrModel->item(row, 0)->setData((uint)attr.id());
 
-            m_attrModel->setData(m_attrModel->index(i, 1), attr.name());
-            m_attrModel->setData(m_attrModel->index(i, 2), dataType.shortname());
-            m_attrModel->setData(m_attrModel->index(i, 3), attr.isReadonly() ? "r" : "rw");
+            m_attrModel->setData(m_attrModel->index(row, 1), attr.name());
+            m_attrModel->setData(m_attrModel->index(row, 2), dataType.shortname());
+            m_attrModel->setData(m_attrModel->index(row, 3), attr.isReadonly() ? "r" : "rw");
 
             data = attr.toString(dataType, deCONZ::ZclAttribute::Prefix);
-            m_attrModel->setData(m_attrModel->index(i, 4), data);
-            
+            m_attrModel->setData(m_attrModel->index(row, 4), data);
+
             QString mfc = "0x" + QString("%1").arg(attr.manufacturerCode(), 4, 16, QLatin1Char('0')).toUpper();
             m_attrModel->setData(m_attrModel->index(row, 5), mfc);
 
             // visual difference if a attribute is available
             for (int j = 0; j < m_attrModel->columnCount(); j++)
             {
-                m_attrModel->item(i, j)->setEnabled(attr.isAvailable());
+                m_attrModel->item(row, j)->setEnabled(attr.isAvailable());
             }
+
+            row++;
         }
     }
 
