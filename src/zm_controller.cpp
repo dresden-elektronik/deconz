@@ -6465,16 +6465,10 @@ void zmController::zclReadAttributesResponse(NodeInfo *node, const deCONZ::ApsDa
 
         if (cluster)
         {
-            for (uint i = 0; i < cluster->attributes().size(); i++)
+            for (auto &a : cluster->attributes())
             {
-                auto &a = cluster->attributes()[i];
-                if (a.id() == id)
+                if (a.id() == id && a.manufacturerCode() == zclFrame.manufacturerCode())
                 {
-                    if (a.isManufacturerSpecific() && a.manufacturerCode() != zclFrame.manufacturerCode())
-                    {
-                        continue;
-                    }
-
                     attr = &a;
                     break;
                 }

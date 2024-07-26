@@ -52,6 +52,7 @@ zmClusterInfo::zmClusterInfo(QWidget *parent) :
     attrHeaders.append("type");
     attrHeaders.append("access");
     attrHeaders.append("value");
+    attrHeaders.append("mfc");
 
     m_attrModel->setHorizontalHeaderLabels(attrHeaders);
 
@@ -743,7 +744,7 @@ void zmClusterInfo::showAttributes()
     {
         m_attrModel->setRowCount(0);
         //m_attrModel->setRowCount(m_cluster.attributes().size() + m_cluster.attributeSets().size());
-        m_attrModel->setColumnCount(5);
+        m_attrModel->setColumnCount(6);
         ui->attrTableView->horizontalHeader()->stretchLastSection();
     }
 
@@ -793,7 +794,7 @@ void zmClusterInfo::showAttributes()
                 m_attrModel->item(row, 1)->setBackground(palette().dark().color().lighter(120));
                 m_attrModel->item(row, 1)->setForeground(palette().brightText());
 
-                ui->attrTableView->setSpan(row, 1 , 1, 4);
+                ui->attrTableView->setSpan(row, 1 , 1, 5);
 
                 row++;
             }
@@ -839,6 +840,9 @@ void zmClusterInfo::showAttributes()
 
                     data = attr.toString(dataType, deCONZ::ZclAttribute::Prefix);
                     m_attrModel->setData(m_attrModel->index(row, 4), data);
+                    
+                    QString mfc = "0x" + QString("%1").arg(attr.manufacturerCode(), 4, 16, QLatin1Char('0')).toUpper();
+                    m_attrModel->setData(m_attrModel->index(row, 5), mfc);
 
                     // visual difference if a attribute is available
                     for (int j = 0; j < m_attrModel->columnCount(); j++)
@@ -888,6 +892,9 @@ void zmClusterInfo::showAttributes()
 
             data = attr.toString(dataType, deCONZ::ZclAttribute::Prefix);
             m_attrModel->setData(m_attrModel->index(i, 4), data);
+            
+            QString mfc = "0x" + QString("%1").arg(attr.manufacturerCode(), 4, 16, QLatin1Char('0')).toUpper();
+            m_attrModel->setData(m_attrModel->index(row, 5), mfc);
 
             // visual difference if a attribute is available
             for (int j = 0; j < m_attrModel->columnCount(); j++)
@@ -904,6 +911,7 @@ void zmClusterInfo::showAttributes()
         ui->attrTableView->resizeColumnToContents(2);
         ui->attrTableView->resizeColumnToContents(3);
         ui->attrTableView->resizeColumnToContents(4);
+        ui->attrTableView->setColumnHidden(5, true);
         ui->attrTableView->resizeRowsToContents();
         ui->attrTableView->horizontalHeader()->setStretchLastSection(true);
         m_init = true;
