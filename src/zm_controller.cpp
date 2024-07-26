@@ -6489,9 +6489,9 @@ void zmController::zclReadAttributesResponse(NodeInfo *node, const deCONZ::ApsDa
             if (dataType != attr->dataType())
             {
                 DBG_Printf(DBG_ZCL, "ZCL Read Attributes node=0x%04X, error assumed data type "
-                       " 0x%02X but got 0x%02X for at=0x%04X\n",
+                       " 0x%02X but got 0x%02X for at=0x%04X, mfc=0x%04X\n",
                        node->data->address().nwk(),
-                       attr->dataType(), dataType, attr->id());
+                       attr->dataType(), dataType, attr->id(), attr->manufacturerCode());
 
                 // disabled by stack
                 if (dataType == deCONZ::ZclNoData)
@@ -6555,10 +6555,10 @@ void zmController::zclReadAttributesResponse(NodeInfo *node, const deCONZ::ApsDa
             attr->setAvailable(false); // disable fetching
         }
 
-        DBG_Printf(DBG_ZCL, "ZCL got data for node=0x%04X, cl=0x%04X, at=0x%04X, status=0x%02X, type=0x%02X\n",
+        DBG_Printf(DBG_ZCL, "ZCL got data for node=0x%04X, cl=0x%04X, at=0x%04X, mfc=0x%04X, status=0x%02X, type=0x%02X\n",
                node->data->address().nwk(),
                ind.clusterId(),
-               attr->id(), status, dataType);
+               attr->id(), attr->manufacturerCode(), status, dataType);
     }
 
     DBG_Assert(node && node->data && cluster);
