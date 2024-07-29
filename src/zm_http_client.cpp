@@ -553,24 +553,14 @@ int zmHttpClient::handleHttpFileRequest(const QHttpRequestHeader &hdr)
 
     if (path == QLatin1String("/") || isPwa)
     {
-        if (!isPwa && hdr.hasKey(QLatin1String("Host")))
-        {
-            const auto host = hdr.value(QLatin1String("Host"));
-
-            if (host.size() >= 7 && memcmp(host.data(), "phoscon", 7) == 0)
-            {
-                isPwa = true;
-            }
-        }
-
-        if (isPwa && QFile::exists(m_serverRoot + QLatin1String("/pwa/index.html")))
+        if (QFile::exists(m_serverRoot + QLatin1String("/pwa/index.html")))
         {
             QTextStream stream(this);
             const QString str = QString("<html><head>"
                                   "<title>Moved</title>"
                                   "</head><body>"
                                   "<h1>Moved</h1>"
-                                  "<p>moved to /pwa/index/html</p>"
+                                  "<p>moved to /pwa/index.html</p>"
                                   "</body></html>");
 
             stream << "HTTP/1.1 301 Moved Permanently\r\n"
