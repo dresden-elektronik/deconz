@@ -6,3 +6,5 @@ CMakeLists.txt.user
 build*
 cmake-build*
 cred-macos
+.vscode/
+
