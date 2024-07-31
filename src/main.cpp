@@ -250,6 +250,11 @@ int main(int argc, char *argv[])
             DBG_Enable(DBG_MEASURE);
         }
 
+        if (deCONZ::appArgumentNumeric("--dbg-vfs", 0) > 0)
+        {
+            DBG_Enable(DBG_VFS);
+        }
+
         QCoreApplication::setOrganizationName("dresden-elektronik");
         QCoreApplication::setOrganizationDomain("dresden-elektronik.de");
         QCoreApplication::setApplicationName("deCONZ");

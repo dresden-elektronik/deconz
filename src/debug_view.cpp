@@ -38,7 +38,7 @@ DebugView::DebugView(QWidget *parent) :
                                       DBG_ZDP, DBG_ZCL, DBG_ZCLDB, DBG_IAS, DBG_OTA,
                                       DBG_HTTP, DBG_TLINK, DBG_ROUTING, DBG_MEASURE
 #ifdef QT_DEBUG
-        , DBG_PROT
+        , DBG_PROT, DBG_VFS
 #endif
     };
 
