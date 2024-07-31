@@ -24,6 +24,7 @@ namespace deCONZ
 class ApsDataIndication;
 }
 
+class zmNode;
 class QPushButton;
 class QLabel;
 class QVBoxLayout;
@@ -36,7 +37,7 @@ class zmCommandInfo : public QWidget
 public:
     explicit zmCommandInfo(QWidget *parent = 0);
     ~zmCommandInfo();
-    void setCluster(quint16 profileId, const deCONZ::ZclCluster &cluster, deCONZ::ZclClusterSide side);
+    void setCluster(quint16 profileId, const deCONZ::ZclCluster &cluster, deCONZ::ZclClusterSide side, deCONZ::zmNode *node);
 
 public Q_SLOTS:
     void onExec(int commandId);
@@ -98,6 +99,7 @@ private:
     deCONZ::ZclCluster m_clusterOpposite;
     QList<CommandDescriptor> m_cache;
     QSignalMapper *m_execMapper;
+    deCONZ::zmNode *m_node = nullptr;
 };
 
 #endif // ZM_COMMAND_INFO_H
