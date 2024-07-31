@@ -433,9 +433,9 @@ void zmClusterInfo::attributeDoubleClicked(const QModelIndex &index)
             const deCONZ::ZclAttribute &attr = cluster->attributes()[i];
             if (attr.id() == id)
             {
-                QString mfc = "0x" + QString("%1").arg(attr.manufacturerCode(), 4, 16, QLatin1Char('0')).toUpper();
+                unsigned mfc = m_attrModel->data(m_attrModel->index(index.row(), 5)).toString().toUInt(nullptr, 0);
 
-                if (mfc == m_attrModel->data(m_attrModel->index(index.row(), 5)).toString())
+                if (attr.manufacturerCode() == mfc)
                 {
                     info->setAttribute(m_endpoint, m_clusterId, m_clusterSide, attr);
                     ok = true;

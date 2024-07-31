@@ -6467,6 +6467,8 @@ void zmController::zclReadAttributesResponse(NodeInfo *node, const deCONZ::ApsDa
         {
             for (auto &a : cluster->attributes())
             {
+                // Keep an eye on this part if anything weird shows up. Eventually extend by also checking frame options + mfc 0x0000
+                // Also see: https://github.com/dresden-elektronik/deconz/pull/2#discussion_r1694968173
                 if (a.id() == id && a.manufacturerCode() == zclFrame.manufacturerCode())
                 {
                     attr = &a;
