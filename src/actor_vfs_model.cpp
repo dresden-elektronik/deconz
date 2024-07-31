@@ -421,15 +421,20 @@ int ActorVfsModel::listDirectoryResponse(am_message *msg)
         if (!entriesToAdd.empty())
         {
             // figure out parent index
+            int row = 0;
             int e = entryIndex;
             int parent_e = priv->entries[e].parent;
 
-            if (parent_e < 0)
+            if (parent_e < 0) // top level entry
+            {
                 parent_e = 0;
+            }
+            else
+            {
+                parent_e = priv->entries[parent_e].child;
+            }
 
-            int row = 0;
-            parent_e = priv->entries[parent_e].child;
-            for (; parent_e > 0; )
+            for (; parent_e >= 0; )
             {
                 if (parent_e == e)
                     break;
