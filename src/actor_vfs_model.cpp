@@ -230,7 +230,7 @@ static void listDirectoryRequest(DirFetcher &fetch)
     if (!m)
         return;
 
-    DBG_Printf(DBG_INFO, "list directory request e: %d, %s\n", fetch.entryIndex, url);
+    DBG_Printf(DBG_VFS, "list directory request e: %d, %s\n", fetch.entryIndex, url);
 
     entry.fetchState = ENTRY_FETCH_STATE_WAIT_RESPONSE;
     fetch.tag = _priv->fetchTag++;
@@ -295,7 +295,7 @@ static int readEntryRequest(int e)
     if (!m)
         return 0;
 
-    DBG_Printf(DBG_INFO, "vfs model: fetch value of entry: %d, url: '%s'\n", e, url);
+    DBG_Printf(DBG_VFS, "vfs model: fetch value of entry: %d, url: '%s'\n", e, url);
 
     entry.fetchState = ENTRY_FETCH_STATE_WAIT_RESPONSE;
     _priv->valFetchTag++;
@@ -371,7 +371,7 @@ int ActorVfsModel::listDirectoryResponse(am_message *msg)
         if (msg->status != AM_MSG_STATUS_OK)
             return AM_CB_STATUS_INVALID;
 
-        DBG_Printf(DBG_INFO, "vfs model: handle list directory rsp, tag: %u url: %.*s, index: %u, next_index: %u, count: %u\n", tag, url.size, url.data, index, next_index, count);
+        DBG_Printf(DBG_VFS, "vfs model: handle list directory rsp, tag: %u url: %.*s, index: %u, next_index: %u, count: %u\n", tag, url.size, url.data, index, next_index, count);
 
         std::vector<Entry> entriesToAdd;
 
@@ -415,7 +415,7 @@ int ActorVfsModel::listDirectoryResponse(am_message *msg)
                     addEntryToValueFetchers(e);
             }
 
-            DBG_Printf(DBG_INFO, "             %.*s (%.*s) mode: %u\n", name.size, name.data, type.size, type.data, mode);
+            DBG_Printf(DBG_VFS, "             %.*s (%.*s) mode: %u\n", name.size, name.data, type.size, type.data, mode);
         }
 
         if (!entriesToAdd.empty())
@@ -449,7 +449,7 @@ int ActorVfsModel::listDirectoryResponse(am_message *msg)
             }
             last = first + (int)entriesToAdd.size() - 1;
 
-            DBG_Printf(DBG_INFO, "vfs model: insert rows e: %d, parent_e: %d, row: %d, first: %d, last: %d\n", e, parent_e, row, first, last);
+            DBG_Printf(DBG_VFS, "vfs model: insert rows e: %d, parent_e: %d, row: %d, first: %d, last: %d\n", e, parent_e, row, first, last);
 
             beginInsertRows(parent, first, last);
 
@@ -465,7 +465,7 @@ int ActorVfsModel::listDirectoryResponse(am_message *msg)
     }
     else
     {
-        DBG_Printf(DBG_INFO, "vfs model: list directory error: %u\n", status);
+        DBG_Printf(DBG_VFS, "vfs model: list directory error: %u\n", status);
         _priv->dirFetchers[fetcherIndex] = _priv->dirFetchers.back();
         _priv->dirFetchers.pop_back();
     }
@@ -547,10 +547,10 @@ int ActorVfsModel::readEntryResponse(am_message *msg, int e)
             }
             else
             {
-                DBG_Printf(DBG_INFO, "vfs model: read entry rsp: TODO handle type\n");
+                DBG_Printf(DBG_VFS, "vfs model: read entry rsp: TODO handle type\n");
             }
 
-            DBG_Printf(DBG_INFO, "vfs model: read entry rsp: url: %.*s, type: %.*s, value: %llu\n", url.size, url.data, type.size, type.data, (unsigned long long)entry.value);
+            DBG_Printf(DBG_VFS, "vfs model: read entry rsp: url: %.*s, type: %.*s, value: %llu\n", url.size, url.data, type.size, type.data, (unsigned long long)entry.value);
 
             {
                 int parent_e = priv->entries[e].parent;
@@ -589,7 +589,7 @@ int ActorVfsModel::readEntryResponse(am_message *msg, int e)
         }
     }
 
-    DBG_Printf(DBG_INFO, "vfs model: read entry: %d response error, tag: %u, status: %u\n", e, tag, status);
+    DBG_Printf(DBG_VFS, "vfs model: read entry: %d response error, tag: %u, status: %u\n", e, tag, status);
     return AM_CB_STATUS_OK;
 }
 
@@ -769,7 +769,7 @@ QVariant ActorVfsModel::data(const QModelIndex &index, int role) const
 
     if  (role == Qt::DisplayRole)
     {
-//        DBG_Printf(DBG_INFO, "vfs model: data(row: %d, column: %d) id: %d, role: display\n", index.row(), index.column(), (int)index.internalId());
+//        DBG_Printf(DBG_VFS, "vfs model: data(row: %d, column: %d) id: %d, role: display\n", index.row(), index.column(), (int)index.internalId());
 
         AT_Atom a;
         a.len = 0;
