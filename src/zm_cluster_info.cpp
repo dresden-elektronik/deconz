@@ -52,6 +52,7 @@ zmClusterInfo::zmClusterInfo(QWidget *parent) :
     attrHeaders.append("type");
     attrHeaders.append("access");
     attrHeaders.append("value");
+    attrHeaders.append("mfc");
 
     m_attrModel->setHorizontalHeaderLabels(attrHeaders);
 
@@ -432,9 +433,14 @@ void zmClusterInfo::attributeDoubleClicked(const QModelIndex &index)
             const deCONZ::ZclAttribute &attr = cluster->attributes()[i];
             if (attr.id() == id)
             {
-                info->setAttribute(m_endpoint, m_clusterId, m_clusterSide, attr);
-                ok = true;
-                break;
+                unsigned mfc = m_attrModel->data(m_attrModel->index(index.row(), 5)).toString().toUInt(nullptr, 0);
+
+                if (attr.manufacturerCode() == mfc)
+                {
+                    info->setAttribute(m_endpoint, m_clusterId, m_clusterSide, attr);
+                    ok = true;
+                    break;
+                }
             }
         }
 
@@ -743,7 +749,7 @@ void zmClusterInfo::showAttributes()
     {
         m_attrModel->setRowCount(0);
         //m_attrModel->setRowCount(m_cluster.attributes().size() + m_cluster.attributeSets().size());
-        m_attrModel->setColumnCount(5);
+        m_attrModel->setColumnCount(6);
         ui->attrTableView->horizontalHeader()->stretchLastSection();
     }
 
@@ -793,7 +799,7 @@ void zmClusterInfo::showAttributes()
                 m_attrModel->item(row, 1)->setBackground(palette().dark().color().lighter(120));
                 m_attrModel->item(row, 1)->setForeground(palette().brightText());
 
-                ui->attrTableView->setSpan(row, 1 , 1, 4);
+                ui->attrTableView->setSpan(row, 1 , 1, 5);
 
                 row++;
             }
@@ -839,6 +845,9 @@ void zmClusterInfo::showAttributes()
 
                     data = attr.toString(dataType, deCONZ::ZclAttribute::Prefix);
                     m_attrModel->setData(m_attrModel->index(row, 4), data);
+                    
+                    QString mfc = "0x" + QString("%1").arg(attr.manufacturerCode(), 4, 16, QLatin1Char('0')).toUpper();
+                    m_attrModel->setData(m_attrModel->index(row, 5), mfc);
 
                     // visual difference if a attribute is available
                     for (int j = 0; j < m_attrModel->columnCount(); j++)
@@ -853,10 +862,8 @@ void zmClusterInfo::showAttributes()
     }
     else
     {
-        for (uint i = 0; i < cluster->attributes().size(); i++)
+        for (const auto &attr : cluster->attributes())
         {
-            const deCONZ::ZclAttribute &attr =  cluster->attributes()[i];
-
             if (discoveredOnly && !attr.isAvailable())
             {
                 continue;
@@ -879,21 +886,26 @@ void zmClusterInfo::showAttributes()
                 m_attrModel->setRowCount(m_attrModel->rowCount() + 1);
             }
 
-            m_attrModel->setData(m_attrModel->index(i, 0), aid);
-            m_attrModel->item(i, 0)->setData((uint)attr.id());
+            m_attrModel->setData(m_attrModel->index(row, 0), aid);
+            m_attrModel->item(row, 0)->setData((uint)attr.id());
 
-            m_attrModel->setData(m_attrModel->index(i, 1), attr.name());
-            m_attrModel->setData(m_attrModel->index(i, 2), dataType.shortname());
-            m_attrModel->setData(m_attrModel->index(i, 3), attr.isReadonly() ? "r" : "rw");
+            m_attrModel->setData(m_attrModel->index(row, 1), attr.name());
+            m_attrModel->setData(m_attrModel->index(row, 2), dataType.shortname());
+            m_attrModel->setData(m_attrModel->index(row, 3), attr.isReadonly() ? "r" : "rw");
 
             data = attr.toString(dataType, deCONZ::ZclAttribute::Prefix);
-            m_attrModel->setData(m_attrModel->index(i, 4), data);
+            m_attrModel->setData(m_attrModel->index(row, 4), data);
+
+            QString mfc = "0x" + QString("%1").arg(attr.manufacturerCode(), 4, 16, QLatin1Char('0')).toUpper();
+            m_attrModel->setData(m_attrModel->index(row, 5), mfc);
 
             // visual difference if a attribute is available
             for (int j = 0; j < m_attrModel->columnCount(); j++)
             {
-                m_attrModel->item(i, j)->setEnabled(attr.isAvailable());
+                m_attrModel->item(row, j)->setEnabled(attr.isAvailable());
             }
+
+            row++;
         }
     }
 
@@ -904,6 +916,7 @@ void zmClusterInfo::showAttributes()
         ui->attrTableView->resizeColumnToContents(2);
         ui->attrTableView->resizeColumnToContents(3);
         ui->attrTableView->resizeColumnToContents(4);
+        ui->attrTableView->setColumnHidden(5, true);
         ui->attrTableView->resizeRowsToContents();
         ui->attrTableView->horizontalHeader()->setStretchLastSection(true);
         m_init = true;

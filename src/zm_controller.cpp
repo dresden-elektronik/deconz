@@ -6465,16 +6465,12 @@ void zmController::zclReadAttributesResponse(NodeInfo *node, const deCONZ::ApsDa
 
         if (cluster)
         {
-            for (uint i = 0; i < cluster->attributes().size(); i++)
+            for (auto &a : cluster->attributes())
             {
-                auto &a = cluster->attributes()[i];
-                if (a.id() == id)
+                // Keep an eye on this part if anything weird shows up. Eventually extend by also checking frame options + mfc 0x0000
+                // Also see: https://github.com/dresden-elektronik/deconz/pull/2#discussion_r1694968173
+                if (a.id() == id && a.manufacturerCode() == zclFrame.manufacturerCode())
                 {
-                    if (a.isManufacturerSpecific() && a.manufacturerCode() != zclFrame.manufacturerCode())
-                    {
-                        continue;
-                    }
-
                     attr = &a;
                     break;
                 }
@@ -6495,9 +6491,9 @@ void zmController::zclReadAttributesResponse(NodeInfo *node, const deCONZ::ApsDa
             if (dataType != attr->dataType())
             {
                 DBG_Printf(DBG_ZCL, "ZCL Read Attributes node=0x%04X, error assumed data type "
-                       " 0x%02X but got 0x%02X for at=0x%04X\n",
+                       " 0x%02X but got 0x%02X for at=0x%04X, mfc=0x%04X\n",
                        node->data->address().nwk(),
-                       attr->dataType(), dataType, attr->id());
+                       attr->dataType(), dataType, attr->id(), attr->manufacturerCode());
 
                 // disabled by stack
                 if (dataType == deCONZ::ZclNoData)
@@ -6561,10 +6557,10 @@ void zmController::zclReadAttributesResponse(NodeInfo *node, const deCONZ::ApsDa
             attr->setAvailable(false); // disable fetching
         }
 
-        DBG_Printf(DBG_ZCL, "ZCL got data for node=0x%04X, cl=0x%04X, at=0x%04X, status=0x%02X, type=0x%02X\n",
+        DBG_Printf(DBG_ZCL, "ZCL got data for node=0x%04X, cl=0x%04X, at=0x%04X, mfc=0x%04X, status=0x%02X, type=0x%02X\n",
                node->data->address().nwk(),
                ind.clusterId(),
-               attr->id(), status, dataType);
+               attr->id(), attr->manufacturerCode(), status, dataType);
     }
 
     DBG_Assert(node && node->data && cluster);

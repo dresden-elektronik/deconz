@@ -370,6 +370,7 @@ void zmAttributeInfo::readAttributeResponse(const deCONZ::ZclFrame &zclFrame)
             {
                 //m_attribute.setDataType(dataType);
                 m_attribute.readFromStream(stream);
+                m_attribute.setManufacturerCode(zclFrame.manufacturerCode());
                 updateEdit();
                 ui->status->setText(tr("reading done"));
             }
