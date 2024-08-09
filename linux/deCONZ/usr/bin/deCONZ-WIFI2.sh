@@ -116,7 +116,7 @@ function sqliteSelect() {
 }
 
 function putWifiUpdated() {
-	curl --noproxy '*' -s -o /dev/null -d "$@" -X PUT http://127.0.0.1:${DECONZ_PORT}/api/$OWN_PID/config/wifi/updated
+	curl --noproxy '*' -s -o /dev/null -d "$@" -X PUT http://127.0.0.1:${DECONZ_PORT}/api/$OWN_PID/config/wifi/updated &
 }
 
 function isWiredConnection() {
@@ -832,7 +832,7 @@ scanAvailableWifi() {
 	# use python to convert to JSON (incl. unicode stuff)
 	local json=$(python -c "import json; print(json.dumps([$NETW]))")
 	# -w '%{http_code}'
-	curl --noproxy '*' -s -o /dev/null -d "$json" -X PUT http://127.0.0.1:${DECONZ_PORT}/api/$OWN_PID/config/wifi/scanresult
+	curl --noproxy '*' -s -o /dev/null -d "$json" -X PUT http://127.0.0.1:${DECONZ_PORT}/api/$OWN_PID/config/wifi/scanresult &
 
 	if [[ "$WIFI_CONFIG" == "deactivated" ]]; then
 			ifconfig wlan0 down
