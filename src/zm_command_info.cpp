@@ -26,6 +26,7 @@
 #include "deconz/dbg_trace.h"
 #include "zm_cluster_info.h"
 #include "zm_command_info.h"
+#include "zm_node.h"
 #include "ui_zm_command_info.h"
 #include "zcl_private.h"
 
@@ -54,13 +55,15 @@ zmCommandInfo::~zmCommandInfo()
     delete ui;
 }
 
-void zmCommandInfo::setCluster(quint16 profileId, const deCONZ::ZclCluster &cluster, deCONZ::ZclClusterSide side)
+void zmCommandInfo::setCluster(quint16 profileId, const deCONZ::ZclCluster &cluster, deCONZ::ZclClusterSide side, deCONZ::zmNode *node)
 {
     bool changed = false;
 
-    if (m_profileId != profileId
-     || m_cluster.id() != cluster.id()
-     || m_cluster.isServer() != cluster.isServer())
+    if (m_profileId != profileId || m_cluster.id() != cluster.id() || m_cluster.isServer() != cluster.isServer())
+    {
+        changed = true;
+    }
+    else if (node && m_node && node->nodeDescriptor().manufacturerCode() != m_node->nodeDescriptor().manufacturerCode())
     {
         changed = true;
     }
@@ -70,15 +73,16 @@ void zmCommandInfo::setCluster(quint16 profileId, const deCONZ::ZclCluster &clus
     m_side = side;
     m_cluster = cluster;
 
+    // Gets general and cluster specific commands while providing an mfc != 0
     if (changed)
     {
         if (m_cluster.isServer())
         {
-            m_clusterOpposite = deCONZ::zclDataBase()->outCluster(m_profileId, m_cluster.oppositeId(), m_cluster.manufacturerCode());
+            m_clusterOpposite = deCONZ::zclDataBase()->outCluster(m_profileId, m_cluster.oppositeId(), node->nodeDescriptor().manufacturerCode());
         }
         else
         {
-            m_clusterOpposite = deCONZ::zclDataBase()->inCluster(m_profileId, m_cluster.oppositeId(), m_cluster.manufacturerCode());
+            m_clusterOpposite = deCONZ::zclDataBase()->inCluster(m_profileId, m_cluster.oppositeId(), node->nodeDescriptor().manufacturerCode());
         }
     }
 
@@ -100,6 +104,12 @@ void zmCommandInfo::setCluster(quint16 profileId, const deCONZ::ZclCluster &clus
                 m_vbox->removeItem(item);
             }
         }
+    }
+    
+    // Clear cache to ensure all relevant commands are exposed any bypass the following widget check
+    if (m_cache.size() != m_cluster.commands().size())
+    {
+        m_cache.clear();
     }
 
     // check if the widgets for this cluster already exist
@@ -132,6 +142,8 @@ void zmCommandInfo::setCluster(quint16 profileId, const deCONZ::ZclCluster &clus
         // done
         return;
     }
+    
+    m_node = node;
 
     // create new widgets
     std::vector<deCONZ::ZclCommand>::const_iterator i;

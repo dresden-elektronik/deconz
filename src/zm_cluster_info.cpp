@@ -156,7 +156,7 @@ void zmClusterInfo::showCluster(quint16 id, deCONZ::ZclClusterSide clusterSide)
         ui->clusterGroupBox->setTitle(cluster->name() + " Cluster");
         ui->clusterDescription->setText(cluster->description());
         showAttributes();
-        ui->commandInfo->setCluster(sd->profileId(), *cluster, m_clusterSide);
+        ui->commandInfo->setCluster(sd->profileId(), *cluster, m_clusterSide, m_node);
         return;
     }
 
@@ -189,7 +189,7 @@ void zmClusterInfo::refresh()
             if (cluster)
             {
                 showAttributes();
-                ui->commandInfo->setCluster(sd->profileId(), *cluster, m_clusterSide);
+                ui->commandInfo->setCluster(sd->profileId(), *cluster, m_clusterSide, m_node);
             }
         }
     }
@@ -218,7 +218,7 @@ void zmClusterInfo::refreshNodeCommands(deCONZ::zmNode *node, deCONZ::ZclCluster
 
         if (sd && cl)
         {
-            ui->commandInfo->setCluster(sd->profileId(), *cl, m_clusterSide);
+            ui->commandInfo->setCluster(sd->profileId(), *cl, m_clusterSide, m_node);
         }
     }
 }
