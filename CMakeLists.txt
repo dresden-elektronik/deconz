@@ -61,6 +61,7 @@ if (${CMAKE_HOST_SYSTEM_NAME} MATCHES "Linux")
 
     install(DIRECTORY "linux/deCONZ/lib/systemd" DESTINATION "/lib")
     install(FILES "linux/deCONZ/usr/share/applications/deCONZ.desktop" DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/applications")
+    install(FILES "linux/deCONZ/usr/share/deCONZ/doc/deCONZ-BHB-en.pdf" DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/deCONZ/doc")
     install(FILES "src/icons/de_logo_48px.png" DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/deCONZ/icons")
 
     install(
