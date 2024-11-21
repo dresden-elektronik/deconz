@@ -1,19 +1,6 @@
 #!/bin/bash
 
-OS_NUMBER=$(grep '^VERSION_ID=' /etc/os-release | cut -d '"' -f2)
-
-if [ "$OS_NUMBER" -ge 12 ]; then # 12 = bookworm
-	/usr/bin/deCONZ-WIFI3.sh
-	exit
-fi
-
-HOSTAPD_CONF="/etc/hostapd/hostapd.conf"
-INTERFACES="/etc/network/interfaces"
-DNSMASQ_CONF="/etc/dnsmasq.conf"
-DHCPCD_CONF="/etc/dhcpcd.conf"
-WPA_CONF="/etc/wpa_supplicant/wpa_supplicant.conf"
-OS_ID=$(cat /etc/os-release | sed -n 's/^ID=\(.*\)/\1/p')
-OS_VERSION=$(cat /etc/os-release | sed -n 's/^VERSION="[0-9]\s(\(.*\))"/\1/p')
+OS_ID=$(grep '^VERSION_ID=' /etc/os-release | cut -d '"' -f2)
 MAINUSER=$(getent passwd 1000 | cut -d: -f1)
 DECONZ_CONF_DIR="/home/$MAINUSER/.local/share"
 DECONZ_PORT=0
@@ -26,7 +13,9 @@ WAIT_RESTORE_CONF=0		# if backup is active wait before restoring configuration w
 WAIT_AP_BACKUP=0 		# wait before creating an ap backup when connection to wifi is lost
 WAIT_WIFI_SCAN=30		# if user is not at the wifi page then only scan ca every 10 minutes
 SQL_RESULT=
-UPDATE_WIFI_IN_DB=false # in some cases it is mandatory to update wifi informations ins db (e.g. after a gateway reset)
+UPDATE_WIFI_IN_DB=false # in some cases it is mandatory to update wifi informations in db (e.g. after a gateway reset)
+PROFILE_NAME=""
+DECONZ_PROFILE_NAME="deconz_wifi" # standard profile name for deconz managed wifi
 
 # State Machine
 readonly STATE_NOT_CONFIGURED=0
@@ -91,6 +80,7 @@ WIFI_TYPE=""   # empty string | value
 LAST_WIFI_TYPE=""
 LAST_WIFI_NAME=""
 LAST_WIFI_PW=""
+RECOVER_LAST_WORKING_CONFIGURATION=false
 
 # ap backup fallback
 AP_BACKUP_NAME=""
@@ -256,6 +246,13 @@ function init {
 			[[ $LOG_INFO ]] && echo "${LOG_INFO}use wifi interface $WIFI_DEV"
 		fi
 	done
+	
+	# check if country code is set
+	if [ -z "$(raspi-config nonint get_wifi_country)" ]; then
+		[[ $LOG_DEBUG ]] && echo "${LOG_DEBUG}WIFI country not set. Setting default country DE"
+		raspi-config nonint do_wifi_country DE
+		return
+	fi
 }
 
 #trap 'on_usr2;' SIGUSR2
@@ -266,80 +263,57 @@ function init {
 function checkConfig {
     if [[ $1 == $EVENT_PROCESS ]]; then
 
-		local mgmt_hostapd=0x01
-		local mgmt_wpa_supplicant=0x02
 		local mgmt_interfaces=0x04
 		local mgmt_active=0x08
 		local mgmt=0
 		local CONFIGURED_BY_DECONZ=false
+		
 		SSID_AP=""
 		SSID_CLIENT=""
 		PW_AP=""
 		PW_AP_ENC=""
 		PW_CLIENT=""
 		PW_CLIENT_ENC=""
-
+		PROFILE_NAME=$(nmcli -t -f NAME,DEVICE,TYPE connection show | grep '^.*:$WIFI_DEV:802-11-wireless' | cut -d':' -f1)
+		USER_SSID=""
+		if [ -n "$PROFILE_NAME" ]; then
+			USER_SSID=$(nmcli -s -g 802-11-wireless.ssid connection show "$PROFILE_NAME")
+		fi		
+		SSID_CLIENT="$USER_SSID"
+		active=false
+		type="client"
+		
 		# check current state and which files are managed by deCONZ
 		[[ $LOG_DEBUG ]] && echo "${LOG_DEBUG}forward current configuration"
-
-		[[ -e "$HOSTAPD_CONF"  && -n $(grep "by deCONZ" $HOSTAPD_CONF) ]] && mgmt=$((mgmt | mgmt_hostapd))
-		[[ -e "$WPA_CONF" && -n $(grep "by deCONZ" $WPA_CONF) ]] && mgmt=$((mgmt | mgmt_wpa_supplicant))
+		[[ -e "$INTERFACES" && -n $(grep "by deCONZ" $INTERFACES) ]] && mgmt=$((mgmt | mgmt_interfaces))
+		[[ $mgmt -ne 0 ]] && CONFIGURED_BY_DECONZ=true
+		
+		# is active or not?
+		if [ -n "$(nmcli connection show --active | grep "$PROFILE_NAME")" ]; then
+			active=true
+			mgmt=$((mgmt | mgmt_active)) # set active flag
+		fi
+		PW_ENC=""
+		if [ -n "$PROFILE_NAME" ]; then
+			PW_ENC=$(nmcli -s -g 802-11-wireless-security.psk connection show $PROFILE_NAME) # set to PW_CLIENT_ENC or PW_AP_ENC
+			PW_CLIENT_ENC="$PW_ENC"
+			
+			# AP or client ?
+			if [ $(nmcli -s -g 802-11-wireless.mode connection show "$PROFILE_NAME") -eq "ap" ]; then
+				type="accesspoint"
+				PW_AP_ENC="$PW_ENC"
+				SSID_AP="$USER_SSID"
+			fi
+		fi						
+		
+		# check current state and which files are managed by deCONZ
+		[[ $LOG_DEBUG ]] && echo "${LOG_DEBUG}forward current configuration"
 		[[ -e "$INTERFACES" && -n $(grep "by deCONZ" $INTERFACES) ]] && mgmt=$((mgmt | mgmt_interfaces))
 
 		[[ $mgmt -ne 0 ]] && CONFIGURED_BY_DECONZ=true
 
-		USER_SSID=$(iw $WIFI_DEV info | grep ssid | sed -e 's/\<ssid\>//g') #active SSID
-		if [[ -n "$USER_SSID" ]]; then #  get active configuration
-			USER_SSID=$(echo $USER_SSID | xargs) # trim whitespace
-			mgmt=$((mgmt | mgmt_active)) # set active flag
-			iw $WIFI_DEV info | grep 'type AP' > /dev/null
-			if [ $? -eq 0 ]; then
-				SSID_AP="$USER_SSID"
-				if [ -f "$HOSTAPD_CONF" ]; then
-					PW_AP=$(cat $HOSTAPD_CONF | grep wpa_passphrase= -m1 | cut -d'=' -f2)
-					PW_AP_ENC=$(cat $HOSTAPD_CONF | grep wpa_psk= -m1 | cut -d'=' -f2)
-				fi
-			fi
-
-			iw $WIFI_DEV info | grep 'type managed' > /dev/null
-			if [ $? -eq 0 ]; then
-				SSID_CLIENT="$USER_SSID"
-				if [ -f "$WPA_CONF" ]; then
-					PW_CLIENT=$(cat $WPA_CONF | grep psk=\" -m1 | cut -d'"' -f2)
-					PW_CLIENT_ENC=$(cat $WPA_CONF | grep psk=[^\"] -m1 | cut -d= -f2)
-				fi
-			fi
-		else
-			# configured but not active?
-			if [ -f "$HOSTAPD_CONF" ]; then
-				USER_SSID=$(cat $HOSTAPD_CONF | grep ssid= -m1 | cut -d'=' -f2)
-				if [[ -n "$USER_SSID" ]]; then
-					SSID_AP="$USER_SSID"
-				fi
-				PW_AP=$(cat $HOSTAPD_CONF | grep wpa_passphrase= -m1 | cut -d'=' -f2)
-				PW_AP_ENC=$(cat $HOSTAPD_CONF | grep wpa_psk= -m1 | cut -d'=' -f2)
-				if [ "$UPDATE_WIFI_IN_DB" = true ]; then
-					putWifiUpdated "{\"status\":\"current-config\", \"wifi\":\"deactivated\", \"wifitype\":\"accesspoint\", \"wifiname\":\"$SSID_AP\", \"wifipw\":\"$PW_AP\", \"wifipwenc\":\"$PW_AP_ENC\" }"
-					UPDATE_WIFI_IN_DB=false
-				fi
-			fi
-
-			if [ -f "$WPA_CONF" ]; then
-				USER_SSID=$(cat $WPA_CONF | grep ssid= -m1 | cut -d'"' -f2)
-				if [[ -n "$USER_SSID" ]]; then
-					SSID_CLIENT="$USER_SSID"
-				fi
-				PW_CLIENT=$(cat $WPA_CONF | grep psk=\" -m1 | cut -d'"' -f2)
-				PW_CLIENT_ENC=$(cat $WPA_CONF | grep psk=[^\"] -m1 | cut -d= -f2)
-				if [ "$UPDATE_WIFI_IN_DB" = true ]; then
-					putWifiUpdated "{\"status\":\"current-config\", \"wifi\":\"deactivated\", \"wifitype\":\"client\", \"wifiname\":\"$SSID_CLIENT\", \"wifipw\":\"$PW_CLIENT\", \"wifipwenc\":\"$PW_CLIENT_ENC\" }"
-					UPDATE_WIFI_IN_DB=false
-				fi
-			fi
-		fi
-
-		if [[ -n "$SSID_AP" ]]; then
-			if [[ $((mgmt & mgmt_hostapd)) -eq 0 ]]; then
+		if [[ "$type" == "accesspoint" && -n "$SSID_AP" ]]; then
+			if [[ $((mgmt & mgmt_interfaces)) -eq 0 ]]; then
 				CONFIGURED_BY_DECONZ=false
 				putWifiUpdated "{\"status\":\"current-config\", \"type\":\"accesspoint\", \"ssid\":\"$SSID_AP\", \"mgmt\": $mgmt }"
 			elif [ "$UPDATE_WIFI_IN_DB" = true ]; then
@@ -348,8 +322,8 @@ function checkConfig {
 			fi
 		fi
 
-		if [[ -n "$SSID_CLIENT" ]]; then
-			if [[ $((mgmt & mgmt_wpa_supplicant)) -eq 0 ]]; then
+		if [[ "$type" == "client" && -n "$SSID_CLIENT" ]]; then
+			if [[ $((mgmt & mgmt_interfaces)) -eq 0 ]]; then
 				CONFIGURED_BY_DECONZ=false
 				putWifiUpdated "{\"status\":\"current-config\", \"type\":\"client\", \"ssid\":\"$SSID_CLIENT\", \"mgmt\": $mgmt}"
 			elif [ "$UPDATE_WIFI_IN_DB" = true ]; then
@@ -403,7 +377,7 @@ function checkConfig {
 		fi
 
 		# scan for wifis
-		# scan for wifis at startup and then ca every 10 minutes or everey 20 seconds if user is at wifi page
+		# scan for wifis at startup and then ca every 10 minutes or everey 10 seconds if user is at wifi page
 		if [ "$WIFI_PAGE_ACTIVE" = true ] || [ $WAIT_WIFI_SCAN -ge 30 ]; then
 			WAIT_WIFI_SCAN=0
 			scanAvailableWifi
@@ -412,20 +386,15 @@ function checkConfig {
 		fi
 
 		if [ "$WIFI_CONFIG" = "not-configured" ]; then
-			#if [[ $CONFIGURED_BY_DECONZ = false ]]; then
-				[[ $LOG_DEBUG ]] && echo "${LOG_DEBUG}wifi not configured by deCONZ - cancel"
-				LAST_UPDATED="${values[6]}"
-				EVENT=$EVENT_PROCESS
-				STATE=$STATE_NOT_CONFIGURED
-				TIMEOUT=2
-				return
-			#fi
+			[[ $LOG_DEBUG ]] && echo "${LOG_DEBUG}wifi not configured by deCONZ - cancel"
+			LAST_UPDATED="${values[6]}"
+			EVENT=$EVENT_PROCESS
+			STATE=$STATE_NOT_CONFIGURED
+			TIMEOUT=2
+			return
 		fi
 
 		if [[ "$WIFI_CONFIG" = "deactivated" ]]; then
-
-			#[[ $CONFIGURED_BY_DECONZ = false ]] && return
-
 			LAST_UPDATED="${values[6]}"
 			EVENT=$EVENT_PROCESS
 			STATE=$STATE_DEACTIVATED
@@ -449,12 +418,22 @@ function checkConfig {
 			[[ $LOG_ERROR ]] && echo "${LOG_ERROR}missing parameter wifitype"
 			return
 		fi
-		if [ -z "${values[2]}" ] || [[ "${values[2]}" == "invalid" ]]; then
+		if [ -z "${values[2]}" ]; then
 			[[ $LOG_ERROR ]] && echo "${LOG_ERROR}missing parameter wifiname"
 			# try to read active wifi configuration and update db
 			UPDATE_WIFI_IN_DB=true
 			return
 		fi
+		if [[ "${values[2]}" == "invalid" ]]; then
+			[[ $LOG_DEBUG ]] && echo "${LOG_DEBUG}wifi name is invalid."
+			LAST_UPDATED="${values[6]}"
+			ERROR_COUNT=$((ERROR_COUNT + 1))
+			TIMEOUT=2
+			EVENT=$EVENT_PROCESS
+			STATE=$STATE_CONNECT_ACCESSPOINT_FAIL
+			return
+		fi
+		
 		if [ -z "${values[3]}" ]; then
 			[[ $LOG_WARN ]] && echo "${LOG_WARN}missing parameter wifipw"
 			if [ -n "${values[8]}" ]; then
@@ -549,42 +528,58 @@ function checkConfig {
 				TIMEOUT=2
 				return
 			else
-				WORKING_WIFI_TYPE="$WIFI_TYPE"
-				WORKING_WIFI_NAME="$WIFI_NAME"
-				WORKING_WIFI_PW="$WIFI_PW"
-				WORKING_WIFI_PW_ENC="$WIFI_PW_ENC"
 				WAIT_RESTORE_CONF=0
+				if [[ "$WIFI_TYPE" == *"accesspoint"* ]]; then
+					EVENT=$EVENT_PROCESS
+					STATE=$STATE_CHECK_ACCESSPOINT
+					TIMEOUT=2
+					return
+				fi
+				
+				if [[ "$WIFI_TYPE" == "client" ]]; then
+					EVENT=$EVENT_PROCESS
+					STATE=$STATE_CHECK_CLIENT
+					TIMEOUT=2
+					return
+				fi
 			fi
 		else
 			if [[ "$WIFI_NAME" != "invalid" ]] && [[ "$WIFI_TYPE" != "invalid" ]] && [[ "$WIFI_PW" != "invalid" ]]; then
 				if [[ "$WORKING_WIFI_NAME" != "$WIFI_NAME" ]] || [[ "$WORKING_WIFI_TYPE" != "$WIFI_TYPE" ]]; then
-					[[ $LOG_DEBUG ]] && echo "${LOG_DEBUG}Working configuration differ from user configuration. Wait until $WAIT_RESTORE_CONF reaches 40 then try to reconnect to user configuration."
+					[[ $LOG_DEBUG ]] && echo "${LOG_DEBUG}Working configuration differ from user configuration. Count $WAIT_RESTORE_CONF to 40 then try to reconnect to user configuration. Or if working wifi name is empty."
 					WAIT_RESTORE_CONF=$((WAIT_RESTORE_CONF + 1))
 					if [ $WAIT_RESTORE_CONF -ge 40 ] || [ -z "$WORKING_WIFI_NAME" ] || [ -z "$WORKING_WIFI_TYPE" ]; then
 						# 40 x 15s = 10 minutes; then try again to restore configuration wanted by user
 						WAIT_RESTORE_CONF=0
 						[[ $LOG_DEBUG ]] && echo "${LOG_DEBUG}Try to reconnect to user configuration (only if no user is connected to the ap)."
-						if [ -z "$(iw dev wlan0 station dump)" ]; then
+						if [ -z "$(iw dev $WIFI_DEV station dump)" ]; then
 							# no user is connected to the ap - try to restore user config
-
-							# TODO: first scan wifi then try to reconnect
-
-							WORKING_WIFI_TYPE="$WIFI_TYPE"
-							WORKING_WIFI_NAME="$WIFI_NAME"
-							WORKING_WIFI_PW="$WIFI_PW"
-							WORKING_WIFI_PW_ENC="$WIFI_PW_ENC"
-						fi
+							if [[ "$WIFI_TYPE" == *"accesspoint"* ]]; then
+								EVENT=$EVENT_PROCESS
+								STATE=$STATE_CHECK_ACCESSPOINT
+								TIMEOUT=2
+								return
+							fi
+							
+							if [[ "$WIFI_TYPE" == "client" ]]; then
+								EVENT=$EVENT_PROCESS
+								STATE=$STATE_CHECK_CLIENT
+								TIMEOUT=2
+								return
+							fi		
+						fi # restore user config
 					fi
 				fi
 			fi
 		fi
 
-		if [[ "$WORKING_WIFI_TYPE" = *"accesspoint"* ]]; then
+		if [[ "$WORKING_WIFI_TYPE" == *"accesspoint"* ]]; then
 			EVENT=$EVENT_PROCESS
 			STATE=$STATE_CHECK_ACCESSPOINT
 			TIMEOUT=2
 			return
 		fi
+		
 		if [[ "$WORKING_WIFI_TYPE" == "client" ]]; then
 			EVENT=$EVENT_PROCESS
 			STATE=$STATE_CHECK_CLIENT
@@ -598,83 +593,40 @@ function checkConfig {
 function checkAccesspoint {
 	if [[ $1 == $EVENT_PROCESS ]]; then
 		putWifiUpdated '{"status":"check-ap"}'
-		### accesspoint/accesspoint-backup mode
-		if [[ "$WORKING_WIFI_TYPE" = *"accesspoint"* ]]; then
-			[[ $LOG_DEBUG ]] && echo "${LOG_DEBUG}enter configure ap section"
-			TIMEOUT=2
-			which hostapd &> /dev/null
-			if [ $? -ne 0 ]; then
-				[[ $LOG_CRIT ]] && echo "${LOG_CRIT}hostapd not installed"
-				ERROR_COUNT=$((ERROR_COUNT + 1)) # try last working conf then backup
+		TIMEOUT=2
+		
+		### configuration changed?
+		if [ -n "$WIFI_PW_ENC" ]; then
+			if [[ "$WORKING_WIFI_NAME" != "$WIFI_NAME" ]] || [[ "$WORKING_WIFI_PW_ENC" != "$WIFI_PW_ENC" ]] || [[ "$RECOVER_LAST_WORKING_CONFIGURATION" = true ]]; then
+				RECOVER_LAST_WORKING_CONFIGURATION=false
 				EVENT=$EVENT_PROCESS
-				STATE=$STATE_CONNECT_ACCESSPOINT_FAIL
+				STATE=$STATE_TRY_CONNECT_ACCESSPOINT
 				return
 			fi
-
-			which dnsmasq &> /dev/null
-			if [ $? -ne 0 ]; then
-				[[ $LOG_CRIT ]] && echo "${LOG_CRIT}dnsmasqd not installed"
-				ERROR_COUNT=$((ERROR_COUNT + 1)) # try last working conf then backup
+		else
+			if [[ "$WORKING_WIFI_NAME" != "$WIFI_NAME" ]] || [[ "$WORKING_WIFI_PW" != "$WIFI_PW" ]] || [[ "$RECOVER_LAST_WORKING_CONFIGURATION" = true ]]; then
+			RECOVER_LAST_WORKING_CONFIGURATION=false
 				EVENT=$EVENT_PROCESS
-				STATE=$STATE_CONNECT_ACCESSPOINT_FAIL
+				STATE=$STATE_TRY_CONNECT_ACCESSPOINT
 				return
 			fi
+		fi
 
-			if [ -f "$HOSTAPD_CONF" ]; then
-				# check from config
-				local OLD_WIFI_NAME=$(cat $HOSTAPD_CONF | grep "^ssid" | cut -d'=' -f2)
-				local OLD_WIFI_PW=$(cat $HOSTAPD_CONF | grep "^wpa_passphrase" | cut -d'=' -f2)
-				local OLD_WIFI_PW_ENC=$(cat $HOSTAPD_CONF | grep "^wpa_psk" | cut -d'=' -f2)
-			fi
-
-			if [ -n "$OLD_WIFI_PW_ENC" ]; then
-				if [[ "$WORKING_WIFI_NAME" != "$OLD_WIFI_NAME" ]] || [[ "$WORKING_WIFI_PW_ENC" != "$OLD_WIFI_PW_ENC" ]]; then
-					EVENT=$EVENT_PROCESS
-					STATE=$STATE_TRY_CONNECT_ACCESSPOINT
-					return
-				fi
-			else
-				if [[ "$WORKING_WIFI_NAME" != "$OLD_WIFI_NAME" ]] || [[ "$WORKING_WIFI_PW" != "$OLD_WIFI_PW" ]]; then
-					EVENT=$EVENT_PROCESS
-					STATE=$STATE_TRY_CONNECT_ACCESSPOINT
-					return
-				fi
-			fi
-
-			### accesspoint running ?
-			systemctl -q is-active hostapd
-				if [ $? -eq 0 ]; then
-					[[ $LOG_DEBUG ]] && echo "${LOG_DEBUG}hostapd is running"
-					systemctl -q is-active dnsmasq
-					if [ $? -eq 0 ]; then
-						[[ $LOG_DEBUG ]] && echo "${LOG_DEBUG}dnsmasq is running"
-						[[ $LOG_DEBUG ]] && echo "${LOG_DEBUG}IP Address: $IP_ADDR. iw wlan0 info: $(iw $WIFI_DEV info | grep 'type AP')"
-						iw $WIFI_DEV info | grep 'type AP' > /dev/null
-						if [[ $? -eq 0 ]] || [[ -n $IP_ADDR ]]; then
-							[[ $LOG_INFO ]] && echo "${LOG_INFO}Accesspoint running"
-							# accesspoint running
-							EVENT=$EVENT_PROCESS
-							STATE=$STATE_CONFIGURED_ACCESSPOINT
-							return
-						else
-							# activate ap if not running
-							EVENT=$EVENT_PROCESS
-							STATE=$STATE_TRY_CONNECT_ACCESSPOINT
-							return
-						fi
-					else
-						[[ $LOG_WARN ]] && echo "${LOG_WARN}dnsmasq is not running - reconfigure"
-						EVENT=$EVENT_PROCESS
-						STATE=$STATE_TRY_CONNECT_ACCESSPOINT
-						return
-					fi
-				else
-					[[ $LOG_WARN ]] && echo "${LOG_WARN}hostapd is not running - reconfigure"
-					EVENT=$EVENT_PROCESS
-					STATE=$STATE_TRY_CONNECT_ACCESSPOINT
-					return
-				fi
-		fi # accesspoint
+		### accesspoint running ?
+		if [ -n "$(nmcli connection show --active | grep "$PROFILE_NAME")" ]; then
+			[[ $LOG_DEBUG ]] && echo "${LOG_DEBUG}IP Address: $IP_ADDR. iw wlan0 info: $(iw $WIFI_DEV info | grep 'type AP')"
+			[[ $LOG_INFO ]] && echo "${LOG_INFO}Accesspoint running"
+			# accesspoint running
+			EVENT=$EVENT_PROCESS
+			STATE=$STATE_CONFIGURED_ACCESSPOINT
+			return
+		else
+			# activate ap if not running
+			EVENT=$EVENT_PROCESS
+			STATE=$STATE_TRY_CONNECT_ACCESSPOINT
+			return
+		fi
+				
 		EVENT=$EVENT_PROCESS
 		STATE=$STATE_CHECK_CONFIG
 	fi
@@ -684,76 +636,49 @@ function checkAccesspoint {
 function checkClient {
 	if [[ $1 == $EVENT_PROCESS ]]; then
 		putWifiUpdated '{"status":"check-client"}'
-		### client mode
-		if [[ "$WORKING_WIFI_TYPE" = "client" ]]; then
-			[[ $LOG_DEBUG ]] && echo "${LOG_DEBUG}enter configure client section"
-			TIMEOUT=2
-			
-			which wpa_supplicant &> /dev/null
-			if [ $? -ne 0 ]; then
-				[[ $LOG_CRIT ]] && echo "${LOG_CRIT}wpa_supplicant not installed"
-				ERROR_COUNT=$((ERROR_COUNT + 1)) # try last working conf then backup
-				EVENT=$EVENT_PROCESS
-				STATE=$STATE_CONNECT_CLIENT_FAIL
-				return
-			fi
-
-			if [ -f "$WPA_CONF" ]; then
-				# check from config
-				local OLD_WIFI_NAME=$(cat $WPA_CONF | grep "ssid" | cut -d'=' -f2 | cut -d\" -f2)
-				local OLD_WIFI_PW=$(cat $WPA_CONF | grep psk=\" | cut -d'=' -f2 | cut -d\" -f2)
-				local OLD_WIFI_PW_ENC=$(cat $WPA_CONF | grep psk=[^\"] -m1 | cut -d= -f2)
-			fi
-
-			# reconfigure if parameter changed or services aren't started
-			if [[ "$WORKING_WIFI_NAME" != "$OLD_WIFI_NAME" ]] || [[ "$WORKING_WIFI_PW" != "$OLD_WIFI_PW" ]] || [[ "$WORKING_WIFI_PW_ENC" != "$OLD_WIFI_PW_ENC" ]]; then
+		TIMEOUT=2
+		
+		### configuration changed?
+		if [ -n "$WIFI_PW_ENC" ]; then
+			if [[ "$WORKING_WIFI_NAME" != "$WIFI_NAME" ]] || [[ "$WORKING_WIFI_PW_ENC" != "$WIFI_PW_ENC" ]] || [[ "$RECOVER_LAST_WORKING_CONFIGURATION" = true ]]; then
+				RECOVER_LAST_WORKING_CONFIGURATION=false
 				EVENT=$EVENT_PROCESS
 				STATE=$STATE_TRY_CONNECT_CLIENT
 				return
 			fi
-
-			### client mode running ?
-			pidof wpa_supplicant > /dev/null
-			if [ $? -eq 0 ]; then
-				[[ $LOG_DEBUG ]] && echo "${LOG_DEBUG}wpa_supplicant is running"
-				[[ $LOG_DEBUG ]] && echo "${LOG_DEBUG}IP Address: $IP_ADDR. Connected to: $(iw $WIFI_DEV info | grep $WORKING_WIFI_NAME)"
-				iw $WIFI_DEV info | grep "$WORKING_WIFI_NAME" > /dev/null
-				if [[ $? -eq 0 ]] && [[ -n $IP_ADDR ]]; then
-					[[ $LOG_INFO ]] && echo "${LOG_INFO}connected to $WORKING_WIFI_NAME"
-					# client mode running
-					WAIT_AP_BACKUP=0
-					EVENT=$EVENT_PROCESS
-					STATE=$STATE_CONFIGURED_CLIENT
-					return
-				else
-					# not connected. other wifi down?
-					# automatic try reconnect - after 3 minutes: set up AP backup
-					WAIT_AP_BACKUP=$((WAIT_AP_BACKUP + 1))
-					[[ $LOG_DEBUG ]] && echo "${LOG_DEBUG}Not connected. Wait until $WAIT_AP_BACKUP reaches 12 before setting up AP backup."
-					if [ $WAIT_AP_BACKUP -ge 12 ]; then
-						# 12 x 15s = 3 minutes; then AP backup
-						WAIT_AP_BACKUP=0
-						[[ $LOG_DEBUG ]] && echo "${LOG_DEBUG}other network is more than 3 minutes down. Set up AP backup."
-						EVENT=$EVENT_PROCESS
-						STATE=$STATE_ACCESSPOINT_BACKUP
-						return
-						#isWiredConnection
-						#if [ $? -ne 0 ]; then
-						#	[[ $LOG_DEBUG ]] && echo "${LOG_DEBUG}Create an AP backup"
-						#	# only create ap backup if no wired connection to the gw is available
-						#	EVENT=$EVENT_PROCESS
-						#	STATE=$STATE_ACCESSPOINT_BACKUP
-						#fi
-					fi
-				fi
-		    else
-			    [[ $LOG_WARN ]] && echo "${LOG_WARN}wpa_supplicant is not running - reconfigure network"
-				# activate client mode if not running
+		else
+			if [[ "$WORKING_WIFI_NAME" != "$WIFI_NAME" ]] || [[ "$WORKING_WIFI_PW" != "$WIFI_PW" ]] || [[ "$RECOVER_LAST_WORKING_CONFIGURATION" = true ]]; then
+				RECOVER_LAST_WORKING_CONFIGURATION=false
 				EVENT=$EVENT_PROCESS
 				STATE=$STATE_TRY_CONNECT_CLIENT
 				return
 			fi
-		fi # client mode
+		fi
+		
+		### client running ?
+		if [ -n "$(nmcli connection show --active | grep "$WORKING_WIFI_NAME")" ] || [ -n "$(nmcli connection show --active | grep preconfigured)" ]; then
+			[[ $LOG_DEBUG ]] && echo "${LOG_DEBUG}IP Address: $IP_ADDR"
+			[[ $LOG_INFO ]] && echo "${LOG_INFO}Client running"
+			# client running
+			WAIT_AP_BACKUP=0
+			EVENT=$EVENT_PROCESS
+			STATE=$STATE_CONFIGURED_CLIENT
+			return
+		else
+			# not connected. other wifi down?
+			# automatic try reconnect - after 3 minutes: set up AP backup
+			WAIT_AP_BACKUP=$((WAIT_AP_BACKUP + 1))
+			[[ $LOG_DEBUG ]] && echo "${LOG_DEBUG}Not connected. Wait until $WAIT_AP_BACKUP reaches 12 before setting up AP backup."
+			if [ $WAIT_AP_BACKUP -ge 12 ]; then
+				# 12 x 15s = 3 minutes; then AP backup
+				WAIT_AP_BACKUP=0
+				[[ $LOG_DEBUG ]] && echo "${LOG_DEBUG}other network is more than 3 minutes down. Set up AP backup."
+				EVENT=$EVENT_PROCESS
+				STATE=$STATE_ACCESSPOINT_BACKUP
+				return
+			fi
+		fi
+		
 		EVENT=$EVENT_PROCESS
 		STATE=$STATE_CHECK_CONFIG
 	fi
@@ -768,9 +693,7 @@ scanAvailableWifi() {
 	if [[ "$WIFI_CONFIG" == "deactivated" ]]; then
 		if [ "$WIFI_PAGE_ACTIVE" = true ]; then
 			# activate wifi
-			ifconfig wlan0 up
-		else
-			return
+			nmcli radio wifi on
 		fi
 	fi
 
@@ -839,10 +762,11 @@ scanAvailableWifi() {
 	# use python to convert to JSON (incl. unicode stuff)
 	local json=$(python -c "import json; print(json.dumps([$NETW]))")
 	# -w '%{http_code}'
+	
 	curl --noproxy '*' -s -o /dev/null -d "$json" -X PUT http://127.0.0.1:${DECONZ_PORT}/api/$OWN_PID/config/wifi/scanresult
 
 	if [[ "$WIFI_CONFIG" == "deactivated" ]]; then
-			ifconfig wlan0 down
+		nmcli radio wifi off		
 	fi
 }
 
@@ -889,28 +813,13 @@ function stateDeactivated {
 		# deactivate wifi
 		putWifiUpdated '{"status":"deactivated"}'
 		[[ $LOG_DEBUG ]] && echo "${LOG_DEBUG}wifi deactivated"
-		#systemctl -q is-active hostapd
-		#if [ $? -eq 0 ]; then
-			#echo "${LOG_INFO}hostapd is running - deactivate it"
-			systemctl stop hostapd
-		#fi
-		#systemctl -q is-active wpa_supplicant
-		#if [ $? -eq 0 ]; then
-			#[[ $LOG_INFO ]] && echo "${LOG_INFO}wpa_supplicant is running - deactivate it"
-			#[[ $LOG_INFO ]] && echo "${LOG_INFO}release any dhcp leases"
-			systemctl stop wpa_supplicant
-			pkill wpa_supplicant
-		#fi
-		#systemctl -q is-active dhcpcd
-		#if [ $? -eq 0 ]; then
-		#	echo "${LOG_INFO}dhcpcd is running - deactivate it"
-		#	systemctl stop dhcpcd
-		#fi
-		#systemctl -q is-active dnsmasq
-		#if [ $? -eq 0 ]; then
-		#	echo "${LOG_INFO}dnsmasq is running - deactivate it"
-		#	systemctl stop dnsmasq
-		#fi
+
+		nmcli radio wifi off
+		WORKING_WIFI_TYPE=""
+		WORKING_WIFI_NAME=""
+		WORKING_WIFI_PW=""
+		WORKING_WIFI_PW_ENC=""
+
 		# remove all ip addresses
 		ip addr flush dev $WIFI_DEV &> /dev/null
 
@@ -936,9 +845,16 @@ function configuredAccesspoint {
 		ORIGIN_STATE=$STATE_CONFIGURED_ACCESSPOINT
 		ERROR_COUNT=0
 		putWifiUpdated '{"status":"ap-configured"}'
+		
+		WORKING_WIFI_TYPE="$WIFI_TYPE"
+		WORKING_WIFI_NAME="$WIFI_NAME"
+		WORKING_WIFI_PW="$WIFI_PW"
+		WORKING_WIFI_PW_ENC="$WIFI_PW_ENC"
+		
 		LAST_WIFI_TYPE="$WORKING_WIFI_TYPE"
 		LAST_WIFI_NAME="$WORKING_WIFI_NAME"
 		AP_BACKUP_NAME="$WORKING_WIFI_NAME"
+		
 		if [ -n "$WORKING_WIFI_PW_ENC" ]; then
 			LAST_WIFI_PW="$WORKING_WIFI_PW_ENC"
 			AP_BACKUP_PW_ENC="$WORKING_WIFI_PW_ENC"
@@ -948,6 +864,7 @@ function configuredAccesspoint {
 			AP_BACKUP_PW="$WORKING_WIFI_PW"
 			putWifiUpdated "{\"status\":\"current-config\", \"workingtype\":\"$WORKING_WIFI_TYPE\", \"workingname\":\"$WORKING_WIFI_NAME\", \"workingpw\":\"$WORKING_WIFI_PW\"}"
 		fi
+		
 		STATE=$STATE_CHECK_CONFIG
 		EVENT=$EVENT_PROCESS
 	fi
@@ -959,15 +876,23 @@ function configuredClient {
 		ORIGIN_STATE=$STATE_CONFIGURED_CLIENT
 		ERROR_COUNT=0
 		putWifiUpdated '{"status":"client-configured"}'
+		
+		WORKING_WIFI_TYPE="$WIFI_TYPE"
+		WORKING_WIFI_NAME="$WIFI_NAME"
+		WORKING_WIFI_PW="$WIFI_PW"
+		WORKING_WIFI_PW_ENC="$WIFI_PW_ENC"
+		
 		LAST_WIFI_TYPE="$WORKING_WIFI_TYPE"
 		LAST_WIFI_NAME="$WORKING_WIFI_NAME"
+		
 		if [ -n "$WORKING_WIFI_PW_ENC" ]; then
 			LAST_WIFI_PW="$WORKING_WIFI_PW_ENC"
 			putWifiUpdated "{\"status\":\"current-config\", \"workingtype\":\"$WORKING_WIFI_TYPE\", \"workingname\":\"$WORKING_WIFI_NAME\", \"workingpwenc\":\"$WORKING_WIFI_PW_ENC\"}"
 		else
 			LAST_WIFI_PW="$WORKING_WIFI_PW"
 			putWifiUpdated "{\"status\":\"current-config\", \"workingtype\":\"$WORKING_WIFI_TYPE\", \"workingname\":\"$WORKING_WIFI_NAME\", \"workingpw\":\"$WORKING_WIFI_PW\"}"
-		fi		
+		fi	
+		
 		STATE=$STATE_CHECK_CONFIG
 		EVENT=$EVENT_PROCESS
 	fi
@@ -1057,12 +982,13 @@ function lastWorkingConfiguration {
 			fi
 		fi
 
-		WORKING_WIFI_TYPE="$LAST_WIFI_TYPE"
-		WORKING_WIFI_NAME="$LAST_WIFI_NAME"
-		if [ -n "$WORKING_WIFI_PW_ENC" ]; then
-			WORKING_WIFI_PW_ENC="$LAST_WIFI_PW"
+		RECOVER_LAST_WORKING_CONFIGURATION=true
+		WIFI_TYPE="$LAST_WIFI_TYPE"
+		WIFI_NAME="$LAST_WIFI_NAME"
+		if [ -n "$WIFI_PW_ENC" ]; then
+			WIFI_PW_ENC="$LAST_WIFI_PW"
 		else
-			WORKING_WIFI_PW="$LAST_WIFI_PW"
+			WIFI_PW="$LAST_WIFI_PW"
 		fi
 
 		if [[ "$LAST_WIFI_TYPE" == "client" ]]; then
@@ -1092,10 +1018,10 @@ function accesspointBackup {
 			# only set backup if gateway has no wired connection to the router
 			if [ -n "$AP_BACKUP_NAME" ]; then
 				if [ -n "$AP_BACKUP_PW" ] || [ -n "$AP_BACKUP_PW_ENC" ]; then
-					WORKING_WIFI_TYPE="accesspoint"
-					WORKING_WIFI_NAME="$AP_BACKUP_NAME"
-					WORKING_WIFI_PW="$AP_BACKUP_PW"
-					WORKING_WIFI_PW_ENC="$AP_BACKUP_PW_ENC"
+					WIFI_TYPE="accesspoint"
+					WIFI_NAME="$AP_BACKUP_NAME"
+					WIFI_PW="$AP_BACKUP_PW"
+					WIFI_PW_ENC="$AP_BACKUP_PW_ENC"
 					STATE=$STATE_CHECK_ACCESSPOINT
 					return
 				fi
@@ -1108,154 +1034,30 @@ function accesspointBackup {
 # $1 = EVENT
 function tryConnectClient {
 	if [[ $1 == $EVENT_PROCESS ]]; then
-		## stop network
-		[[ $LOG_DEBUG ]] && echo "${LOG_DEBUG}stopping network"
-
-		systemctl stop networking
-		systemctl stop dhcpcd
-		systemctl stop hostapd
-		systemctl stop dnsmasq
-
 		# remove all ip addresses
 		ip addr flush dev $WIFI_DEV
-
-		systemctl stop wpa_supplicant
-		pkill wpa_supplicant
-
-		[[ $LOG_INFO ]] && echo "${LOG_INFO}configuring WIFI"
-
-		## create wpa_supplicant conf
-		if [ -n "$WORKING_WIFI_PW_ENC" ]; then
-			echo "# generated by deCONZ
-ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev
-country=DE
-update_config=1
-
-network={
-ssid=\"${WORKING_WIFI_NAME}\"
-psk=${WORKING_WIFI_PW_ENC}
-}" > $WPA_CONF
-		else
-			echo "# generated by deCONZ
-ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev
-country=DE
-update_config=1
-
-network={
-ssid=\"${WORKING_WIFI_NAME}\"
-psk=\"${WORKING_WIFI_PW}\"
-}" > $WPA_CONF	
+		
+		local PW=""			
+		if [ -n "$WIFI_PW" ]; then
+			PW="$WIFI_PW"
+		elif [ -n "$WIFI_PW_ENC" ]; then
+			PW="$WIFI_PW_ENC"
 		fi
-
-
-if [ "$OS_ID" = "raspbian" ] && [ "$OS_VERSION" = "jessie" ]; then
-
-		echo "# generated by deCONZ
-# interfaces(5) file used by ifup(8) and ifdown(8)
-
-# Please note that this file is written to be used with dhcpcd
-# For static IP, consult /etc/dhcpcd.conf and 'man dhcpcd.conf'
-
-# Include files from /etc/network/interfaces.d:
-source-directory /etc/network/interfaces.d
-
-auto lo
-iface lo inet loopback
-
-iface eth0 inet manual
-
-allow-hotplug $WIFI_DEV
-iface $WIFI_DEV inet manual
-    wpa-conf /etc/wpa_supplicant/wpa_supplicant.conf
-
-allow-hotplug wlan1
-iface wlan1 inet manual
-    wpa-conf /etc/wpa_supplicant/wpa_supplicant.conf" > $INTERFACES
-fi
-
-
-# stretch uses dhcpcd hooks for wpa_supplicant
-if [ "$OS_ID" = "raspbian" ] && [ "$OS_VERSION" = "stretch" ]; then
-			echo "# generated by deCONZ
-# interfaces(5) file used by ifup(8) and ifdown(8)
-
-# Please note that this file is written to be used with dhcpcd
-# For static IP, consult /etc/dhcpcd.conf and 'man dhcpcd.conf'
-
-# Include files from /etc/network/interfaces.d:
-source-directory /etc/network/interfaces.d" > $INTERFACES
-fi
-
-		## dynamic ip addresses
-			echo "# created by deCONZ
-# A sample configuration for dhcpcd.
-# See dhcpcd.conf(5) for details.
-
-# Allow users of this group to interact with dhcpcd via the control socket.
-#controlgroup wheel
-
-# Inform the DHCP server of our hostname for DDNS.
-hostname
-
-# Use the hardware address of the interface for the Client ID.
-clientid
-# or
-# Use the same DUID + IAID as set in DHCPv6 for DHCPv4 ClientID as per RFC4361.
-# Some non-RFC compliant DHCP servers do not reply with this set.
-# In this case, comment out duid and enable clientid above.
-#duid
-
-# Persist interface configuration when dhcpcd exits.
-persistent
-
-# Rapid commit support.
-# Safe to enable by default because it requires the equivalent option set
-# on the server to actually work.
-option rapid_commit
-
-# A list of options to request from the DHCP server.
-option domain_name_servers, domain_name, domain_search, host_name
-option classless_static_routes
-# Most distributions have NTP support.
-option ntp_servers
-# Respect the network MTU. This is applied to DHCP routes.
-option interface_mtu
-
-# A ServerID is required by RFC2131.
-require dhcp_server_identifier
-
-# Generate Stable Private IPv6 Addresses instead of hardware based ones
-slaac private
-" > $DHCPCD_CONF
-
-		## restart network
+		
+		nmcli radio wifi on
+		nmcli device disconnect "$WIFI_DEV"
+		nmcli device wifi list &> /dev/null
+		nmcli device wifi connect "$WIFI_NAME" password "$PW"
 		[[ $LOG_INFO ]] && echo "${LOG_INFO}starting wifi client mode"
 		putWifiUpdated '{"status":"client-connecting"}'
 		
-		# check if wlan0 is softblocked (possible after first start of rpi)
-		if [[ -n $(rfkill list wlan | grep yes) ]]; then
-			rfkill unblock wlan
-			ifconfig wlan0 up
-		fi
-
-		#systemctl daemon-reload
-		systemctl restart dhcpcd
-		systemctl restart networking
-
-		pidof wpa_supplicant > /dev/null
-		if [[ $? -ne 0 ]]; then
-			# start wpa_supplicant manually, systemd doesn't seem to work
-			wpa_supplicant -u -s -i $WIFI_DEV -c $WPA_CONF -B
-		fi
-
-		# reload config if already running
-		#killall -HUP wpa_supplicant
+		# check if connection was successfull
 		sleep 5
 		local ok=0
 
 		for i in {1..5}; do
 			local mng=$(iw $WIFI_DEV info | grep "type managed")
-			local ssid=$(iw $WIFI_DEV info | grep "ssid $WORKING_WIFI_NAME")
+			local ssid=$(iw $WIFI_DEV info | grep "ssid $WIFI_NAME")
 			if [[ -n $mng ]] && [[ -n $ssid ]]; then
 				# have ip address?
 				local ip=$(ip -4 a show dev $WIFI_DEV up scope global)
@@ -1277,7 +1079,7 @@ slaac private
 
 		[[ $LOG_INFO ]] && echo "${LOG_INFO}client connection to wifi established"
 		checkIpAddr
-
+	
 		EVENT=$EVENT_PROCESS
 		STATE=$STATE_CONFIGURED_CLIENT
 		TIMEOUT=2
@@ -1288,215 +1090,28 @@ slaac private
 # $1 = EVENT
 function tryConnectAccesspoint {
 	if [[ $1 == $EVENT_PROCESS ]]; then
-		## stop network
-		[[ $LOG_DEBUG ]] && echo "${LOG_DEBUG}stopping network"
-		systemctl stop dhcpcd
-		systemctl stop dnsmasq
-		systemctl stop hostapd
-		systemctl stop wpa_supplicant
-		pkill wpa_supplicant
-
-		# remove all ip addresses
-		ip addr flush dev $WIFI_DEV
-
-		[[ $LOG_INFO ]] && echo "${LOG_INFO}configuring AP"
-
-		## create hostapd conf
-		if [ -n "$WORKING_WIFI_PW_ENC" ]; then
-			echo "# generated by deCONZ
-interface=$WIFI_DEV
-#driver=nl80211
-
-# AP configuration
-ssid=$WORKING_WIFI_NAME
-channel=11
-hw_mode=g
-wmm_enabled=1
-country_code=DE
-#ieee80211d=1
-ignore_broadcast_ssid=0
-auth_algs=1
-
-# AP security
-wpa=2
-wpa_key_mgmt=WPA-PSK
-rsn_pairwise=CCMP
-wpa_psk=$WORKING_WIFI_PW_ENC" > $HOSTAPD_CONF
-		else
-			echo "# generated by deCONZ
-interface=$WIFI_DEV
-#driver=nl80211
-
-# AP configuration
-ssid=$WORKING_WIFI_NAME
-channel=11
-hw_mode=g
-wmm_enabled=1
-#country_code=DE
-#ieee80211d=1
-ignore_broadcast_ssid=0
-auth_algs=1
-
-# AP security
-wpa=2
-wpa_key_mgmt=WPA-PSK
-rsn_pairwise=CCMP
-wpa_passphrase=$WORKING_WIFI_PW" > $HOSTAPD_CONF
+		local AP_PW=""			
+		if [ -n "$WIFI_PW" ]; then
+			AP_PW="$WIFI_PW"
+		elif [ -n "$WIFI_PW_ENC" ]; then
+			AP_PW="$WIFI_PW_ENC"
 		fi
-
-		## Add conf to hostapd daemon
-		sed -i '/DAEMON_CONF=/c\DAEMON_CONF=\"\/etc\/hostapd\/hostapd.conf\"' /etc/default/hostapd
-
-		## Static address for access point
-			echo "# generated by deCONZ
-# A sample configuration for dhcpcd.
-# See dhcpcd.conf(5) for details.
-
-# Allow users of this group to interact with dhcpcd via the control socket.
-#controlgroup wheel
-
-# Inform the DHCP server of our hostname for DDNS.
-hostname
-
-# Use the hardware address of the interface for the Client ID.
-clientid
-# or
-# Use the same DUID + IAID as set in DHCPv6 for DHCPv4 ClientID as per RFC4361.
-# Some non-RFC compliant DHCP servers do not reply with this set.
-# In this case, comment out duid and enable clientid above.
-#duid
-
-# Persist interface configuration when dhcpcd exits.
-persistent
-
-# Rapid commit support.
-# Safe to enable by default because it requires the equivalent option set
-# on the server to actually work.
-option rapid_commit
-
-# A list of options to request from the DHCP server.
-option domain_name_servers, domain_name, domain_search, host_name
-option classless_static_routes
-# Most distributions have NTP support.
-option ntp_servers
-# Respect the network MTU. This is applied to DHCP routes.
-option interface_mtu
-
-# A ServerID is required by RFC2131.
-require dhcp_server_identifier
-
-# Generate Stable Private IPv6 Addresses instead of hardware based ones
-slaac private
-
-interface $WIFI_DEV
-static ip_address=192.168.8.1/24" > $DHCPCD_CONF
-
-
-
-# --------------- default for Raspbian Jessi --- /etc/network/interfaces
-# interfaces(5) file used by ifup(8) and ifdown(8)
-
-# Please note that this file is written to be used with dhcpcd
-# For static IP, consult /etc/dhcpcd.conf and 'man dhcpcd.conf'
-
-# Include files from /etc/network/interfaces.d:
-#source-directory /etc/network/interfaces.d
-
-#auto lo
-#iface lo inet loopback
-
-#iface eth0 inet manual
-
-#allow-hotplug wlan0
-#iface wlan0 inet manual
-#    wpa-conf /etc/wpa_supplicant/wpa_supplicant.conf
-
-#allow-hotplug wlan1
-#iface wlan1 inet manual
-#    wpa-conf /etc/wpa_supplicant/wpa_supplicant.conf
-#----------------------------------------------------------
-
-
-
-# --------------- default for Raspbian Stretch --- /etc/network/interfaces
-# interfaces(5) file used by ifup(8) and ifdown(8)
-
-# Please note that this file is written to be used with dhcpcd
-# For static IP, consult /etc/dhcpcd.conf and 'man dhcpcd.conf'
-
-# Include files from /etc/network/interfaces.d:
-#source-directory /etc/network/interfaces.d
-#----------------------------------------------------------
-
-
-if [ "$OS_ID" = "raspbian" ] && [ "$OS_VERSION" = "jessie" ]; then
-
-		echo "# generated by deCONZ
-# interfaces(5) file used by ifup(8) and ifdown(8)
-
-# Please note that this file is written to be used with dhcpcd
-# For static IP, consult /etc/dhcpcd.conf and 'man dhcpcd.conf'
-
-# Include files from /etc/network/interfaces.d:
-source-directory /etc/network/interfaces.d
-
-auto lo
-iface lo inet loopback
-
-iface eth0 inet manual
-
-allow-hotplug $WIFI_DEV
-iface $WIFI_DEV inet manual
-    wpa-conf /etc/wpa_supplicant/wpa_supplicant.conf
-
-allow-hotplug wlan1
-iface wlan1 inet manual
-    wpa-conf /etc/wpa_supplicant/wpa_supplicant.conf" > $INTERFACES
-fi
-
-
-# stretch uses dhcpcd hooks for wpa_supplicant
-if [ "$OS_ID" = "raspbian" ] && [ "$OS_VERSION" = "stretch" ]; then
-			echo "# generated by deCONZ
-# interfaces(5) file used by ifup(8) and ifdown(8)
-
-# Please note that this file is written to be used with dhcpcd
-# For static IP, consult /etc/dhcpcd.conf and 'man dhcpcd.conf'
-
-# Include files from /etc/network/interfaces.d:
-source-directory /etc/network/interfaces.d" > $INTERFACES
-fi
-
-		## Configure dns server
-		echo "# generated by deCONZ
-interface=$WIFI_DEV
-no-dhcp-interface=lo,eth0
-dhcp-range=192.168.8.50,192.168.8.150,24h
-dhcp-option=option:dns-server,192.168.8.1
-address=/phoscon.app/192.168.8.1
-address=/phoscon.lan/192.168.8.1" > $DNSMASQ_CONF
-
-		# empty wpa_supplicant file
-		echo "# generated by deCONZ" > $WPA_CONF
-
-		## restart network
-		[[ $LOG_INFO ]] && echo "${LOG_INFO}restarting network"
+	
+		systemctl stop dnsmasq
+		nmcli radio wifi on
+		nmcli device disconnect "$WIFI_DEV"
+		nmcli connection delete "$DECONZ_PROFILE_NAME"
+		nmcli con add con-name "$DECONZ_PROFILE_NAME" ifname wlan0 type wifi ssid "$WIFI_NAME" 
+		nmcli con modify "$DECONZ_PROFILE_NAME" wifi-sec.key-mgmt wpa-psk
+		nmcli con modify "$DECONZ_PROFILE_NAME" wifi-sec.psk "$AP_PW"
+		nmcli con modify "$DECONZ_PROFILE_NAME" 802-11-wireless.mode ap 802-11-wireless.band bg ipv4.method shared
+		nmcli connection up "$DECONZ_PROFILE_NAME"
+		[[ $LOG_INFO ]] && echo "${LOG_INFO}starting accesspoint"
 		putWifiUpdated '{"status":"ap-connecting"}'
 		
-		# check if wlan0 is softblocked (possible after first start of rpi)
-		if [[ -n $(rfkill list wlan | grep yes) ]]; then
-			rfkill unblock wlan
-			ifconfig wlan0 up
-		fi
-
-		systemctl restart networking
-		#systemctl daemon-reload
-		systemctl restart dhcpcd
-		systemctl restart dnsmasq
-		systemctl restart hostapd
-
+		# check if accesspoint was created successfully
 		for i in {1..5}; do
-			sleep 2
+			sleep 3
 			checkIpAddr
 
 			iw $WIFI_DEV info | grep 'type AP' > /dev/null
@@ -1514,6 +1129,7 @@ address=/phoscon.lan/192.168.8.1" > $DNSMASQ_CONF
 
 		ERROR_COUNT=$((ERROR_COUNT + 1)) # try last working configuration
 		[[ $LOG_ERROR ]] && echo "${LOG_ERROR}could not start accesspoint (error count $ERROR_COUNT)"
+		
 		EVENT=$EVENT_PROCESS
 		STATE=$STATE_CONNECT_ACCESSPOINT_FAIL	
 		TIMEOUT=2
