@@ -26,6 +26,11 @@ fi
 OS_ID=$(cat /etc/os-release | sed -n 's/^ID=\(.*\)/\1/p')
 OS_VERSION=$(cat /etc/os-release | sed -n 's/^VERSION="[0-9]\s(\(.*\))"/\1/p')
 
+# TODO(mpi)
+# Streamline this script for raspian | debian | ubuntu.
+# The old setup part for Ubuntu and the endless loop + deCONZ exit monitoring were used for much older versions of deCONZ.
+# Systemd is now the main target and this script can be simplified.
+
 if [ "$OS_ID" = "raspbian" ] || [ "$OS_ID" = "debian" ]; then
 	echo "start deCONZ via systemd service"
 	sudo systemctl start deconz-gui
