@@ -38,6 +38,7 @@ const char *HttpContentCss         = "text/css";
 const char *HttpContentJson        = "application/json; charset=utf-8";
 const char *HttpContentManifestJson = "application/manifest+json";
 const char *HttpContentJS          = "text/javascript";
+const char *HttpContentGIF         = "image/gif";
 const char *HttpContentPNG         = "image/png";
 const char *HttpContentJPG         = "image/jpg";
 const char *HttpContentSVG         = "image/svg+xml";
@@ -605,6 +606,10 @@ int zmHttpClient::handleHttpFileRequest(const QHttpRequestHeader &hdr)
     else if (path.endsWith(QLatin1String("json")))
     {
         contentType = HttpContentJson;
+    }
+    else if (path.endsWith(QLatin1String("gif")))
+    {
+        contentType = HttpContentGIF;
     }
     else if (path.endsWith(QLatin1String("png")))
     {
