@@ -567,7 +567,7 @@ int zmHttpClient::handleHttpFileRequest(const QHttpRequestHeader &hdr)
             stream << "HTTP/1.1 301 Moved Permanently\r\n"
                       "Content-Type: text/html\r\n"
                       "Location: /pwa/index.html\r\n";
-            stream << "Content-Length:" << QString::number(str.size()) << "\r\n"
+            stream << "Content-Length: " << QString::number(str.size()) << "\r\n"
                                                                           "\r\n";
             stream << str;
             flush();
@@ -687,7 +687,7 @@ int zmHttpClient::handleHttpFileRequest(const QHttpRequestHeader &hdr)
             stream << "Content-Disposition: attachment; filename=\"raspbee_gateway_config_";
             stream << now << ".dat\"\r\n";
             stream << "Content-Transfer-Encoding: binary\r\n";
-            stream << "Content-Length:" << QString::number(data.size()) << "\r\n";
+            stream << "Content-Length: " << QString::number(data.size()) << "\r\n";
             stream << "\r\n";
             stream.flush();
 
@@ -726,7 +726,7 @@ int zmHttpClient::handleHttpFileRequest(const QHttpRequestHeader &hdr)
         stream << "HTTP/1.1 200 OK\r\n";
         stream << "ETag: " << cacheItem->etag << "\r\n";
         stream << "Content-Type: " << contentType << "\r\n";
-        stream << "Content-Length:" << QString::number(data.size()) << "\r\n";
+        stream << "Content-Length: " << QString::number(data.size()) << "\r\n";
         if (contentType == HttpContentAppCache)
         {
             stream << "Cache-Control: no-cache\r\n"; // use ETag for cache optimization
@@ -762,7 +762,7 @@ int zmHttpClient::handleHttpFileRequest(const QHttpRequestHeader &hdr)
 
         stream << "HTTP/1.1 404 Not Found\r\n";
         stream << "Content-Type: text/html\r\n";
-        stream << "Content-Length:" << QString::number(str.size()) << "\r\n";
+        stream << "Content-Length: " << QString::number(str.size()) << "\r\n";
         stream << "\r\n";
         stream << str;
 
