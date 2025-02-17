@@ -14,6 +14,7 @@
 #include <actor/plugin_loader.h>
 
 #include <deconz/atom_table.h>
+#include <deconz/u_memory.h>
 #include "zm_app.h"
 #include "zm_http_server.h"
 
@@ -34,14 +35,14 @@ static struct main_mq main_mq;
 
 void *AM_Alloc(unsigned long size)
 {
-    return malloc(size);
+    return U_Alloc(size);
 }
 
 void AM_Free(void *ptr)
 {
     if (ptr)
     {
-        free(ptr);
+        U_Free(ptr);
     }
 }
 
