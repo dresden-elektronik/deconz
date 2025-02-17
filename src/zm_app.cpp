@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2024 dresden elektronik ingenieurtechnik gmbh.
+ * Copyright (c) 2013-2025 dresden elektronik ingenieurtechnik gmbh.
  * All rights reserved.
  *
  * The software in this package is published under the terms of the BSD
@@ -14,6 +14,8 @@
 #include <actor/plugin_loader.h>
 
 #include <deconz/atom_table.h>
+#include <deconz/timeref.h>
+#include <deconz/u_timer.h>
 #include <deconz/u_memory.h>
 #include "zm_app.h"
 #include "zm_http_server.h"
@@ -31,6 +33,7 @@ struct main_mq
     struct am_message_queue queue;
 };
 
+static int64_t tref; // track timer differences
 static struct main_mq main_mq;
 
 void *AM_Alloc(unsigned long size)
@@ -72,12 +75,16 @@ zmApp::zmApp(int &argc, char **argv) :
     mq->out_data = &main_mq.out_data[0];
     AM_RegisterMessageQueue(mq);
 
+    tref = deCONZ::steadyTimeRef().ref;
+
     /* this should later run in its own thread without Qt */
     if (eventDispatcher())
     {
         connect(eventDispatcher(), &QAbstractEventDispatcher::awake,
                 this, &zmApp::eventQueueIdle);
     }
+
+    U_TimerInit(AM_ApiFunctions());
 
     d_ptr->httpServer = new deCONZ::HttpServer(this);
 }
@@ -94,8 +101,21 @@ zmApp::~zmApp()
     d_ptr = nullptr;
 }
 
+/* TODO make this called by seperate thread. The delays in Qt idle queue are 1..100 ms. */
 void zmApp::eventQueueIdle()
 {
+    const int64_t now = deCONZ::steadyTimeRef().ref;
+
+    if (now < tref) // readjust, shouldn't happen
+        tref = now;
+
+    int64_t diff = now - tref;
+    if (diff > 0)
+    {
+        tref = now;
+        U_TimerTick(diff);
+    }
+
     AM_Tick(&main_mq.queue);
 
     d_ptr->httpServer->processClients();
