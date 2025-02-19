@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2024 dresden elektronik ingenieurtechnik gmbh.
+ * Copyright (c) 2013-2025 dresden elektronik ingenieurtechnik gmbh.
  * All rights reserved.
  *
  * The software in this package is published under the terms of the BSD
@@ -738,7 +738,11 @@ zmController::zmController(zmMaster *master,
     m_saveNodesTimer->setSingleShot(false);
     connect(m_saveNodesTimer, SIGNAL(timeout()),
             this, SLOT(saveNodesState()));
-    m_saveNodesTimer->start();
+
+    m_saveSourceRouteConfigTimer = new QTimer(this);
+    m_saveSourceRouteConfigTimer->setSingleShot(true);
+    connect(m_saveSourceRouteConfigTimer, SIGNAL(timeout()),
+            this, SLOT(saveSourceRouteConfig()));
 
     m_sendNextTimer = new QTimer(this);
     m_sendNextTimer->setInterval(50);
@@ -819,9 +823,6 @@ zmController::~zmController()
             n.data = nullptr;
         }
     }
-
-    QSettings config(deCONZ::getStorageLocation(deCONZ::ConfigLocation), QSettings::IniFormat);
-    storeSourceRoutingConfig(&config);
 
      _netModel = nullptr;
     _apsCtrl = nullptr;
@@ -6729,6 +6730,21 @@ void zmController::queueSaveNodesState()
     {
         m_saveNodesChanges++;
     }
+
+void zmController::queueSaveSourceRouteConfig()
+{
+    m_saveSourceRouteConfigTimer->stop();
+    m_saveSourceRouteConfigTimer->start(10000);
+}
+
+void zmController::saveSourceRouteConfig()
+{
+    QSettings config(deCONZ::getStorageLocation(deCONZ::ConfigLocation), QSettings::IniFormat);
+
+    config.setValue("source-routing/enabled", m_sourceRoutingEnabled);
+    config.setValue("source-routing/min-lqi", m_sourceRouteMinLqi);
+    config.setValue("source-routing/max-hops", m_sourceRouteMaxHops);
+    config.setValue("source-routing/min-lqi-display", m_minLqiDisplay);
 }
 
 NodeInfo *zmController::getNode(const Address &addr, deCONZ::AddressMode mode)
@@ -7428,23 +7444,6 @@ void zmController::initSourceRouting(const QSettings &config)
         if (ok && minLqiDisp >= 0 && minLqiDisp <= 255)
         {
             m_minLqiDisplay = minLqiDisp;
-        }
-    }
-}
-
-void zmController::storeSourceRoutingConfig(QSettings *config)
-{
-    config->setValue("source-routing/enabled", m_sourceRoutingEnabled);
-    config->setValue("source-routing/min-lqi", m_sourceRouteMinLqi);
-    config->setValue("source-routing/max-hops", m_sourceRouteMaxHops);
-    config->setValue("source-routing/min-lqi-display", m_minLqiDisplay);
-
-    for (auto &route : m_routes)
-    {
-        if (route.needSave())
-        {
-            emit sourceRouteCreated(route);
-            route.saved();
         }
     }
 }
@@ -9784,6 +9783,7 @@ void zmController::setSourceRouteMinLqi(int sourceRouteMinLqi)
     DBG_Printf(DBG_INFO, "Set source route min LQI: %d -> %d\n", m_sourceRouteMinLqi, sourceRouteMinLqi);
     m_sourceRouteMinLqi = sourceRouteMinLqi;
     emit sourceRouteMinLqiChanged(m_sourceRouteMinLqi);
+    queueSaveSourceRouteConfig();
 }
 
 void zmController::setSourceRouteMaxHops(int sourceRouteMmaxHops)
@@ -9794,6 +9794,7 @@ void zmController::setSourceRouteMaxHops(int sourceRouteMmaxHops)
     DBG_Printf(DBG_INFO, "Set source route max Hops: %d -> %d\n", m_sourceRouteMaxHops, sourceRouteMmaxHops);
     m_sourceRouteMaxHops = sourceRouteMmaxHops;
     emit sourceRouteMaxHopsChanged(m_sourceRouteMaxHops);
+    queueSaveSourceRouteConfig();
 }
 
 void zmController::setSourceRoutingEnabled(bool sourceRoutingEnabled)
@@ -9804,6 +9805,7 @@ void zmController::setSourceRoutingEnabled(bool sourceRoutingEnabled)
     DBG_Printf(DBG_INFO, "Set source routing enabled: %d -> %d\n", m_sourceRoutingEnabled, sourceRoutingEnabled);
     m_sourceRoutingEnabled = sourceRoutingEnabled;
     emit sourceRoutingEnabledChanged(m_sourceRoutingEnabled);
+    queueSaveSourceRouteConfig();
 }
 
 void zmController::setFastNeighborDiscovery(bool fastDiscovery)
@@ -9822,6 +9824,7 @@ void zmController::setMinLqiDisplay(int minLqi)
 
     DBG_Printf(DBG_INFO, "Set min LQI display: %d -> %d\n", m_minLqiDisplay, minLqi);
     m_minLqiDisplay = minLqi;
+    queueSaveSourceRouteConfig();
 }
 
 void zmController::addDeviceDiscover(const AddressPair &a)
