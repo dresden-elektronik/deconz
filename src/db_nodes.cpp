@@ -487,6 +487,7 @@ void zmController::saveNodesState()
         QMetaObject::invokeMethod(m_restPlugin, "dbSaveAllowed", Qt::DirectConnection, Q_RETURN_ARG(bool, allowSave));
         if (!allowSave)
         {
+            queueSaveNodesState();
             return;
         }
     }
@@ -494,6 +495,7 @@ void zmController::saveNodesState()
     if (m_otauActivity > 0)
     {
         DBG_Printf(DBG_INFO_L2, "don't save node state while OTA busy\n");
+        queueSaveNodesState();
         return;
     }
 
@@ -502,6 +504,7 @@ void zmController::saveNodesState()
     if (!openDb())
     {
         DBG_Printf(DBG_ERROR, "CTRL failed save nodes state, can't open db\n");
+        queueSaveNodesState();
         return;
     }
 
@@ -599,14 +602,12 @@ void zmController::saveNodesState()
     t.start();
 
     m_saveNodesChanges = 0;
-    Q_ASSERT(m_saveNodesTimer->interval() > 0);
-    m_saveNodesTimer->start();
 
-    DBG_Printf(DBG_INFO, "saved node state in %d ms\n", int(t.elapsed()));
+    DBG_Printf(DBG_INFO_L2, "CTRL saved node state in %d ms\n", int(t.elapsed()));
 
 #ifdef Q_OS_LINUX
     t.restart();
     //sync();
-    DBG_Printf(DBG_INFO, "sync() in %d ms\n", int(t.elapsed()));
+    DBG_Printf(DBG_INFO_L2, "CTRL sync() in %d ms\n", int(t.elapsed()));
 #endif
 }

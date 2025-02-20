@@ -27,6 +27,8 @@
 #include "actor/cxx_helper.h"
 
 #include "aps_private.h"
+#include "deconz/am_core.h"
+#include "deconz/am_gui.h"
 #include "deconz/buffer_helper.h"
 #include "deconz/dbg_trace.h"
 #include "deconz/node_event.h"
@@ -36,6 +38,7 @@
 #include "deconz/green_power_controller.h"
 #include "deconz/u_assert.h"
 #include "deconz/u_sstream.h"
+#include "deconz/u_timer.h"
 #include "source_routing.h"
 #include "db_nodes.h"
 #include "zcl_private.h"
@@ -76,15 +79,17 @@
 
 using namespace deCONZ;
 
-#define AM_ACTOR_ID_CORE_APS    2005
-#define AM_ACTOR_ID_CORE_NET    2006
-
 enum CommonMessageIds
 {
    M_ID_LIST_DIR_REQ = AM_MESSAGE_ID_COMMON_REQUEST(1),
    M_ID_LIST_DIR_RSP = AM_MESSAGE_ID_COMMON_RESPONSE(1),
    M_ID_READ_ENTRY_REQ = AM_MESSAGE_ID_COMMON_REQUEST(2),
    M_ID_READ_ENTRY_RSP = AM_MESSAGE_ID_COMMON_RESPONSE(2)
+};
+
+enum TimerMessageIds
+{
+    M_ID_TIMEOUT_NOTIFY = AM_MESSAGE_ID_SPECIFIC_NOTIFY(3)
 };
 
 // provide global access
@@ -97,6 +102,7 @@ static size_t tickCounter = 0;
 static struct am_api_functions *am = nullptr;
 static struct am_actor am_actor_core_net;
 static struct am_actor am_actor_core_aps;
+static struct am_actor am_actor_core_node;
 
 static uint64_t aps_frames_tx = 0;
 static uint64_t aps_frames_rx = 0;
@@ -623,6 +629,13 @@ static int CoreNet_MessageCallback(struct am_message *msg)
     if (msg->id == M_ID_LIST_DIR_REQ)
         return CoreNet_ListDirectoryRequest(msg);
 
+    if (msg->src == AM_ACTOR_ID_TIMERS)
+    {
+        if (msg->id == M_ID_TIMEOUT_NOTIFY)
+        {
+        }
+    }
+
     DBG_Printf(DBG_INFO, "core/net: msg from: %u\n", msg->src);
     return AM_CB_STATUS_UNSUPPORTED;
 }
@@ -639,6 +652,52 @@ static int CoreAps_MessageCallback(struct am_message *msg)
     return AM_CB_STATUS_UNSUPPORTED;
 }
 
+/*! Message from GUI zmgNode.
+ */
+static int CoreNode_GuiNodeMessageCallback(struct am_message *msg)
+{
+    uint16_t tag;
+    uint64_t extaddr;
+
+    tag =  am->msg_get_u16(msg);
+    extaddr = am->msg_get_u64(msg);
+
+    if (msg->status != AM_MSG_STATUS_OK)
+        return AM_CB_STATUS_UNSUPPORTED;
+
+    if (msg->id == M_ID_GUI_NODE_SELECTED || msg->id == M_ID_GUI_NODE_DESELECTED)
+    {
+        return AM_CB_STATUS_OK;
+    }
+    else if (msg->id == M_ID_GUI_NODE_MOVED)
+    {
+        double x = am->msg_get_s32(msg);
+        double y = am->msg_get_s32(msg);
+        deCONZ::controller()->queueSaveNodesState();
+        return AM_CB_STATUS_OK;
+    }
+    else if (msg->id == M_ID_GUI_NODE_KEY_PRESSED)
+    {
+        int key = am->msg_get_s32(msg);
+        deCONZ::controller()->nodeKeyPressed(extaddr, key);
+    }
+    else
+    {
+        DBG_Printf(DBG_INFO, "core/node: unknown msg (%u) from gui node " FMT_MAC "\n", msg->id, FMT_MAC_CAST(extaddr));
+    }
+
+    return AM_CB_STATUS_UNSUPPORTED;
+}
+
+static int CoreNode_MessageCallback(struct am_message *msg)
+{
+    if (msg->src == AM_ACTOR_ID_GUI_NODE)
+        return CoreNode_GuiNodeMessageCallback(msg);
+
+    DBG_Printf(DBG_INFO, "core/node: unknown msg (%u) from: %u\n", msg->id, msg->src);
+    return AM_CB_STATUS_UNSUPPORTED;
+}
+
 
 zmController::zmController(zmMaster *master,
                            zmNetDescriptorModel *networks,
@@ -650,13 +709,23 @@ zmController::zmController(zmMaster *master,
     m_scene(scene),
     m_graph(graph)
 {
-#ifdef USE_ACTOR_MODEL
     am = AM_ApiFunctions();
     AM_INIT_ACTOR(&am_actor_core_net, AM_ACTOR_ID_CORE_NET, CoreNet_MessageCallback);
     AM_INIT_ACTOR(&am_actor_core_aps, AM_ACTOR_ID_CORE_APS, CoreAps_MessageCallback);
+    AM_INIT_ACTOR(&am_actor_core_node, AM_ACTOR_ID_CORE_NODE, CoreNode_MessageCallback);
 
     am->register_actor(&am_actor_core_net);
     am->register_actor(&am_actor_core_aps);
+    am->register_actor(&am_actor_core_node);
+
+    am->subscribe(AM_ACTOR_ID_GUI_NODE, AM_ACTOR_ID_CORE_NODE);
+
+#if 0
+    U_TimerStart(AM_ACTOR_ID_CORE_NET, 11, 10009, 0);
+    U_TimerStart(AM_ACTOR_ID_CORE_NET, 22, 20009, 0);
+
+    U_TimerStop(AM_ACTOR_ID_CORE_NET, 22);
+    U_TimerStop(AM_ACTOR_ID_CORE_NET, 11);
 #endif
 
     QString configPath = deCONZ::getStorageLocation(deCONZ::ConfigLocation);
@@ -735,7 +804,7 @@ zmController::zmController(zmMaster *master,
 
     m_saveNodesTimer = new QTimer(this);
     m_saveNodesTimer->setInterval(SaveNodeTimerInterval);
-    m_saveNodesTimer->setSingleShot(false);
+    m_saveNodesTimer->setSingleShot(true);
     connect(m_saveNodesTimer, SIGNAL(timeout()),
             this, SLOT(saveNodesState()));
 
@@ -1341,30 +1410,24 @@ void zmController::clearAllApsRequestsToNode(NodeInfo node)
     }
 }
 
-void zmController::nodeKeyPressed(deCONZ::zmNode *dnode, int key)
+void zmController::nodeKeyPressed(uint64_t extAddr, int key)
 {
     if (m_nodes.empty())
     {
         return;
     }
 
+    deCONZ::Address addr;
+    addr.setExt((extAddr));
     zmNetEvent event;
-    NodeInfo *node = getNode(dnode);
+    NodeInfo *node = getNode(addr, deCONZ::ExtAddress);
 
-    DBG_Assert(node->data == dnode);
-    DBG_Assert(node->g != 0);
     DBG_Assert(node->data != 0);
 
-    if (node && (node->data == dnode))
+    if (node && node->data)
     {
         if (key == deCONZ::NodeKeyRefresh)
         {
-            //node->data->forceFetch(deCONZ::ReqIeeeAddr, 1);
-            //node->data->forceFetch(deCONZ::ReqNodeDescriptor, 1);
-            //node->data->forceFetch(deCONZ::ReqPowerDescriptor, 1);
-            //node->data->forceFetch(deCONZ::ReqActiveEndpoints, 1);
-            //node->data->forceFetch(deCONZ::ReqSimpleDescriptor, 1);
-            //node->data->forceFetch(deCONZ::ReqMgmtBind, 1);
             node->data->reset(node->data->macCapabilities());
             node->data->touch(m_steadyTimeRef);
             event.setType(deCONZ::NodeDataChanged);
@@ -4587,9 +4650,6 @@ void zmController::onApsdeDataIndication(const deCONZ::ApsDataIndication &ind)
                 {
                     node->g->updated(deCONZ::ReqSimpleDescriptor);
                     queueSaveNodesState();
-                    m_saveNodesTimer->stop();
-                    m_saveNodesTimer->start(10000);
-
                 }
                 if (node->data->getNextUnfetchedEndpoint() == -1)
                 {
@@ -5694,7 +5754,6 @@ NodeInfo zmController::createNode(const Address &addr, deCONZ::MacCapabilities m
     info.g = new zmgNode(info.data, nullptr);
 
     connect(info.g, &zmgNode::contextMenuRequest, this, &zmController::onNodeContextMenuRequest);
-    connect(info.g, SIGNAL(moved()), this, SLOT(queueSaveNodesState()));
 
     info.id = m_nodes.size() + 1;
 
@@ -5708,7 +5767,6 @@ NodeInfo zmController::createNode(const Address &addr, deCONZ::MacCapabilities m
     info.g->setPos(p);
     info.g->setNeedSaveToDatabase(true);
     queueSaveNodesState();
-    m_saveNodesTimer->start(1000 * 10);
 
     info.data->setAddress(addr);
     info.g->setAddress(addr.nwk(), addr.ext());
@@ -6730,6 +6788,12 @@ void zmController::queueSaveNodesState()
     {
         m_saveNodesChanges++;
     }
+
+    if (!m_saveNodesTimer->isActive())
+    {
+        m_saveNodesTimer->start(10000);
+    }
+}
 
 void zmController::queueSaveSourceRouteConfig()
 {

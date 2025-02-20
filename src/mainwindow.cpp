@@ -33,6 +33,7 @@
 #include <cerrno>
 #ifdef USE_ACTOR_MODEL
 #include <actor/plugin_loader.h>
+#include "actor/service.h"
 #endif
 #include "gui/actor_vfs_view.h"
 #include "actor_vfs_model.h"
@@ -184,6 +185,11 @@ void setDeviceState(State state)
 
 } // namespace deCONZ
 
+am_api_functions *GUI_GetActorModelApi(void)
+{
+    return AM_ApiFunctions();
+}
+
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
     ui(new Ui::MainWindow)
@@ -204,6 +210,8 @@ MainWindow::MainWindow(QWidget *parent) :
         m_debugView = new DebugView(this);
         m_debugView->hide();
     }
+
+    GUI_InitNodeActor();
 
     setCentralWidget(ui->stackedView);
 
@@ -1869,7 +1877,7 @@ void MainWindow::deleteNodesActionTriggered()
             if (ret == QMessageBox::Yes)
             {
                 statusBar()->showMessage(tr("Node %1 (%2) deleted.").arg(nodeName, extAddr));
-                deCONZ::controller()->nodeKeyPressed(node->data(), Qt::Key_Delete);
+                deCONZ::controller()->nodeKeyPressed(node->data()->address().ext(), Qt::Key_Delete);
             }
         }
     }
@@ -1944,7 +1952,7 @@ void MainWindow::readNodeDescriptorActionTriggered()
         zmgNode *node = qgraphicsitem_cast<zmgNode*>(item);
         if (node && node->data())
         {
-            deCONZ::controller()->nodeKeyPressed(node->data(), deCONZ::NodeKeyRequestNodeDescriptor);
+            deCONZ::controller()->nodeKeyPressed(node->data()->address().ext(), deCONZ::NodeKeyRequestNodeDescriptor);
         }
     }
 }
@@ -1956,7 +1964,7 @@ void MainWindow::readActiveEndpointsActionTriggered()
         zmgNode *node = qgraphicsitem_cast<zmgNode*>(item);
         if (node && node->data())
         {
-            deCONZ::controller()->nodeKeyPressed(node->data(), deCONZ::NodeKeyRequestActiveEndpoints);
+            deCONZ::controller()->nodeKeyPressed(node->data()->address().ext(), deCONZ::NodeKeyRequestActiveEndpoints);
         }
     }
 }
@@ -1968,7 +1976,7 @@ void MainWindow::readSimpleDescriptorsActionTriggered()
         zmgNode *node = qgraphicsitem_cast<zmgNode*>(item);
         if (node && node->data())
         {
-            deCONZ::controller()->nodeKeyPressed(node->data(), deCONZ::NodeKeyRequestSimpleDescriptors);
+            deCONZ::controller()->nodeKeyPressed(node->data()->address().ext(), deCONZ::NodeKeyRequestSimpleDescriptors);
         }
     }
 }
@@ -2226,7 +2234,7 @@ void MainWindow::resetNodesActionTriggered()
         zmgNode *node = qgraphicsitem_cast<zmgNode*>(item);
         if (node && node->data())
         {
-            deCONZ::controller()->nodeKeyPressed(node->data(), Qt::Key_Refresh);
+            deCONZ::controller()->nodeKeyPressed(node->data()->address().ext(), Qt::Key_Refresh);
         }
     }
 }

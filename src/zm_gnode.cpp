@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2024 dresden elektronik ingenieurtechnik gmbh.
+ * Copyright (c) 2013-2025 dresden elektronik ingenieurtechnik gmbh.
  * All rights reserved.
  *
  * The software in this package is published under the terms of the BSD
@@ -14,6 +14,8 @@
 #include <QGraphicsSceneMouseEvent>
 #include <QGraphicsScene>
 
+#include "actor/plugin.h"
+#include <deconz/am_gui.h>
 #include <deconz/dbg_trace.h>
 #include <deconz/timeref.h>
 #include "gui/gnode_link_group.h"
@@ -24,9 +26,7 @@
 #include "zm_gnode.h"
 #include "zm_glink.h"
 #include "zm_gsocket.h"
-#include "zm_controller.h"
 
-//#define NODE_COLOR         235, 235, 235
 #define NODE_COLOR         239, 239, 239
 #define NODE_COLOR_DARK    180, 180, 180
 #define NODE_COLOR_BRIGHT  240, 240, 240
@@ -43,6 +43,8 @@ static const int IndGeneralInterval = 400;
 static const int IndGeneralCount = 5;
 static const int IndDataUpdateInterval = 400;
 static const int IndDataUpdateCount = 5;
+static am_actor am_actor_gui_node;
+static uint16_t msgNotifyTag;
 
 extern deCONZ::SteadyTimeRef m_steadyTimeRef; // in zmController TODO proper interface
 
@@ -54,6 +56,75 @@ struct IndicationDef
     QColor colorHi;
     QColor colorLo;
 };
+
+static int GuiNode_MessageCallback(struct am_message *msg)
+{
+    DBG_Printf(DBG_INFO, "gui/node: msg from: %u\n", msg->src);
+    return AM_CB_STATUS_UNSUPPORTED;
+}
+
+void GUI_InitNodeActor()
+{
+    am_api_functions *am = GUI_GetActorModelApi();
+
+    AM_INIT_ACTOR(&am_actor_gui_node, AM_ACTOR_ID_GUI_NODE, GuiNode_MessageCallback);
+
+    am->register_actor(&am_actor_gui_node);
+}
+
+void SendNotifyMessage1(am_msg_id msgid, am_u64 extaddr)
+{
+    am_api_functions *am = GUI_GetActorModelApi();
+
+    am_message *m = am->msg_alloc();
+    if (m)
+    {
+        m->id = msgid;
+        m->src = AM_ACTOR_ID_GUI_NODE;
+        m->dst = AM_ACTOR_ID_SUBSCRIBERS;
+        am->msg_put_u16(m, msgNotifyTag++);
+        am->msg_put_u64(m, extaddr);
+
+        am->send_message(m);
+    }
+}
+
+void SendNotifyMessageMoved(am_u64 extaddr, const QPointF &pos)
+{
+    am_api_functions *am = GUI_GetActorModelApi();
+
+    am_message *m = am->msg_alloc();
+    if (m)
+    {
+        m->id = M_ID_GUI_NODE_MOVED;
+        m->src = AM_ACTOR_ID_GUI_NODE;
+        m->dst = AM_ACTOR_ID_SUBSCRIBERS;
+        am->msg_put_u16(m, msgNotifyTag++);
+        am->msg_put_u64(m, extaddr);
+        am->msg_put_s32(m, (am_s32)(pos.x() * 1000.0));
+        am->msg_put_s32(m, (am_s32)(pos.y() * 1000.0));
+
+        am->send_message(m);
+    }
+}
+
+void SendNotifyMessageKeyPressed(am_u64 extaddr, am_s32 key)
+{
+    am_api_functions *am = GUI_GetActorModelApi();
+
+    am_message *m = am->msg_alloc();
+    if (m)
+    {
+        m->id = M_ID_GUI_NODE_KEY_PRESSED;
+        m->src = AM_ACTOR_ID_GUI_NODE;
+        m->dst = AM_ACTOR_ID_SUBSCRIBERS;
+        am->msg_put_u16(m, msgNotifyTag++);
+        am->msg_put_u64(m, extaddr);
+        am->msg_put_s32(m, key);
+
+        am->send_message(m);
+    }
+}
 
 zmgNode::zmgNode(deCONZ::zmNode *data, QGraphicsItem *parent) :
     QGraphicsObject(parent),
@@ -85,7 +156,6 @@ zmgNode::zmgNode(deCONZ::zmNode *data, QGraphicsItem *parent) :
     m_indRect = QRectF(20, 8, 10, 10);
     m_indCount = -1;
 
-    m_newPos = pos();
     setZValue(0.1);
 
     m_indicator = new QGraphicsEllipseItem(m_indRect, this);
@@ -462,7 +532,10 @@ QVariant zmgNode::itemChange(GraphicsItemChange change, const QVariant &value)
             NodeLinkGroup::setRenderQuality(NodeLinkGroup::RenderQualityFast);
             m_moveWatcher = 2;
         }
-        emit moved(); // to schedule saving to DB and source links update? ... TODO without Qt signals
+
+        // TODO(mpi): The moved signaled is now only used by UI source routes.
+        // The UI source routes and NodeLink need to be brought into GUI layer.
+        emit moved();
         updateLinks();
     }
     else if (change == QGraphicsItem::ItemSelectedHasChanged)
@@ -470,9 +543,11 @@ QVariant zmgNode::itemChange(GraphicsItemChange change, const QVariant &value)
         if (value.toBool())
         {
             m_selectionCounter = ++SelectionOrderCounter;
+            SendNotifyMessage1(M_ID_GUI_NODE_SELECTED, m_extAddressCache);
         }
         else
         {
+            SendNotifyMessage1(M_ID_GUI_NODE_DESELECTED, m_extAddressCache);
             m_selectionCounter = -1;
         }
     }
@@ -502,6 +577,8 @@ void zmgNode::mouseReleaseEvent(QGraphicsSceneMouseEvent *event)
     {
         m_moveWatcher = -1;
         NodeLinkGroup::setRenderQuality(NodeLinkGroup::RenderQualityHigh);
+
+        SendNotifyMessageMoved(m_extAddressCache, pos());
     }
 
     if (m_endpointToggle.contains(event->pos()))
@@ -535,13 +612,11 @@ void zmgNode::keyPressEvent(QKeyEvent *event)
     {
     case Qt::Key_Refresh:
     case Qt::Key_Delete:
-        //deCONZ::controller()->nodeKeyPressed(m_data, event->key());
         break;
 
     default:
-        if (m_data)
         {
-            deCONZ::controller()->nodeKeyPressed(m_data, event->key());
+            SendNotifyMessageKeyPressed(m_extAddressCache, (am_s32)event->key());
         }
         break;
     }
@@ -555,6 +630,7 @@ void zmgNode::updateLinks()
         updateLink(link);
     }
 
+    // TODO only lines bounding rect?
     if (scene())
         scene()->invalidate(sceneBoundingRect(), QGraphicsScene::BackgroundLayer);
 }
@@ -744,69 +820,6 @@ bool zmgNode::ownsSocket(NodeSocket *socket) const
         return false;
 
     return true;
-}
-
-#if 0
-void zmgNode::calculateForces()
-{
-    if (!scene())
-    {
-        m_newPos = pos();
-        return;
-    }
-
-    if (m_linksIter >= m_links.size())
-    {
-        m_linksIter = 0;
-        return;
-    }
-
-    // Sum up all forces pushing this item away
-    qreal xvel = 0;
-    qreal yvel = 0;
-
-    const auto items = scene()->items();
-    for (QGraphicsItem *item : items)
-    {
-        // TODO: use neighbor table
-        zmgNode *node = qgraphicsitem_cast<zmgNode *>(item);
-        if (node)
-        {
-            QPointF vec = mapToItem(node, 0, 0);
-            qreal dx = vec.x();
-            qreal dy = vec.y();
-            double l = 4 * (dx * dx + dy * dy);
-
-            if (l > 0)
-            {
-                xvel += (dx * 150.0) / l;
-                yvel += (dy * 150.0) / l;
-            }
-        }
-    }
-
-    if (qAbs(xvel) < 0.5 && qAbs(yvel) < 0.4)
-    {
-        xvel = yvel = 0;
-    }
-
-    QRectF sceneRect = scene()->sceneRect();
-    m_newPos = pos() + QPointF(xvel, yvel);
-    m_newPos.setX(qMin(qMax(m_newPos.x(), sceneRect.left() + 30), sceneRect.right() - 30));
-    m_newPos.setY(qMin(qMax(m_newPos.y(), sceneRect.top() + 30), sceneRect.bottom() - 30));
-}
-#endif
-
-void zmgNode::advance(int phase)
-{
-    Q_UNUSED(phase);
-
-    if (m_newPos == pos()) {
-        updateLinks();
-        return;
-    }
-
-    setPos(m_newPos);
 }
 
 void zmgNode::checkVisible()

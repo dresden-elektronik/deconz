@@ -181,7 +181,7 @@ public:
     void removeBindingLink(const deCONZ::Binding &binding);
     void clearAllApsRequestsToNode(NodeInfo node);
     uint8_t genSequenceNumber() { return m_genSequenceNumber++; }
-    void nodeKeyPressed(deCONZ::zmNode *dnode, int key);
+    void nodeKeyPressed(uint64_t extAddr, int key);
     deCONZ::State deviceState() const { return m_devState; }
     void setDeviceState(deCONZ::State state);
     void unregisterGNode(zmgNode *gnode);

@@ -84,8 +84,6 @@ public:
     void toggleConfigDropdown();
     void updated(deCONZ::RequestId id);
     void indicate(deCONZ::Indication type);
-    //void calculateForces();
-    void advance(int phase) override;
     void checkVisible();
     NodeLink *link(int i);
     int linkCount() const { return static_cast<int>(m_links.size()); }
@@ -131,7 +129,6 @@ protected:
     int m_indCount = 0;
     QRectF m_indRect;
     NodeState m_nodeState;
-    QPointF m_newPos;
     QString m_name;
     QString m_extAddress;
     quint64 m_extAddressCache = 0;
@@ -149,5 +146,7 @@ protected:
     bool m_dirty = false;
     deCONZ::DeviceType m_deviceType = deCONZ::UnknownDevice;
 };
+
+void GUI_InitNodeActor();
 
 #endif
