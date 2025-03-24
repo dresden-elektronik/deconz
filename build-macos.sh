@@ -82,23 +82,22 @@ mkdir -p deCONZ.app/Contents/Frameworks
 
 pushd deCONZ.app/Contents/Frameworks
 
-LIBCRYPTO=$(find /usr/local/Cellar -name 'libcrypto.3.dylib')
-LIBSSL=$(find /usr/local/Cellar -name 'libssl.3.dylib')
+LIBCRYPTO=$(find /usr/local/opt/openssl/lib -name 'libcrypto.3.dylib')
+LIBSSL=$(find /usr/local/opt/openssl/lib -name 'libssl.3.dylib')
 
 cp $LIBCRYPTO $LIBSSL .
 
-install_name_tool -change /usr/local/Cellar/openssl@3/3.3.1/lib/libcrypto.3.dylib @loader_path/../Frameworks/libcrypto.3.dylib ./libssl.3.dylib
-install_name_tool -change /usr/local/opt/openssl@3/lib/libssl.3.dylib @loader_path/../Frameworks/libssl.3.dylib ./libssl.3.dylib
+install_name_tool -change /usr/local/opt/openssl/lib/libcrypto.3.dylib @loader_path/../Frameworks/libcrypto.3.dylib ./libssl.3.dylib
+install_name_tool -change /usr/local/opt/openssl/lib/libssl.3.dylib @loader_path/../Frameworks/libssl.3.dylib ./libssl.3.dylib
 
-install_name_tool -change /usr/local/Cellar/openssl@3/3.3.1/lib/libcrypto.3.dylib @loader_path/../Frameworks/libcrypto.3.dylib ./libcrypto.3.dylib
+install_name_tool -change /usr/local/opt/openssl/lib/libcrypto.3.dylib @loader_path/../Frameworks/libcrypto.3.dylib ./libcrypto.3.dylib
 install_name_tool -id "@rpath/libssl.3.dylib" libssl.3.dylib
 install_name_tool -id "@rpath/libcrypto.3.dylib" libcrypto.3.dylib
 
-codesign -v -f -s "${DEVELOPER_ID_APPLICATION}" libssl.3.dylib
-codesign -v -f -s "${DEVELOPER_ID_APPLICATION}" libcrypto.3.dylib
-popd
+chmod 644 libssl.3.dylib
+chmod 644 libcrypto.3.dylib
 
-#exit 1
+popd
 
 # 	-DCMAKE_OSX_ARCHITECTURES=arm64 \
 
@@ -108,10 +107,18 @@ cmake  -DCMAKE_MACOSX_BUNDLE=ON \
 	-G Ninja .. \
 	&& cmake --build . \
 	&& cmake --install . --prefix . \
-	&& $QT_LOC/bin/macdeployqt deCONZ.app -sign-for-notarization=${DEVELOPER_ID_APPLICATION}
+	&& $QT_LOC/bin/macdeployqt deCONZ.app
+
+# Plugins need to be signed separate due not found by --deep
+for i in $(find deCONZ.app/Contents/Plugins -name '*.dylib')
+do
+	codesign --force --verify --verbose --timestamp --options runtime  --sign "${DEVELOPER_ID_APPLICATION}" "$i"
+done
+
+codesign --deep --force --verify --verbose --timestamp --options runtime  --sign "${DEVELOPER_ID_APPLICATION}" "deCONZ.app"
 
 # zip -r9y deconz_${VERSION}-macos_${ARCH}.zip deCONZ.app/
-#7z a -mx9 deconz_${VERSION}-macos_${ARCH}.zip deCONZ.app
+# 7z a -mx9 deconz_${VERSION}-macos_${ARCH}.zip deCONZ.app
 
 # compress exactly like Finder does
 ditto -c -k --sequesterRsrc --keepParent deCONZ.app deconz_${VERSION}-macos_${ARCH}.zip
