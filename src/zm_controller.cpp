@@ -6030,15 +6030,12 @@ bool ZDP_SendIeeeAddrRequest(zmController *apsCtrl, const deCONZ::Address &dst)
 
     req.dstAddress().setExt(dst.ext());
     req.dstAddress().setNwk(dst.nwk());
-    req.setDstAddressMode(deCONZ::ApsNwkAddress);
+    req.setDstAddressMode(deCONZ::ApsExtAddress);
 
     req.setDstEndpoint(ZDO_ENDPOINT);
     req.setSrcEndpoint(ZDO_ENDPOINT);
     req.setProfileId(ZDP_PROFILE_ID);
-    if (deCONZ::netEdit()->apsAcksEnabled())
-    {
-        req.setTxOptions(deCONZ::ApsTxAcknowledgedTransmission);
-    }
+    req.setTxOptions(deCONZ::ApsTxAcknowledgedTransmission);
     req.setRadius(0);
     req.setClusterId(ZDP_IEEE_ADDR_CLID);
     stream << apsCtrl->genSequenceNumber();
@@ -8322,7 +8319,7 @@ void zmController::zombieTick()
         }
     }
 
-    deCONZ::TimeMs dt;
+    deCONZ::TimeMs dt{};
     if (isValid(minSeenTime))
     {
         dt = m_steadyTimeRef - minSeenTime;
@@ -8825,6 +8822,16 @@ void zmController::deviceDiscoverTick()
         else
         {
             m_lqiIter++;
+
+            // try to proceed with IEEE requests to move to zombie state if none are received
+            if (node.data->recvErrors() < MaxRecvErrorsZombie && !node.data->nodeDescriptor().isNull())
+            {
+                AddressPair addressPair;
+                addressPair.bAddr = node.data->address();
+                addressPair.bMacCapabilities = node.data->nodeDescriptor().macCapabilities();
+
+                addDeviceDiscover(addressPair);
+            }
         }
     }
 
