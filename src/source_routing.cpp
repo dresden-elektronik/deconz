@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2024 dresden elektronik ingenieurtechnik gmbh.
+ * Copyright (c) 2013-2025 dresden elektronik ingenieurtechnik gmbh.
  * All rights reserved.
  *
  * The software in this package is published under the terms of the BSD
@@ -9,6 +9,7 @@
  */
 
 #include <deconz/dbg_trace.h>
+#include <deconz/u_assert.h>
 #include "source_routing.h"
 #include "zm_controller.h"
 #include "zm_neighbor.h"
@@ -16,6 +17,8 @@
 
 #define MAX_TRASH_ROUTE_TTL 16
 #define MAX_TRASH_ROUTES 16
+#define MAX_ROUTE_ERRORS 6
+#define MAX_RECV_ERRORS 3
 
 static size_t MaxRecvErrors = 11;
 
@@ -158,6 +161,11 @@ static bool updateSourceRoute(SourceRoute &route, const std::vector<NodeInfo> &n
             break;
         }
 
+        if (node->data->isZombie() || node->data->recvErrors() >= MAX_RECV_ERRORS)
+        {
+            route.incrementErrors(); // slowly bring in error rate to accelerate route removal
+        }
+
         if (prevNode)
         {
             const zmNeighbor *neib = prevNode->data->getNeighbor(hop);
@@ -171,7 +179,6 @@ static bool updateSourceRoute(SourceRoute &route, const std::vector<NodeInfo> &n
                     route.m_hopLqi[i] = lqi;
                 }
             }
-
         }
 
         prevNode = node;
@@ -294,17 +301,12 @@ static void calculateRouteForNode(const NodeInfo &node, const std::vector<NodeIn
         return;
     }
 
-    Q_ASSERT(routeIter < routes.size());
+    U_ASSERT(routeIter < routes.size());
     auto &route = routes[routeIter];
 
-    Q_ASSERT(maxHops > 2);
+    U_ASSERT(maxHops > 2);
     DBG_Assert(!route.hops().empty());
     if (route.hops().empty())
-    {
-        return;
-    }
-
-    if (route.hops().size() >= static_cast<size_t>(maxHops))
     {
         return;
     }
@@ -316,7 +318,7 @@ static void calculateRouteForNode(const NodeInfo &node, const std::vector<NodeIn
         if (route.hops().back().ext() == node1->address().ext())
         {
             bool updated = updateSourceRoute(route, nodes);
-            if (route.errors() > 10 && route.txOk() < route.errors())
+            if (route.errors() >= MAX_ROUTE_ERRORS && route.txOk() < route.errors())
             {
                 if (/*route.uuid().startsWith(QLatin1String("auto-")) &&*/ (tickCounter > (1000 / zmController::MainTickMs) * 60))
                 {
@@ -345,6 +347,11 @@ static void calculateRouteForNode(const NodeInfo &node, const std::vector<NodeIn
     }
 
     if (route.state() == SourceRoute::StateSleep)
+    {
+        return;
+    }
+
+    if (route.hops().size() >= static_cast<size_t>(maxHops))
     {
         return;
     }
@@ -511,24 +518,6 @@ void SR_CalculateRouteForNode(const std::vector<NodeInfo> &nodes, std::vector<de
         return;
     }
 
-    int mightBeAlive = 2;
-    if (node.data->isRouter() && (node.data->isZombie() || node.data->sourceRoutes().empty() || !node.data->sourceRoutes().front().isOperational()))
-    {
-        mightBeAlive = 0;
-        for (size_t i = 0; i < nodes.size() && i < 128 && mightBeAlive < 2; i++)
-        {
-            if (nodes[i].data->isEndDevice())
-                continue;
-
-            zmNeighbor *neib = nodes[i].data->getNeighbor(node.data->address());
-            if (neib && neib->m_lqi >= minLqi)
-            {
-                mightBeAlive++;
-            }
-        }
-    }
-
-    if (mightBeAlive > 1)
     {
         calculateRouteForNode(node, nodes, routeIter % routes.size(), routes, minLqi, maxHops, tickCounter);
         routeIter++;
@@ -542,10 +531,6 @@ void SR_CalculateRouteForNode(const std::vector<NodeInfo> &nodes, std::vector<de
         {
             selectBestSourceRouteForNode(node, routes);
         }
-    }
-    else
-    {
-        routeIter = routes.size(); // proceed with next
     }
 
     if (routeIter >= routes.size())
