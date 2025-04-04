@@ -1730,7 +1730,7 @@ void zmController::readParameterResponse(ZM_State_t status, ZM_DataId_t id, cons
 
             m_graph->fitInView(m_scene->itemsBoundingRect().adjusted(-20, -20, 20, 20), Qt::KeepAspectRatio);
 
-            for (const auto &node2 : m_nodes) // hide other coordinator nodes if present
+            for (auto &node2 : m_nodes) // hide other coordinator nodes if present
             {
                 if (node2.data && node2.g &&
                     node2.data->address().nwk() == 0x0000 &&
@@ -1738,6 +1738,7 @@ void zmController::readParameterResponse(ZM_State_t status, ZM_DataId_t id, cons
                     node2.data->address().ext() != u64)
                 {
                     node2.g->hide();
+                    deleteNode(&node2, NodeRemoveZombie);
                 }
             }
         }
