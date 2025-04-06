@@ -27,6 +27,10 @@ public:
 
 private Q_SLOTS:
     void eventQueueIdle();
+    void actorTick();
+
+Q_SIGNALS:
+    void amMessageReceived();
 
 private:
     AppPrivate *d_ptr = nullptr;

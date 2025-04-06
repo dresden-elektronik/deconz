@@ -8,7 +8,6 @@
  *
  */
 
-#include <stdlib.h> /* malloc, free */
 #include <QAbstractEventDispatcher>
 #include <actor/service.h>
 #include <actor/plugin_loader.h>
@@ -26,6 +25,7 @@ bool gHeadlessVersion = false;
 
 struct main_mq
 {
+    int running;
     struct am_message msg_buf[MAX_MAIN_MQ_MESSAGAES];
     unsigned char msg_data[1 << 18];
     unsigned char out_data[AM_MAX_MESSAGE_SIZE];
@@ -33,8 +33,11 @@ struct main_mq
     struct am_message_queue queue;
 };
 
+static U_Thread mqThread;
 static int64_t tref; // track timer differences
 static struct main_mq main_mq;
+
+static zmApp *_instance;
 
 void *AM_Alloc(unsigned long size)
 {
@@ -49,6 +52,20 @@ void AM_Free(void *ptr)
     }
 }
 
+/* Wait for main queue messages in own thread. */
+static void mqThreadFunc(void *arg)
+{
+    for (;main_mq.running;)
+    {
+        AM_WaitMessageQueue(&main_mq.queue);
+
+        // notify main thread to process message queue
+        emit _instance->amMessageReceived();
+    }
+
+    U_thread_exit(0);
+}
+
 class AppPrivate
 {
 public:
@@ -59,6 +76,8 @@ zmApp::zmApp(int &argc, char **argv) :
     QApplication(argc, argv),
     d_ptr(new AppPrivate)
 {
+    _instance = this;
+
     AT_Init(1 << 15);
 
     struct am_message_queue *mq;
@@ -74,15 +93,23 @@ zmApp::zmApp(int &argc, char **argv) :
     mq->msg_data = &main_mq.msg_data[0];
     mq->out_data = &main_mq.out_data[0];
     AM_RegisterMessageQueue(mq);
+    main_mq.running = 1;
 
     tref = deCONZ::steadyTimeRef().ref;
 
-    /* this should later run in its own thread without Qt */
     if (eventDispatcher())
     {
         connect(eventDispatcher(), &QAbstractEventDispatcher::awake,
                 this, &zmApp::eventQueueIdle);
     }
+
+    // The signal is called from mqThreadFunc() in non gui thread.
+    // Everytime a message is received from some thread, the main thread
+    // wakes up and delivers the message.
+    connect(this, &zmApp::amMessageReceived, this, &zmApp::actorTick, Qt::QueuedConnection);
+
+    // extra thread to wait for messages
+    U_thread_create(&mqThread, mqThreadFunc, &main_mq);
 
     U_TimerInit(AM_ApiFunctions());
 
@@ -91,6 +118,7 @@ zmApp::zmApp(int &argc, char **argv) :
 
 zmApp::~zmApp()
 {
+    main_mq.running = 0;
     AM_UnloadPlugins();
     AM_Shutdown();
     AM_Destroy();
@@ -101,12 +129,17 @@ zmApp::~zmApp()
     d_ptr = nullptr;
 }
 
-/* TODO make this called by seperate thread. The delays in Qt idle queue are 1..100 ms. */
+/* This called by seperate thread via queued connection on signal amMessageReceived(). */
+void zmApp::actorTick()
+{
+    AM_Tick(&main_mq.queue);
+}
+
 void zmApp::eventQueueIdle()
 {
     const int64_t now = deCONZ::steadyTimeRef().ref;
 
-    if (now < tref) // readjust, shouldn't happen
+    if (now < tref) // re-adjust, shouldn't happen
         tref = now;
 
     int64_t diff = now - tref;
@@ -115,8 +148,6 @@ void zmApp::eventQueueIdle()
         tref = now;
         U_TimerTick(diff);
     }
-
-    AM_Tick(&main_mq.queue);
 
     d_ptr->httpServer->processClients();
 }
