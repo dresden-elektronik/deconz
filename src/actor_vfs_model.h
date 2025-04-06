@@ -34,8 +34,8 @@ public:
     QVariant headerData(int section, Qt::Orientation orientation, int role = Qt::DisplayRole) const override;
 
     int listDirectoryResponse(struct am_message *msg);
-    int readEntryResponse(struct am_message *msg, int e);
-    void continueValueFetching();
+    int readEntryResponse(struct am_message *msg);
+    void continueFetching();
 
     void addActorId(unsigned actorId);
 

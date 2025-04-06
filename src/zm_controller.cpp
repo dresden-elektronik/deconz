@@ -29,6 +29,7 @@
 #include "aps_private.h"
 #include "deconz/am_core.h"
 #include "deconz/am_gui.h"
+#include "deconz/am_vfs.h"
 #include "deconz/buffer_helper.h"
 #include "deconz/dbg_trace.h"
 #include "deconz/node_event.h"
@@ -78,14 +79,6 @@
 #define GREEN_POWER_ENDPOINT    0xf2
 
 using namespace deCONZ;
-
-enum CommonMessageIds
-{
-   M_ID_LIST_DIR_REQ = AM_MESSAGE_ID_COMMON_REQUEST(1),
-   M_ID_LIST_DIR_RSP = AM_MESSAGE_ID_COMMON_RESPONSE(1),
-   M_ID_READ_ENTRY_REQ = AM_MESSAGE_ID_COMMON_REQUEST(2),
-   M_ID_READ_ENTRY_RSP = AM_MESSAGE_ID_COMMON_RESPONSE(2)
-};
 
 enum TimerMessageIds
 {
@@ -192,15 +185,6 @@ int APS_RequestsBusyCount(const std::vector<deCONZ::ApsDataRequest> &queue)
     return result;
 }
 
-/* Bit 0 Access */
-#define AM_ENTRY_MODE_READONLY 0
-#define AM_ENTRY_MODE_WRITEABLE 1
-
-/* Bit 16-19 Display */
-#define AM_ENTRY_MODE_DISPLAY_AUTO (0U << 16)
-#define AM_ENTRY_MODE_DISPLAY_HEX  (1U << 16)
-#define AM_ENTRY_MODE_DISPLAY_BIN  (2U << 16)
-
 static int CoreNet_ListDirectoryRequest(struct am_message *msg)
 {
     unsigned i;
@@ -240,12 +224,12 @@ static int CoreNet_ListDirectoryRequest(struct am_message *msg)
         am->msg_put_u32(m, 2); /* count */
         /*************************************/
         am->msg_put_cstring(m, "net");
-        am->msg_put_cstring(m, "dir");
-        am->msg_put_u32(m, mode); /* mode */
+        am->msg_put_u16(m, VFS_LS_DIR_ENTRY_FLAGS_IS_DIR);
+        am->msg_put_u16(m, 0); /* icon */
 
         am->msg_put_cstring(m, ".actor");
-        am->msg_put_cstring(m, "dir");
-        am->msg_put_u32(m, mode); /* mode */
+        am->msg_put_u16(m, VFS_LS_DIR_ENTRY_FLAGS_IS_DIR);
+        am->msg_put_u16(m, 0); /* icon */
     }
     else if (url == ".actor" && req_index == 0)
     {
@@ -257,8 +241,8 @@ static int CoreNet_ListDirectoryRequest(struct am_message *msg)
         am->msg_put_u32(m, 1); /* count */
         /*************************************/
         am->msg_put_cstring(m, "name");
-        am->msg_put_cstring(m, "str");
-        am->msg_put_u32(m, mode); /* mode */
+        am->msg_put_u16(m, 0); /* flags */
+        am->msg_put_u16(m, 1); /* icon */
     }
     else if (url == "net" && req_index == 0)
     {
@@ -270,8 +254,8 @@ static int CoreNet_ListDirectoryRequest(struct am_message *msg)
         am->msg_put_u32(m, 1); /* count */
         /*************************************/
         am->msg_put_cstring(m, "0");
-        am->msg_put_cstring(m, "dir");
-        am->msg_put_u32(m, mode); /* mode */
+        am->msg_put_u16(m, VFS_LS_DIR_ENTRY_FLAGS_IS_DIR);
+        am->msg_put_u16(m, 0); /* icon */
     }
     else if (url == "net/0" && req_index == 0)
     {
@@ -281,20 +265,20 @@ static int CoreNet_ListDirectoryRequest(struct am_message *msg)
             const char *type;
             uint32_t mode;
         } fix_entries[] = {
-            { "channel_mask",       "u32",  AM_ENTRY_MODE_WRITEABLE | AM_ENTRY_MODE_DISPLAY_HEX },
-            { "device_type",        "str",  AM_ENTRY_MODE_WRITEABLE },
-            { "ext_panid",          "u64",  AM_ENTRY_MODE_WRITEABLE | AM_ENTRY_MODE_DISPLAY_HEX },
-            { "mac_address",        "u64",  AM_ENTRY_MODE_WRITEABLE | AM_ENTRY_MODE_DISPLAY_HEX },
-            { "network_key",        "blob", AM_ENTRY_MODE_WRITEABLE },
-            { "nwk_address",        "u16",  AM_ENTRY_MODE_WRITEABLE | AM_ENTRY_MODE_DISPLAY_HEX },
-            { "nwk_updateid",       "u8",   AM_ENTRY_MODE_WRITEABLE },
-            { "panid",              "u16",  AM_ENTRY_MODE_WRITEABLE | AM_ENTRY_MODE_DISPLAY_HEX },
-            { "predefined_panid",   "u8",   AM_ENTRY_MODE_WRITEABLE },
-            { "security_mode",      "u8",   AM_ENTRY_MODE_WRITEABLE },
-            { "static_nwk_address", "u8",   AM_ENTRY_MODE_WRITEABLE },
-            { "tc_address",         "u64",  AM_ENTRY_MODE_WRITEABLE | AM_ENTRY_MODE_DISPLAY_HEX },
-            { "tc_link_key",        "blob", AM_ENTRY_MODE_WRITEABLE },
-            { "use_ext_panid",      "u64",  AM_ENTRY_MODE_WRITEABLE | AM_ENTRY_MODE_DISPLAY_HEX }
+            { "channel_mask",       "u32",  VFS_ENTRY_MODE_WRITEABLE | VFS_ENTRY_MODE_DISPLAY_HEX },
+            { "device_type",        "str",  VFS_ENTRY_MODE_WRITEABLE },
+            { "ext_panid",          "u64",  VFS_ENTRY_MODE_WRITEABLE | VFS_ENTRY_MODE_DISPLAY_HEX },
+            { "mac_address",        "u64",  VFS_ENTRY_MODE_WRITEABLE | VFS_ENTRY_MODE_DISPLAY_HEX },
+            { "network_key",        "blob", VFS_ENTRY_MODE_WRITEABLE },
+            { "nwk_address",        "u16",  VFS_ENTRY_MODE_WRITEABLE | VFS_ENTRY_MODE_DISPLAY_HEX },
+            { "nwk_updateid",       "u8",   VFS_ENTRY_MODE_WRITEABLE },
+            { "panid",              "u16",  VFS_ENTRY_MODE_WRITEABLE | VFS_ENTRY_MODE_DISPLAY_HEX },
+            { "predefined_panid",   "u8",   VFS_ENTRY_MODE_WRITEABLE },
+            { "security_mode",      "u8",   VFS_ENTRY_MODE_WRITEABLE },
+            { "static_nwk_address", "u8",   VFS_ENTRY_MODE_WRITEABLE },
+            { "tc_address",         "u64",  VFS_ENTRY_MODE_WRITEABLE | VFS_ENTRY_MODE_DISPLAY_HEX },
+            { "tc_link_key",        "blob", VFS_ENTRY_MODE_WRITEABLE },
+            { "use_ext_panid",      "u64",  VFS_ENTRY_MODE_WRITEABLE | VFS_ENTRY_MODE_DISPLAY_HEX }
         };
 
         const unsigned count = sizeof(fix_entries) / sizeof(fix_entries[0]);
@@ -309,8 +293,8 @@ static int CoreNet_ListDirectoryRequest(struct am_message *msg)
         for (i = 0; i < count; i++)
         {
             am->msg_put_cstring(m, fix_entries[i].name);
-            am->msg_put_cstring(m, fix_entries[i].type);
-            am->msg_put_u32(m, fix_entries[i].mode);
+            am->msg_put_u16(m, 0); /* flags */
+            am->msg_put_u16(m, 1); /* icon */
         }
     }
     else
@@ -320,7 +304,7 @@ static int CoreNet_ListDirectoryRequest(struct am_message *msg)
 
     m->src = msg->dst;
     m->dst = msg->src;
-    m->id = M_ID_LIST_DIR_RSP;
+    m->id = VFS_M_ID_LIST_DIR_RSP;
     am->send_message(m);
 
     return AM_CB_STATUS_OK;
@@ -334,7 +318,7 @@ static int CoreNet_ReadEntryRequest(struct am_message *msg)
     uint16_t tag;
     am_string url;
 
-    uint32_t mode = AM_ENTRY_MODE_WRITEABLE;
+    uint32_t mode = VFS_ENTRY_MODE_WRITEABLE;
     uint64_t mtime = 0;
 
     tag = am->msg_get_u16(msg);
@@ -362,7 +346,7 @@ static int CoreNet_ReadEntryRequest(struct am_message *msg)
         if (url == "net/0/channel_mask")
         {
             am->msg_put_cstring(m, "u32");
-            am->msg_put_u32(m, mode | AM_ENTRY_MODE_DISPLAY_HEX);
+            am->msg_put_u32(m, mode | VFS_ENTRY_MODE_DISPLAY_HEX);
             am->msg_put_u64(m, mtime);
             am->msg_put_u32(m, net.channelMask());
         }
@@ -379,14 +363,14 @@ static int CoreNet_ReadEntryRequest(struct am_message *msg)
         else if (url == "net/0/ext_panid")
         {
             am->msg_put_cstring(m, "u64");
-            am->msg_put_u32(m, mode | AM_ENTRY_MODE_DISPLAY_HEX);
+            am->msg_put_u32(m, mode | VFS_ENTRY_MODE_DISPLAY_HEX);
             am->msg_put_u64(m, mtime);
             am->msg_put_u64(m, net.pan().ext());
         }
         else if (url == "net/0/mac_address")
         {
             am->msg_put_cstring(m, "u64");
-            am->msg_put_u32(m, mode | AM_ENTRY_MODE_DISPLAY_HEX);
+            am->msg_put_u32(m, mode | VFS_ENTRY_MODE_DISPLAY_HEX);
             am->msg_put_u64(m, mtime);
             am->msg_put_u64(m, net.ownAddress().ext());
         }
@@ -400,7 +384,7 @@ static int CoreNet_ReadEntryRequest(struct am_message *msg)
         else if (url == "net/0/nwk_address")
         {
             am->msg_put_cstring(m, "u16");
-            am->msg_put_u32(m, mode | AM_ENTRY_MODE_DISPLAY_HEX);
+            am->msg_put_u32(m, mode | VFS_ENTRY_MODE_DISPLAY_HEX);
             am->msg_put_u64(m, mtime);
             am->msg_put_u16(m, net.ownAddress().nwk());
         }
@@ -414,7 +398,7 @@ static int CoreNet_ReadEntryRequest(struct am_message *msg)
         else if (url == "net/0/panid")
         {
             am->msg_put_cstring(m, "u16");
-            am->msg_put_u32(m, mode | AM_ENTRY_MODE_DISPLAY_HEX);
+            am->msg_put_u32(m, mode | VFS_ENTRY_MODE_DISPLAY_HEX);
             am->msg_put_u64(m, mtime);
             am->msg_put_u16(m, net.pan().nwk());
         }
@@ -442,7 +426,7 @@ static int CoreNet_ReadEntryRequest(struct am_message *msg)
         else if (url == "net/0/tc_address")
         {
             am->msg_put_cstring(m, "u64");
-            am->msg_put_u32(m, mode | AM_ENTRY_MODE_DISPLAY_HEX);
+            am->msg_put_u32(m, mode | VFS_ENTRY_MODE_DISPLAY_HEX);
             am->msg_put_u64(m, mtime);
             am->msg_put_u64(m, net.trustCenterAddress().ext());
         }
@@ -456,7 +440,7 @@ static int CoreNet_ReadEntryRequest(struct am_message *msg)
         else if (url == "net/0/use_ext_panid")
         {
             am->msg_put_cstring(m, "u64");
-            am->msg_put_u32(m, mode | AM_ENTRY_MODE_DISPLAY_HEX);
+            am->msg_put_u32(m, mode | VFS_ENTRY_MODE_DISPLAY_HEX);
             am->msg_put_u64(m, mtime);
             am->msg_put_u64(m, net.panAps().ext());
         }
@@ -492,7 +476,7 @@ static int CoreNet_ReadEntryRequest(struct am_message *msg)
 
     m->src = msg->dst;
     m->dst = msg->src;
-    m->id = M_ID_READ_ENTRY_RSP;
+    m->id = VFS_M_ID_READ_ENTRY_RSP;
     am->send_message(m);
 
     return AM_CB_STATUS_OK;
@@ -533,15 +517,36 @@ static int CoreAps_ListDirectoryRequest(struct am_message *msg)
         am->msg_put_u32(m, req_index);
         am->msg_put_u32(m, 0); /* no next index */
 
-        am->msg_put_u32(m, 2); /* count */
+        am->msg_put_u32(m, 3); /* count */
         /*************************************/
+        am->msg_put_cstring(m, ".actor");
+        am->msg_put_u16(m, VFS_LS_DIR_ENTRY_FLAGS_IS_DIR); /* flags */
+        am->msg_put_u16(m, 0); /* icon */
+
         am->msg_put_cstring(m, "frames_rx");
-        am->msg_put_cstring(m, "u64");
-        am->msg_put_u32(m, mode); /* mode */
+        am->msg_put_u16(m, 0); /* flags */
+        am->msg_put_u16(m, 1); /* icon */
 
         am->msg_put_cstring(m, "frames_tx");
-        am->msg_put_cstring(m, "u64");
-        am->msg_put_u32(m, mode); /* mode */
+        am->msg_put_u16(m, 0); /* flags */
+        am->msg_put_u16(m, 1); /* icon */
+    }
+    else if (url == ".actor" && req_index == 0)
+    {
+        /*
+         * hidden .actor directory
+         */
+        am->msg_put_u8(m, AM_RESPONSE_STATUS_OK);
+        am->msg_put_string(m, url.data, url.size);
+        am->msg_put_u32(m, req_index);
+        am->msg_put_u32(m, 0); /* no next index */
+
+        am->msg_put_u32(m, 1); /* count */
+        /*************************************/
+
+        am->msg_put_cstring(m, "name");
+        am->msg_put_u16(m, 0); /* flags */
+        am->msg_put_u16(m, 1); /* icon */
     }
     else
     {
@@ -550,7 +555,7 @@ static int CoreAps_ListDirectoryRequest(struct am_message *msg)
 
     m->src = msg->dst;
     m->dst = msg->src;
-    m->id = M_ID_LIST_DIR_RSP;
+    m->id = VFS_M_ID_LIST_DIR_RSP;
     am->send_message(m);
 
     return AM_CB_STATUS_OK;
@@ -563,7 +568,7 @@ static int CoreAps_ReadEntryRequest(struct am_message *msg)
     uint16_t tag;
     am_string url;
 
-    uint32_t mode = AM_ENTRY_MODE_WRITEABLE;
+    uint32_t mode = VFS_ENTRY_MODE_WRITEABLE;
     uint64_t mtime = 0;
 
     tag = am->msg_get_u16(msg);
@@ -614,7 +619,7 @@ static int CoreAps_ReadEntryRequest(struct am_message *msg)
 
     m->src = msg->dst;
     m->dst = msg->src;
-    m->id = M_ID_READ_ENTRY_RSP;
+    m->id = VFS_M_ID_READ_ENTRY_RSP;
     am->send_message(m);
 
     return AM_CB_STATUS_OK;
@@ -623,10 +628,10 @@ static int CoreAps_ReadEntryRequest(struct am_message *msg)
 // TODO(mpi): put in own module
 static int CoreNet_MessageCallback(struct am_message *msg)
 {
-    if (msg->id == M_ID_READ_ENTRY_REQ)
+    if (msg->id == VFS_M_ID_READ_ENTRY_REQ)
         return CoreNet_ReadEntryRequest(msg);
 
-    if (msg->id == M_ID_LIST_DIR_REQ)
+    if (msg->id == VFS_M_ID_LIST_DIR_REQ)
         return CoreNet_ListDirectoryRequest(msg);
 
     if (msg->src == AM_ACTOR_ID_TIMERS)
@@ -642,10 +647,10 @@ static int CoreNet_MessageCallback(struct am_message *msg)
 
 static int CoreAps_MessageCallback(struct am_message *msg)
 {
-    if (msg->id == M_ID_READ_ENTRY_REQ)
+    if (msg->id == VFS_M_ID_READ_ENTRY_REQ)
         return CoreAps_ReadEntryRequest(msg);
 
-    if (msg->id == M_ID_LIST_DIR_REQ)
+    if (msg->id == VFS_M_ID_LIST_DIR_REQ)
         return CoreAps_ListDirectoryRequest(msg);
 
     DBG_Printf(DBG_INFO, "core/aps: msg from: %u\n", msg->src);

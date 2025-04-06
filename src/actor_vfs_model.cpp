@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2024 dresden elektronik ingenieurtechnik gmbh.
+ * Copyright (c) 2013-2025 dresden elektronik ingenieurtechnik gmbh.
  * All rights reserved.
  *
  * The software in this package is published under the terms of the BSD
@@ -16,31 +16,18 @@
 #include "actor/service.h"
 #include "actor/cxx_helper.h"
 #include "actor_vfs_model.h"
+#include "deconz/am_core.h"
+#include "deconz/am_vfs.h"
 #include "deconz/atom_table.h"
 #include "deconz/dbg_trace.h"
+#include "deconz/u_assert.h"
 #include "deconz/u_sstream.h"
+#include "deconz/u_memory.h"
 
-#define AM_ACTOR_ID_CORE_APS    2005
-#define AM_ACTOR_ID_CORE_NET    2006
 #define AM_ACTOR_ID_UI_VFS      4006
 #define AM_ACTOR_ID_OTA         9000
 
-/* Bit 0 Access */
-#define AM_ENTRY_MODE_READONLY 0
-#define AM_ENTRY_MODE_WRITEABLE 1
-
-/* Bit 16-19 Display */
-#define AM_ENTRY_MODE_DISPLAY_AUTO (0U << 16)
-#define AM_ENTRY_MODE_DISPLAY_HEX  (1U << 16)
-#define AM_ENTRY_MODE_DISPLAY_BIN  (2U << 16)
-
-enum CommonMessageIds
-{
-   M_ID_LIST_DIR_REQ = AM_MESSAGE_ID_COMMON_REQUEST(1),
-   M_ID_LIST_DIR_RSP = AM_MESSAGE_ID_COMMON_RESPONSE(1),
-   M_ID_READ_ENTRY_REQ = AM_MESSAGE_ID_COMMON_REQUEST(2),
-   M_ID_READ_ENTRY_RSP = AM_MESSAGE_ID_COMMON_RESPONSE(2)
-};
+#define DIR_VALUE_INITIAL 0xDEADBEEF
 
 static struct am_api_functions *am = nullptr;
 static struct am_actor am_actor_vfs_model;
@@ -52,6 +39,8 @@ static AT_AtomIndex ati_type_u32;
 static AT_AtomIndex ati_type_u64;
 static AT_AtomIndex ati_type_blob;
 static AT_AtomIndex ati_type_str;
+static AT_AtomIndex ati_dot_actor;
+static AT_AtomIndex ati_name;
 static AT_AtomIndex ati_unknown;
 
 static inline bool operator==(AT_AtomIndex a, AT_AtomIndex b)
@@ -63,13 +52,6 @@ static inline bool operator!=(AT_AtomIndex a, AT_AtomIndex b)
 {
     return a.index != b.index;
 }
-
-enum EntryFetchState
-{
-    ENTRY_FETCH_STATE_IDLE,
-    ENTRY_FETCH_STATE_WAIT_START,
-    ENTRY_FETCH_STATE_WAIT_RESPONSE
-};
 
 #define ENTRY_PARENT_NONE   -1
 #define ENTRY_SIBLING_NONE  -3
@@ -85,45 +67,51 @@ enum EntryFetchState
 struct Entry
 {
     uint64_t value;
-    uint32_t mode;
     AT_AtomIndex name;
     AT_AtomIndex type;
     int parent;
     int sibling;
     int child;
-    uint8_t fetchState; // EntryFetchState
-    uint8_t data[24];
+    uint32_t mode;
+    uint16_t icon;
+    // TODO remove for larger than 64-bit value heap objects
+    uint8_t data[29];
 };
 
 static_assert(sizeof(Entry) == 64, "unexpected size");
 
-struct DirFetcher
+enum EntryFetchState
 {
-    am_actor_id actorId;
-    int entryIndex;
-    uint16_t tag;
-    uint32_t index;
-    uint64_t timeout;
+    ENTRY_FETCH_STATE_DONE,
+    ENTRY_FETCH_STATE_WAIT_START,
+    ENTRY_FETCH_STATE_WAIT_RESPONSE
 };
 
-enum ValueFetchState
+struct DirFetcher
 {
-    VAL_FETCH_STATE_IDLE,
-    VAL_FETCH_STATE_WAIT_TIMER,
-    VAL_FETCH_STATE_WAIT_RESPONSE
+    EntryFetchState state;
+    int entryIndex;
+    int timeout;
+    uint32_t index;
+    uint16_t tag;
 };
+
+struct EntryFetcher
+{
+    int entryIndex;
+    int timeout;
+    uint16_t tag;
+    EntryFetchState state;
+};
+
 
 class ActorVfsModelPrivate
 {
 public:
-
     std::vector<Entry> entries;
     std::vector<DirFetcher> dirFetchers;
-    std::vector<int> valueFetchers;
-    uint16_t fetchTag = 1;
-    ValueFetchState valFetchState = VAL_FETCH_STATE_IDLE;
-    unsigned fetchIter = 0;
-    uint16_t valFetchTag = 1;
+    std::vector<EntryFetcher> entryFetchers;
+    uint16_t allocTag = 1;
     QTimer fetchTimer;
 
     QIcon iconActor;
@@ -156,13 +144,19 @@ int findChildEntry(const std::vector<Entry> &entries, int parent_e, AT_AtomIndex
 
 static void addEntryToValueFetchers(int e)
 {
-    for (size_t i = 0; i < _priv->valueFetchers.size(); i++)
+    for (const EntryFetcher &ef : _priv->entryFetchers)
     {
-        if (_priv->valueFetchers[i] == e)
+        if (ef.entryIndex == e)
             return;
     }
 
-    _priv->valueFetchers.push_back(e);
+    EntryFetcher ef;
+    ef.state = ENTRY_FETCH_STATE_WAIT_START;
+    ef.entryIndex = e;
+    ef.tag = 0;
+    ef.timeout = 0;
+
+    _priv->entryFetchers.push_back(ef);
 }
 
 static void addEntryToParent(std::vector<Entry> &entries, int parent_e, Entry &entry)
@@ -186,18 +180,45 @@ static void addEntryToParent(std::vector<Entry> &entries, int parent_e, Entry &e
     }
 
     if (entry.type != ati_type_dir)
+    {
         addEntryToValueFetchers(entries.size() - 1);
+    }
+    else
+    {
+        /* automatically fetch the .actor directory */
+        if (entry.name == ati_dot_actor)
+        {
+
+            DirFetcher df;
+            df.entryIndex = entries.size() - 1;
+            df.index = 0;
+            df.state = ENTRY_FETCH_STATE_WAIT_START;
+
+            _priv->dirFetchers.push_back(df);
+        }
+    }
 }
 
-static void listDirectoryRequest(DirFetcher &fetch)
+static void listDirectoryRequest(DirFetcher &df)
 {
-    int e = fetch.entryIndex;
+    int e = df.entryIndex;
     DBG_Assert(e >= 0);
 
+    am_actor_id dstActorId;
     auto &entries = _priv->entries;
     Entry &entry = entries[e];
 
-    DBG_Assert(entry.fetchState == ENTRY_FETCH_STATE_WAIT_START);
+    {
+        int ep = e;
+        for (;_priv->entries[ep].parent >= 0;)
+        {
+            ep = _priv->entries[ep].parent;
+        }
+
+        dstActorId = _priv->entries[ep].value;
+    }
+
+    U_ASSERT(df.state == ENTRY_FETCH_STATE_WAIT_START);
 
     std::vector<int> path;
 
@@ -230,29 +251,35 @@ static void listDirectoryRequest(DirFetcher &fetch)
     if (!m)
         return;
 
-    DBG_Printf(DBG_VFS, "list directory request e: %d, %s\n", fetch.entryIndex, url);
+    DBG_Printf(DBG_VFS, "list directory request e: %d, %s\n", df.entryIndex, url);
 
-    entry.fetchState = ENTRY_FETCH_STATE_WAIT_RESPONSE;
-    fetch.tag = _priv->fetchTag++;
+    _priv->allocTag++;
+    df.tag = _priv->allocTag;
+    df.timeout = 0;
 
-    am->msg_put_u16(m, fetch.tag);    /* tag */
+    am->msg_put_u16(m, df.tag);    /* tag */
     am->msg_put_cstring(m, url);      /* url */
-    am->msg_put_u32(m, fetch.index);  /* index */
+    am->msg_put_u32(m, df.index);  /* index */
     m->src = AM_ACTOR_ID_UI_VFS;
-    m->dst = fetch.actorId;
-    m->id = M_ID_LIST_DIR_REQ;
-    am->send_message(m);
+    m->dst = dstActorId;
+    m->id = VFS_M_ID_LIST_DIR_REQ;
+
+    if (am->send_message(m))
+        df.state = ENTRY_FETCH_STATE_WAIT_RESPONSE;
+
 }
 
-static int readEntryRequest(int e)
+static int readEntryRequest(EntryFetcher &ef)
 {
+    int e = ef.entryIndex;
+
     if (e < 0)
         return 0;
 
     auto &entries = _priv->entries;
     Entry &entry = entries[e];
 
-    DBG_Assert(entry.fetchState == ENTRY_FETCH_STATE_IDLE);
+    U_ASSERT(ef.state == ENTRY_FETCH_STATE_WAIT_START);
 
     std::vector<int> path;
 
@@ -297,17 +324,21 @@ static int readEntryRequest(int e)
 
     DBG_Printf(DBG_VFS, "vfs model: fetch value of entry: %d, url: '%s'\n", e, url);
 
-    entry.fetchState = ENTRY_FETCH_STATE_WAIT_RESPONSE;
-    _priv->valFetchTag++;
+    _priv->allocTag++;
+    ef.tag = _priv->allocTag;
+    ef.state = ENTRY_FETCH_STATE_WAIT_RESPONSE;
+    ef.timeout = 0;
 
-    am->msg_put_u16(m, _priv->valFetchTag);
+    am->msg_put_u16(m, ef.tag);
     am->msg_put_cstring(m, url);
     m->src = AM_ACTOR_ID_UI_VFS;
     m->dst = actorId;
-    m->id = M_ID_READ_ENTRY_REQ;
+    m->id = VFS_M_ID_READ_ENTRY_REQ;
 
     if (am->send_message(m))
         return 1;
+
+    ef.state = ENTRY_FETCH_STATE_WAIT_START;
 
     return 0;
 }
@@ -321,8 +352,8 @@ int ActorVfsModel::listDirectoryResponse(am_message *msg)
     int entryIndex = -1;
     am_string url;
     am_string name;
-    am_string type;
-    unsigned mode;
+    unsigned flags;
+    unsigned icon;
     unsigned index;
     unsigned next_index;
     unsigned count;
@@ -345,8 +376,15 @@ int ActorVfsModel::listDirectoryResponse(am_message *msg)
     if (entryIndex < 0) // ?? should not happen
         return AM_CB_STATUS_OK;
 
-    DBG_Assert(_priv->entries[entryIndex].fetchState == ENTRY_FETCH_STATE_WAIT_RESPONSE);
-    _priv->entries[entryIndex].fetchState = ENTRY_FETCH_STATE_IDLE;
+    DirFetcher df = _priv->dirFetchers[fetcherIndex];
+
+    if (df.state != ENTRY_FETCH_STATE_WAIT_RESPONSE)
+        return AM_CB_STATUS_OK;
+
+    _priv->dirFetchers[fetcherIndex] = _priv->dirFetchers.back();
+    _priv->dirFetchers.pop_back();
+
+    priv->fetchTimer.stop(); // clear for continuation
 
     if (status == AM_RESPONSE_STATUS_OK)
     {
@@ -354,19 +392,6 @@ int ActorVfsModel::listDirectoryResponse(am_message *msg)
         index = am->msg_get_u32(msg);
         next_index = am->msg_get_u32(msg);
         count = am->msg_get_u32(msg);
-
-        if (next_index == 0)
-        {
-            // done
-            _priv->dirFetchers[fetcherIndex] = _priv->dirFetchers.back();
-            _priv->dirFetchers.pop_back();
-        }
-        else
-        {
-            _priv->entries[entryIndex].fetchState = ENTRY_FETCH_STATE_WAIT_START;
-            _priv->dirFetchers[fetcherIndex].index = next_index;
-            listDirectoryRequest(_priv->dirFetchers[fetcherIndex]);
-        }
 
         if (msg->status != AM_MSG_STATUS_OK)
             return AM_CB_STATUS_INVALID;
@@ -378,20 +403,17 @@ int ActorVfsModel::listDirectoryResponse(am_message *msg)
         for (i = 0; i < count; i++)
         {
             name = am->msg_get_string(msg);
-            type = am->msg_get_string(msg);
-            mode = am->msg_get_u32(msg);
+            flags = am->msg_get_u16(msg);
+            icon = am->msg_get_u16(msg);
 
             if (msg->status != AM_MSG_STATUS_OK)
                 return AM_CB_STATUS_INVALID;
 
-            if (name.size == 0 || type.size == 0)
+            if (name.size == 0)
                 continue;
 
             AT_AtomIndex ati_name;
             AT_AddAtom(name.data, name.size, &ati_name);
-
-            AT_AtomIndex ati_type;
-            AT_AddAtom(type.data, type.size, &ati_type);
 
             int e = findChildEntry(_priv->entries, entryIndex, ati_name);
 
@@ -399,23 +421,33 @@ int ActorVfsModel::listDirectoryResponse(am_message *msg)
             {
                 Entry entry;
                 entry.name = ati_name;
-                entry.type = ati_type;
+                if (flags & VFS_LS_DIR_ENTRY_FLAGS_IS_DIR)
+                {
+                    entry.type = ati_type_dir;
+                    entry.value = DIR_VALUE_INITIAL;
+                }
+                else
+                {
+                    entry.type = ati_unknown;
+                    entry.value = 0;
+                }
                 entry.parent = entryIndex;
                 entry.sibling = ENTRY_SIBLING_NONE;
                 entry.child = ENTRY_CHILD_UNKNOWN;
-                entry.value = 0;
-                entry.mode = mode;
-                entry.fetchState = ENTRY_FETCH_STATE_IDLE;
+
+                entry.mode = 0;
+                entry.icon = icon;
                 entriesToAdd.push_back(entry);
             }
             else
             {
+                // TODO mark as found. Entries which aren't marked should be removed in the end.
                 const Entry &entry = _priv->entries[e];
                 if (entry.type != ati_type_dir)
                     addEntryToValueFetchers(e);
             }
 
-            DBG_Printf(DBG_VFS, "             %.*s (%.*s) mode: %u\n", name.size, name.data, type.size, type.data, mode);
+            DBG_Printf(DBG_VFS, "             %.*s\n", name.size, name.data);
         }
 
         if (!entriesToAdd.empty())
@@ -466,25 +498,29 @@ int ActorVfsModel::listDirectoryResponse(am_message *msg)
             endInsertRows();
         }
 
-        continueValueFetching();
+        if (next_index == 0)
+        {
+            // done
+        }
+        else
+        {
+            // no errors so far, continue
+            df.state = ENTRY_FETCH_STATE_WAIT_START;
+            df.index = next_index;
+            priv->dirFetchers.push_back(df);
+        }
     }
     else
     {
         DBG_Printf(DBG_VFS, "vfs model: list directory error: %u\n", status);
-        _priv->dirFetchers[fetcherIndex] = _priv->dirFetchers.back();
-        _priv->dirFetchers.pop_back();
     }
 
     return AM_CB_STATUS_OK;
 }
 
-int ActorVfsModel::readEntryResponse(am_message *msg, int e)
+int ActorVfsModel::readEntryResponse(am_message *msg)
 {
-    if (e < 0)
-        return AM_CB_STATUS_OK;
-
-    Entry &entry = priv->entries[e];
-
+    int e;
     unsigned status;
     unsigned short tag;
 
@@ -492,40 +528,58 @@ int ActorVfsModel::readEntryResponse(am_message *msg, int e)
     am_string type;
     unsigned mode;
     uint64_t mtime;
+    int fetchIter;
 
     tag = am->msg_get_u16(msg);
     status = am->msg_get_u8(msg);
 
-    if (entry.fetchState == ENTRY_FETCH_STATE_WAIT_RESPONSE)
-        entry.fetchState = ENTRY_FETCH_STATE_IDLE;
+    for (fetchIter = 0; fetchIter < priv->entryFetchers.size(); fetchIter++)
+    {
+        if (priv->entryFetchers[fetchIter].tag == tag)
+            break;
+    }
+
+    if (fetchIter == priv->entryFetchers.size())
+        return AM_CB_STATUS_OK;
+
+    {
+        EntryFetcher ef = priv->entryFetchers[fetchIter];
+        priv->entryFetchers[fetchIter] = priv->entryFetchers.back();
+        priv->entryFetchers.pop_back();
+
+        if (ef.state == ENTRY_FETCH_STATE_WAIT_RESPONSE)
+            priv->fetchTimer.stop(); // clear for continuation
+
+        e = ef.entryIndex;
+        if (e < 0)
+            return AM_CB_STATUS_OK;
+    }
+
+    Entry &entry = priv->entries[e];
 
     if (status == AM_RESPONSE_STATUS_OK && msg->status == AM_MSG_STATUS_OK)
     {
-        if (tag != priv->valFetchTag)
-            return AM_CB_STATUS_OK;
-
         url = am->msg_get_string(msg);
         type = am->msg_get_string(msg);
         mode = am->msg_get_u32(msg);
         mtime = am->msg_get_u64(msg);
 
+        AT_AtomIndex ati_type = ati_unknown;
+        if (type.size)
+        {
+            if (0 == AT_GetAtomIndex(type.data, type.size, &ati_type))
+                ati_type = ati_unknown;
+        }
+
         if (msg->status == AM_MSG_STATUS_OK && url.size && type.size)
         {
             entry.mode = mode;
+            entry.type = ati_type;
 
             if      (type == "u8")  { entry.value = am->msg_get_u8(msg); }
             else if (type == "u16") { entry.value = am->msg_get_u16(msg); }
             else if (type == "u32") { entry.value = am->msg_get_u32(msg); }
             else if (type == "u64") { entry.value = am->msg_get_u64(msg); }
-            else if (entry.parent < 0 && type == "str")
-            {
-                // special case: actor name in root entry
-                if (url == ".actor/name")
-                {
-                    am_string str = am->msg_get_string(msg);
-                    AT_AddAtom(str.data, str.size, &entry.name);
-                }
-            }
             else if (type == "str")
             {
                 am_string str = am->msg_get_string(msg);
@@ -536,6 +590,21 @@ int ActorVfsModel::readEntryResponse(am_message *msg, int e)
                 for (unsigned i = 0; i < entry.value; i++)
                 {
                     entry.data[i] = (uint8_t)str.data[i];
+                }
+
+                // special case: .actor/name in root entry
+                U_ASSERT(entry.parent >= 0);
+                if (entry.name == ati_name && priv->entries[entry.parent].name == ati_dot_actor)
+                {
+                    int ppp = priv->entries[entry.parent].parent;
+                    Entry &actorEntry = priv->entries[ppp];
+                    if (actorEntry.name == ati_unknown)
+                    {
+                        AT_AddAtom(str.data, str.size, &actorEntry.name);
+
+                        QModelIndex index = createIndex(ppp, 0, (quintptr)ppp);
+                        emit dataChanged(index, index);
+                    }
                 }
             }
             else if (type == "blob")
@@ -574,9 +643,11 @@ int ActorVfsModel::readEntryResponse(am_message *msg, int e)
                     child = priv->entries[child].sibling;
                 }
 
-                int column = 2; // value;
+                int column = 1; // type;
                 QModelIndex index = createIndex(row, column, (quintptr)e);
-                emit dataChanged(index, index);
+                column = 2; // value;
+                QModelIndex index2 = createIndex(row, column, (quintptr)e);
+                emit dataChanged(index, index2);
             }
 
             return AM_CB_STATUS_OK;
@@ -598,12 +669,33 @@ int ActorVfsModel::readEntryResponse(am_message *msg, int e)
     return AM_CB_STATUS_OK;
 }
 
-void ActorVfsModel::continueValueFetching()
+void ActorVfsModel::continueFetching()
 {
-    if (priv->valFetchState == VAL_FETCH_STATE_IDLE)
+    if (!priv->dirFetchers.empty())
     {
-        priv->valFetchState = VAL_FETCH_STATE_WAIT_TIMER;
-        priv->fetchTimer.start(0);
+        DirFetcher &df = priv->dirFetchers.front();
+
+        if (df.state == ENTRY_FETCH_STATE_WAIT_START)
+        {
+            listDirectoryRequest(df);
+            if (df.state == ENTRY_FETCH_STATE_WAIT_RESPONSE)
+            {
+                priv->fetchTimer.start(50);
+            }
+        }
+    }
+    else if (!priv->entryFetchers.empty())
+    {
+        EntryFetcher &ef = priv->entryFetchers.front();
+
+        if (ef.state == ENTRY_FETCH_STATE_WAIT_START)
+        {
+            readEntryRequest(ef);
+            if (ef.state == ENTRY_FETCH_STATE_WAIT_RESPONSE)
+            {
+                priv->fetchTimer.start(50);
+            }
+        }
     }
 }
 
@@ -630,11 +722,12 @@ void ActorVfsModel::addActorId(unsigned int actorId)
     entry.name = ati_unknown;
     entry.value = actorId;
     entry.mode = 0;
+    entry.icon = 0;
     entry.type = ati_type_dir;
     entry.parent = ENTRY_PARENT_NONE;
     entry.sibling = ENTRY_SIBLING_NONE;
     entry.child = ENTRY_CHILD_UNKNOWN;
-    entry.fetchState = ENTRY_FETCH_STATE_IDLE;
+
     priv->entries.push_back(entry);
 
     e = (int)priv->entries.size() - 1;
@@ -644,68 +737,75 @@ void ActorVfsModel::addActorId(unsigned int actorId)
         priv->entries[prev_e].sibling = e;
     }
 
-    addEntryToValueFetchers(e);
-    continueValueFetching();
+    DirFetcher df;
+    df.entryIndex = e;
+    df.index = 0;
+    df.state = ENTRY_FETCH_STATE_WAIT_START;
+
+    priv->dirFetchers.push_back(df);
+
+    continueFetching();
 }
 
 void ActorVfsModel::fetchTimerFired()
 {
-    DBG_Assert(priv->valFetchState == VAL_FETCH_STATE_WAIT_TIMER);
-    priv->valFetchState = VAL_FETCH_STATE_IDLE;
+    DBG_Printf(DBG_VFS, "vfs timer fired after %d, dirf: %zu, entryf: %zu\n", priv->fetchTimer.interval(), priv->dirFetchers.size(), priv->entryFetchers.size());
 
-    if (priv->valueFetchers.empty())
-        return;
-
-    if (priv->fetchIter >= priv->valueFetchers.size())
+    if (!priv->dirFetchers.empty())
     {
-        priv->valueFetchers.clear();
-        priv->fetchIter = 0;
-        return;
-    }
+        DirFetcher &df = priv->dirFetchers.front();
 
-    int e = priv->valueFetchers[priv->fetchIter];
-    Entry &entry = priv->entries[e];
-
-    if (entry.type == ati_type_dir && entry.parent >= 0)
-    {
-        priv->fetchIter++;
-        continueValueFetching();
-        return;
-    }
-
-    if (entry.fetchState == ENTRY_FETCH_STATE_IDLE)
-    {
-        if (readEntryRequest(e))
+        if (df.state == ENTRY_FETCH_STATE_WAIT_RESPONSE)
         {
-            priv->valFetchState = VAL_FETCH_STATE_WAIT_RESPONSE;
+            df.timeout++;
+            if (df.timeout < 3)
+            {
+                df.state = ENTRY_FETCH_STATE_WAIT_START;
+            }
+            else
+            {
+                priv->dirFetchers.front() = priv->dirFetchers.back();
+                priv->dirFetchers.pop_back();
+            }
+            continueFetching();
         }
-        else
+    }
+    else if (!priv->entryFetchers.empty())
+    {
+        EntryFetcher &ef = priv->entryFetchers.front();
+
+        if (ef.state == ENTRY_FETCH_STATE_WAIT_RESPONSE)
         {
-            priv->fetchIter++;
-            continueValueFetching();
+            ef.timeout++;
+            if (ef.timeout < 3)
+            {
+                ef.state = ENTRY_FETCH_STATE_WAIT_START;
+            }
+            else
+            {
+                priv->entryFetchers.front() = priv->entryFetchers.back();
+                priv->entryFetchers.pop_back();
+            }
+            continueFetching();
         }
     }
 }
 
 static int VfsModel_MessageCallback(struct am_message *msg)
 {
-    if (msg->id == M_ID_READ_ENTRY_RSP)
+    int ret = AM_CB_STATUS_UNSUPPORTED;
+    if (msg->id == VFS_M_ID_READ_ENTRY_RSP)
     {
-        if (_priv->valFetchState == VAL_FETCH_STATE_WAIT_RESPONSE)
-        {
-            int e = _priv->valueFetchers[_priv->fetchIter];
-            _priv->fetchIter++;
-            _priv->valFetchState = VAL_FETCH_STATE_IDLE;
-            _instance->continueValueFetching();
-            return _instance->readEntryResponse(msg, e);
-        }
+        ret = _instance->readEntryResponse(msg);
+        _instance->continueFetching();
     }
-    else if (msg->id == M_ID_LIST_DIR_RSP)
+    else if (msg->id == VFS_M_ID_LIST_DIR_RSP)
     {
-        return _instance->listDirectoryResponse(msg);
+        ret = _instance->listDirectoryResponse(msg);
+        _instance->continueFetching();
     }
 
-    return AM_CB_STATUS_UNSUPPORTED;
+    return ret;
 }
 
 
@@ -721,30 +821,34 @@ ActorVfsModel::ActorVfsModel(QObject *parent) :
 
     const char *str;
 
+    str = ".actor";
+    AT_AddAtom(str, U_strlen(str), &ati_dot_actor);
+    str = "name";
+    AT_AddAtom(str, U_strlen(str), &ati_name);
     str = "dir";
-    AT_AddAtom(str, qstrlen(str), &ati_type_dir);
+    AT_AddAtom(str, U_strlen(str), &ati_type_dir);
     str = "u8";
-    AT_AddAtom(str, qstrlen(str), &ati_type_u8);
+    AT_AddAtom(str, U_strlen(str), &ati_type_u8);
     str = "u16";
-    AT_AddAtom(str, qstrlen(str), &ati_type_u16);
+    AT_AddAtom(str, U_strlen(str), &ati_type_u16);
     str = "u32";
-    AT_AddAtom(str, qstrlen(str), &ati_type_u32);
+    AT_AddAtom(str, U_strlen(str), &ati_type_u32);
     str = "u64";
-    AT_AddAtom(str, qstrlen(str), &ati_type_u64);
+    AT_AddAtom(str, U_strlen(str), &ati_type_u64);
     str = "str";
-    AT_AddAtom(str, qstrlen(str), &ati_type_str);
+    AT_AddAtom(str, U_strlen(str), &ati_type_str);
     str = "blob";
-    AT_AddAtom(str, qstrlen(str), &ati_type_blob);
+    AT_AddAtom(str, U_strlen(str), &ati_type_blob);
     str = "unknown";
-    AT_AddAtom(str, qstrlen(str), &ati_unknown);
-
-    addActorId(AM_ACTOR_ID_CORE_NET);
-    addActorId(AM_ACTOR_ID_CORE_APS);
-    addActorId(AM_ACTOR_ID_OTA);
+    AT_AddAtom(str, U_strlen(str), &ati_unknown);
 
     AM_INIT_ACTOR(&am_actor_vfs_model, AM_ACTOR_ID_UI_VFS, VfsModel_MessageCallback);
     am = AM_ApiFunctions();
     am->register_actor(&am_actor_vfs_model);
+
+    addActorId(AM_ACTOR_ID_CORE_NET);
+    addActorId(AM_ACTOR_ID_CORE_APS);
+    //addActorId(AM_ACTOR_ID_OTA);
 
     connect(&priv->fetchTimer, &QTimer::timeout, this, &ActorVfsModel::fetchTimerFired);
     priv->fetchTimer.setSingleShot(true);
@@ -792,11 +896,16 @@ QVariant ActorVfsModel::data(const QModelIndex &index, int role) const
         }
         else if (index.column() == 2)
         {
+            if (entry.type == ati_type_dir)
+            {
+                return QVariant();
+            }
+
             if (entry.parent > 0)
             {
                 unsigned display = (entry.mode & 0xF0000);
 
-                if (display == AM_ENTRY_MODE_DISPLAY_HEX)
+                if (display == VFS_ENTRY_MODE_DISPLAY_HEX)
                 {
                     if (entry.type == ati_type_u8)
                         return QString("0x%1").arg(entry.value, 2, 16, QLatin1Char('0'));
@@ -989,14 +1098,10 @@ bool ActorVfsModel::canFetchMore(const QModelIndex &parent) const
     int e = parent.internalId();
     const Entry &entry = priv->entries[e];
 
-    if (entry.fetchState != ENTRY_FETCH_STATE_IDLE)
-    {
-        return false;
-    }
-
     if (entry.type == ati_type_dir)
     {
-        return true;
+        if (entry.value == DIR_VALUE_INITIAL)
+            return true;
     }
 
     return false;
@@ -1014,27 +1119,24 @@ void ActorVfsModel::fetchMore(const QModelIndex &parent)
 
     Entry &entry = priv->entries[e];
 
-    if (entry.fetchState != ENTRY_FETCH_STATE_IDLE)
-        return;
-
     if (entry.type == ati_type_dir)
     {
-        entry.fetchState = ENTRY_FETCH_STATE_WAIT_START;
-
-        DirFetcher fetch;
-
-        fetch.entryIndex = e;
-        fetch.timeout = 0;
-        fetch.index = 0;
-
-        for (;priv->entries[e].parent >= 0;)
+        for (DirFetcher &df : priv->dirFetchers)
         {
-            e = priv->entries[e].parent;
+            if (df.entryIndex == e)
+                return;
         }
 
-        fetch.actorId = priv->entries[e].value;
-        priv->dirFetchers.push_back(fetch);
-        listDirectoryRequest(priv->dirFetchers.back());
+        entry.value = DIR_VALUE_INITIAL + 1; // prevent canFetchMore
+
+        DirFetcher df;
+
+        df.entryIndex = e;
+        df.index = 0;
+        df.state = ENTRY_FETCH_STATE_WAIT_START;
+
+        priv->dirFetchers.push_back(df);
+        continueFetching();
     }
 }
 
