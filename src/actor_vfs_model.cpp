@@ -258,8 +258,9 @@ static void listDirectoryRequest(DirFetcher &df)
     df.timeout = 0;
 
     am->msg_put_u16(m, df.tag);    /* tag */
-    am->msg_put_cstring(m, url);      /* url */
+    am->msg_put_cstring(m, url);   /* url */
     am->msg_put_u32(m, df.index);  /* index */
+    am->msg_put_u32(m, 128);       /* max_count */
     m->src = AM_ACTOR_ID_UI_VFS;
     m->dst = dstActorId;
     m->id = VFS_M_ID_LIST_DIR_REQ;

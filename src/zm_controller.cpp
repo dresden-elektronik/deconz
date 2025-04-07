@@ -193,10 +193,12 @@ static int CoreNet_ListDirectoryRequest(struct am_message *msg)
     unsigned short tag;
     am_string url;
     unsigned req_index;
+    unsigned max_count;
 
     tag = am->msg_get_u16(msg);
     url = am->msg_get_string(msg);
     req_index = am->msg_get_u32(msg);
+    max_count = am->msg_get_u32(msg);
 
     /* end of parsing */
 
@@ -484,10 +486,12 @@ static int CoreAps_ListDirectoryRequest(struct am_message *msg)
     unsigned short tag;
     am_string url;
     unsigned req_index;
+    unsigned max_count;
 
     tag = am->msg_get_u16(msg);
     url = am->msg_get_string(msg);
     req_index = am->msg_get_u32(msg);
+    max_count = am->msg_get_u32(msg);
 
     /* end of parsing */
 
@@ -499,8 +503,6 @@ static int CoreAps_ListDirectoryRequest(struct am_message *msg)
         return AM_CB_STATUS_MESSAGE_ALLOC_FAILED;
 
     am->msg_put_u16(m, tag);
-
-    uint32_t mode = 0;
 
     if (url.size == 0 && req_index == 0)
     {
