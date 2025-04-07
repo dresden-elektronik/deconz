@@ -172,12 +172,13 @@ static const char *cmdString[] =
     "CMD_REBOOT",
     "CMD_BEACON",
     "CMD_FACTORY_RESET",
-    "CMD_NWK_LEAVE_REQ"
+    "CMD_NWK_LEAVE_REQ",
+    "CMD_DEBUG_LOG",
 };
 
 const char *cmdToString(uint cmd)
 {
-    if (cmd <= ZM_CMD_NWK_LEAVE_REQ)
+    if (cmd <= ZM_CMD_DEBUG_LOG)
     {
         return cmdString[cmd];
     }
