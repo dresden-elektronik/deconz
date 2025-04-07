@@ -67,7 +67,7 @@
 
 #endif
 
-#define TH_RX_BUFFER_SIZE 256
+#define TH_RX_BUFFER_SIZE 2048
 #define RX_BUFFER_SIZE 256
 #define TX_BUFFER_SIZE 1024
 #define MAX_SEND_LENGTH 196
@@ -261,9 +261,10 @@ struct PL_Thread
 
     std::condition_variable cv;
 
-    unsigned rxread;
-    unsigned rxpos;
-    unsigned rxcount;
+    // circular buffer pointers
+    unsigned rx_a; // read pointer
+    unsigned rx_b; // write pointer
+
     uint8_t rxbuf[TH_RX_BUFFER_SIZE];
 };
 
@@ -274,7 +275,8 @@ static void PL_Thread0()
     {
         std::lock_guard<std::mutex> lock(plThread->mtx_fd);
         plThread->running = true;
-        plThread->rxcount = 0;
+        plThread->rx_a = 0;
+        plThread->rx_b = 0;
         plThread->events = 0;
     }
 
@@ -285,7 +287,7 @@ static void PL_Thread0()
     struct pollfd fds;
 
     int nread = 0;
-    int timeout = 20;
+    int timeout = 2;
 
     for (;;)
     {
@@ -313,9 +315,7 @@ static void PL_Thread0()
             fds.fd = platform.fd;
             ret = poll(&fds, 1 /* nfds*/ , timeout); // ret == 0: timeout | < 0 error
 
-//            std::unique_lock<std::mutex> fd_lock(plThread->mtx_fd);
-
-            auto sl = 10ms;
+            std::lock_guard<std::mutex> rx_lock(plThread->mtx_rx);
 
             if (ret > 0)
             {
@@ -325,47 +325,70 @@ static void PL_Thread0()
                 }
                 else if (fds.revents & POLLIN)
                 {
-                    std::lock_guard<std::mutex> rx_lock(plThread->mtx_rx);
+                    unsigned maxsize = 0;
 
-                    M_ASSERT(sizeof(plThread->rxbuf) >= plThread->rxpos);
-                    unsigned maxsize = sizeof(plThread->rxbuf) - plThread->rxpos;
+                    {
+                        unsigned rxa = plThread->rx_a;
+                        unsigned rxb = plThread->rx_b;
 
-                    plThread->rxcount++;
+                        if (rxa == rxb)
+                        {
+                            maxsize = sizeof(plThread->rxbuf);
+                        }
+                        else
+                        {
+                            for (;(rxb + 1) != rxa; rxb++)
+                            {
+                                maxsize++;
+                                if (maxsize == sizeof(plThread->rxbuf))
+                                        break;
+
+                                if (maxsize == 128)
+                                    break;
+                            }
+
+                            M_ASSERT(maxsize <= sizeof(plThread->rxbuf));
+                        }
+                    }
 
                     if (maxsize > 0)
                     {
-                        nread = read(platform.fd, &plThread->rxbuf[plThread->rxpos], maxsize);
+                        unsigned char buf[128];
+
+                        if (sizeof(buf) < maxsize)
+                            maxsize = sizeof(buf);
+
+                        nread = read(platform.fd, &buf[0], maxsize);
                         M_ASSERT(nread <= (int)maxsize);
 
                         if (nread > 0 && nread <= (int)maxsize)
                         {
-                            plThread->rxpos += (unsigned)nread;
-                            DBG_Printf(DBG_PROT, "[TH0] rx %d bytes (total: %u)\n", nread, plThread->rxpos);
-
                             int mkEvent = 0;
 
-                            // #1 if we detect end marker emit rx
-                            for (int i = 1; i < (int)plThread->rxpos && i < nread; i++)
+                            M_ASSERT(nread <= (int)sizeof(buf));
+                            for (int i = 0; i < nread; i++)
                             {
-                                if (plThread->rxbuf[plThread->rxpos - i] == 0xC0)
-                                {
-                                    mkEvent = 1;
-                                    break;
-                                }
+                                M_ASSERT(plThread->rx_b % TH_RX_BUFFER_SIZE < sizeof(plThread->rxbuf));
+                                M_ASSERT((plThread->rx_b + 1) != plThread->rx_a);
+                                plThread->rxbuf[plThread->rx_b % TH_RX_BUFFER_SIZE] = buf[i];
+                                plThread->rx_b++;
+
+                                // #1 if we detect end marker emit rx
+                                if (buf[i] == 0xC0)
+                                    mkEvent++;
                             }
 
+                            DBG_Printf(DBG_PROT, "[TH0] rx %d bytes, make event: %d\n", nread, mkEvent);
+
                             // #2 rx buffer full
-                            if (plThread->rxpos == sizeof(plThread->rxbuf))
+                            if (((plThread->rx_b + 1) % TH_RX_BUFFER_SIZE) == (plThread->rx_a % TH_RX_BUFFER_SIZE))
                             {
                                 mkEvent = 1;
                                 // DBG_Printf(DBG_ERROR, "[TH0] rx buffer full ...\n");
                             }
 
-                            M_ASSERT(plThread->rxpos <= sizeof(plThread->rxbuf));
-
                             if (mkEvent)
                             {
-                                plThread->rxcount = 0;
                                 plThread->events |= RX_EVENT_ID;
                             }
                         }
@@ -377,33 +400,6 @@ static void PL_Thread0()
                                 plThread->events |= ERR_EVENT_ID;
                             }
                         }
-
-//                        if (plThread->rxcount)
-//                        {
-//                            sl = 5ms; // poll remaining asap
-//                        }
-//                        else if (plThread->events & RX_EVENT_ID)
-//                        {
-//                            sl = 10ms; // give application time to process
-//                        }
-                    }
-                    else
-                    {
-                        if (plThread->rxcount)
-                        {
-                            plThread->rxcount = 0;
-                            plThread->events |= RX_EVENT_ID;
-                            DBG_Printf(DBG_ERROR, "[TH0] rx buffer full while bytes available\n");
-                        }
-                    }
-                }
-                else
-                {
-                    // #2 nothing further received emit rx
-                    if (plThread->rxpos && plThread->rxcount)
-                    {
-                        plThread->rxcount = 0;
-                        plThread->events |= RX_EVENT_ID;
                     }
                 }
             }
@@ -419,36 +415,15 @@ static void PL_Thread0()
                     // now wait until .running is set to false
                 }
             }
-            else
-            {
-                if (plThread->rxpos && (plThread->events & RX_EVENT_ID) == 0)
-                {
-                    DBG_Printf(DBG_PROT, "[TH0] rx %d bytes (idle)\n", plThread->rxpos);
-                    plThread->events |= RX_EVENT_ID;
-                }
-            }
 
-
-
-            if ((plThread->events & TH0_EVENT_ID) == 0)
+            if ((plThread->events & TH0_EVENT_ID) == 0) // not signalled to main thread yet
             {
                 if ((plThread->events & (RX_EVENT_ID | ERR_EVENT_ID)) != 0)
                 {
                     plThread->events |= TH0_EVENT_ID;
                     emit Com->th0HasEvents();
-                    std::this_thread::sleep_for(4ms);
                 }
             }
-
-
-//            if (plThread->cv.wait_for(fd_lock, sl) == std::cv_status::timeout)
-//            {
-//                timeout = 10;
-//            }
-//            else
-//            {
-//                timeout = 20; // data was written, wait for response
-//            }
         }
     }
 }
@@ -625,8 +600,8 @@ static int PL_Connect(const char *path, int baudrate)
     plSetupPort(platform.fd, baudrate);
 
     plThread = new PL_Thread;
-    plThread->rxpos = 0;
-    plThread->rxread = 0;
+    plThread->rx_a = 0;
+    plThread->rx_b = 0;
     plThread->running = false;
     plThread->events = 0;
     plThread->th = std::thread(PL_Thread0);
@@ -637,6 +612,7 @@ static int PL_Connect(const char *path, int baudrate)
 static void PL_Disconnect()
 {
     M_ASSERT(plThread);
+    M_ASSERT(plThread->th.joinable());
 
     {
 //        std::lock_guard<std::mutex> lock(plThread->mtx_fd);
@@ -662,24 +638,15 @@ static int PL_BytesToWrite()
 static int PL_Read(void *buf, int maxsize)
 {
     int nread = 0;
+    unsigned char* data = (unsigned char*)buf;
+
     if (plThread && maxsize > 0)
     {
-        std::lock_guard<std::mutex> lock(plThread->mtx_rx);
-        M_ASSERT(plThread->rxpos >= plThread->rxread);
-        if ((plThread->rxpos - plThread->rxread) > 0)
+        for (;plThread->rx_a != plThread->rx_b && nread < maxsize;)
         {
-            nread = (int)plThread->rxpos - (int)plThread->rxread;
-            if (nread > maxsize)
-                nread = maxsize;
-
-            memcpy(buf, &plThread->rxbuf[plThread->rxread], nread);
-            plThread->rxread += nread;
-            M_ASSERT(plThread->rxpos >= plThread->rxread);
-            if (plThread->rxpos == plThread->rxread)
-            {
-                plThread->rxpos = 0;
-                plThread->rxread = 0;
-            }
+            data[nread] = plThread->rxbuf[plThread->rx_a % TH_RX_BUFFER_SIZE];
+            nread++;
+            plThread->rx_a++;
         }
     }
     return nread;
@@ -701,8 +668,6 @@ static int PL_Write(const void *buf, int size)
     if (plThread && size > 0)
     {
         {
-//            std::lock_guard<std::mutex> lock(plThread->mtx_fd);
-
             do
             {
                 err = 0;
@@ -776,7 +741,6 @@ int SerialCom::open(const QString &port, int baudrate)
     if (d->open(baudrate) == 0)
     {
         M_ASSERT(d->pollTimerId == -1);
-        //d->pollTimerId = startTimer(10);
         d->setState(ComStateQueryBootloader);
         d->timer.start(500);
         return 0;
@@ -811,55 +775,37 @@ static void SER_ProcessEvents()
     if (!plThread)
         return;
 
-    unsigned events0;
-    unsigned events;
+    std::lock_guard<std::mutex> rx_lock(plThread->mtx_rx);
 
+    plThread->events &= ~TH0_EVENT_ID;
+
+    if (plThread->events == 0)
+        return;
+
+    if (plThread->events & ERR_EVENT_ID)
     {
-        //std::unique_lock<std::mutex> fd_lock(plThread->mtx_fd);
-        plThread->events &= ~TH0_EVENT_ID;
-        events = plThread->events;
-    }
-
-    events0 = events;
-
-    if (events == 0)
-    {
+        Com->close();
+        plThread->events = 0;
         return;
     }
 
-    if (events == ERR_EVENT_ID)
+    if (plThread->events & RX_EVENT_ID)
     {
-        Com->close();
-        events = 0;
-    }
+        PL_Poll();
 
-    if (events & RX_EVENT_ID)
-    {
-        PL_Poll(); // TODO lock mtx_rx??
+        // if (SER_Isc() == 0) // ???
+        // {
+        // }
 
-        if (SER_Isc() == 0)
-            events &= ~RX_EVENT_ID;
-
-    }
-
-#if 0 // --> process in thread
-    if (events & TX_EVENT_ID)
-    {
-        if (TXQ_IsEmpty())
+        if (plThread->rx_a == plThread->rx_b)
         {
-            events &= ~TX_EVENT_ID;
+            plThread->events &= ~RX_EVENT_ID;
         }
         else
         {
-            ComPriv->tx();
+            plThread->events |= TH0_EVENT_ID;
+            emit Com->th0HasEvents();
         }
-    }
-#endif
-
-    if (plThread && events != events0)
-    {
-        //std::unique_lock<std::mutex> fd_lock(plThread->mtx_fd);
-        plThread->events = events;
     }
 #endif // ! USE_QSERIAL_PORT
 }
@@ -1063,6 +1009,8 @@ void SerialCom::readyRead()
 
     int max = int(d->rxBuffer.size() - d->rxWritePos);
     int nread = PL_Read(&d->rxBuffer[d->rxWritePos], (unsigned)max);
+
+    M_ASSERT(nread <= max);
 
     DBG_Printf(DBG_PROT, "[COM] ready read max: %d bytes, nread: %d bytes\n", max, nread);
 
