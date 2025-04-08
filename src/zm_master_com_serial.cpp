@@ -422,6 +422,7 @@ static void PL_Thread0()
                 {
                     plThread->events |= TH0_EVENT_ID;
                     emit Com->th0HasEvents();
+                    std::this_thread::sleep_for(4ms);
                 }
             }
         }
