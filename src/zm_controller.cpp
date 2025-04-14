@@ -137,6 +137,8 @@ namespace {
     constexpr deCONZ::TimeSeconds MaxZombieDiscoveryInterval{60 * 30}; // 30 min
 }
 
+static bool ZCL_IsDefaultResponse(const deCONZ::ApsDataRequest &req);
+
 bool NodeInfo::operator <(const NodeInfo &other) const
 {
     if (data && other.data)
@@ -3384,9 +3386,17 @@ int zmController::apsdeDataRequest(const deCONZ::ApsDataRequest &req)
             {
                 // leave as is
             }
-            else if (node->data->nodeDescriptor().receiverOnWhenIdle() && node->data->recvErrors() > 0)
+            else if(node->data->recvErrors() > 0 && !(req.txOptions() & deCONZ::ApsTxAcknowledgedTransmission))
             {
-                if (!(req.txOptions() & deCONZ::ApsTxAcknowledgedTransmission))
+                if (node->data->nodeDescriptor().receiverOnWhenIdle())
+                {
+                    enableApsAck = true;
+                }
+            }
+
+            if (!enableApsAck && ZCL_IsDefaultResponse(req))
+            {
+                if (node->data->recvErrors() > 0)
                 {
                     enableApsAck = true;
                 }
