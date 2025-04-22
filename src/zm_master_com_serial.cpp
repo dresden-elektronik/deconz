@@ -778,8 +778,8 @@ static void SER_ProcessEvents()
 
     if (plThread->events & ERR_EVENT_ID)
     {
-        Com->close();
         plThread->events = 0;
+        Com->close();
         return;
     }
 
