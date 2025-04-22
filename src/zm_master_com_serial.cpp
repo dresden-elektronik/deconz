@@ -776,19 +776,19 @@ static void SER_ProcessEvents()
     if (!plThread)
         return;
 
-    std::lock_guard<std::mutex> rx_lock(plThread->mtx_rx);
-
-    plThread->events &= ~TH0_EVENT_ID;
-
-    if (plThread->events == 0)
-        return;
-
     if (plThread->events & ERR_EVENT_ID)
     {
         Com->close();
         plThread->events = 0;
         return;
     }
+
+    std::lock_guard<std::mutex> rx_lock(plThread->mtx_rx);
+
+    plThread->events &= ~TH0_EVENT_ID;
+
+    if (plThread->events == 0)
+        return;
 
     if (plThread->events & RX_EVENT_ID)
     {
