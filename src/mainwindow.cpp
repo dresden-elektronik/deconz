@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2024 dresden elektronik ingenieurtechnik gmbh.
+ * Copyright (c) 2013-2025 dresden elektronik ingenieurtechnik gmbh.
  * All rights reserved.
  *
  * The software in this package is published under the terms of the BSD
@@ -202,6 +202,8 @@ MainWindow::MainWindow(QWidget *parent) :
     m_devUpdateCanditate = false;
     m_devEnum = new deCONZ::DeviceEnumerator(this);
     m_autoConnIdx = 0;
+
+    m_vfsModel = new ActorVfsModel(this);
 
     _nodeModel = new deCONZ::NodeModel(this);
 
@@ -1666,8 +1668,7 @@ void MainWindow::showActorView()
 
     if (!dlg)
     {
-        ActorVfsModel *model = new ActorVfsModel(this);
-        dlg = new ActorVfsView(model, this);
+        dlg = new ActorVfsView(m_vfsModel, this);
     }
 
     dlg->show();

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2024 dresden elektronik ingenieurtechnik gmbh.
+ * Copyright (c) 2013-2025 dresden elektronik ingenieurtechnik gmbh.
  * All rights reserved.
  *
  * The software in this package is published under the terms of the BSD
@@ -29,6 +29,7 @@ namespace deCONZ {
     class DeviceEnumerator;
 }
 
+class ActorVfsModel;
 class DebugView;
 class zmBindDropbox;
 class zmController;
@@ -156,6 +157,7 @@ private:
     zmMaster *m_master;
     QString m_remoteIP;
     int m_remotePort;
+    ActorVfsModel *m_vfsModel;
     zmController *m_controller;
     Ui::MainWindow *ui;
     QDockWidget *m_dockNodeInfo;
