@@ -315,8 +315,6 @@ private:
     void fastPrope(uint64_t ext, uint16_t nwk, uint8_t macCapabilities);
     void wakeNode(NodeInfo *node);
     void deleteNode(NodeInfo *node, NodeRemoveMode finally);
-    bool sendNwkAddrRequest(NodeInfo *node);
-    bool sendIeeeAddrRequest(NodeInfo *node);
     bool sendMgtmLqiRequest(NodeInfo *info);
     bool sendMgtmRtgRequest(NodeInfo *node, uint8_t startIndex);
     bool sendNodeDescriptorRequest(NodeInfo *node);
@@ -356,7 +354,7 @@ private:
     bool m_showLqi = false;
     bool m_showNeighborLinks = true;
     QElapsedTimer m_fetchLqiTickMsCounter;
-    deCONZ::SteadyTimeRef m_lastNwkAddrRequest;
+    deCONZ::SteadyTimeRef m_lastDiscoveryRequest; // global NWK and IEEE requests
     deCONZ::SteadyTimeRef m_lastNodeAdded;
     deCONZ::SteadyTimeRef m_lastEndDeviceAnnounce;
     QElapsedTimer m_lastNodeDeleted;

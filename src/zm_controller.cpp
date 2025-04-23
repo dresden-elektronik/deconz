@@ -126,7 +126,7 @@ namespace {
     const int MaxApsBusyRequests = 6;
     const int TickMs = zmController::MainTickMs;
     const int MaxRecvErrors = 5;
-    const int MaxRecvErrorsZombie = 10;
+    const int MaxRecvErrorsZombie = 8;
     constexpr deCONZ::TimeSeconds MaxTimeOut{60};
     constexpr deCONZ::TimeSeconds MaxConfirmedTimeOut{10};
     const int MaxZdpTimeout = 3;
@@ -138,6 +138,8 @@ namespace {
 }
 
 static bool ZCL_IsDefaultResponse(const deCONZ::ApsDataRequest &req);
+bool ZDP_SendNwkAddrRequest(zmController *apsCtrl, const deCONZ::Address &dst);
+bool ZDP_SendIeeeAddrRequest(zmController *apsCtrl, const deCONZ::Address &dst);
 
 bool NodeInfo::operator <(const NodeInfo &other) const
 {
@@ -1749,7 +1751,7 @@ void zmController::nodeKeyPressed(uint64_t extAddr, int key)
         }
         else if (key == deCONZ::NodeKeyRequestNwkAddress)
         {
-            if (sendNwkAddrRequest(node))
+            if (ZDP_SendNwkAddrRequest(this, node->data->address()))
             {
             }
         }
@@ -6281,9 +6283,9 @@ void zmController::deleteNode(NodeInfo *node, NodeRemoveMode finally)
 }
 
 
-bool zmController::sendNwkAddrRequest(NodeInfo *node)
+bool ZDP_SendNwkAddrRequest(zmController *apsCtrl, const deCONZ::Address &dst)
 {
-    if (!node || !node->data)
+    if (!apsCtrl || !dst.hasExt())
     {
         return false;
     }
@@ -6293,7 +6295,7 @@ bool zmController::sendNwkAddrRequest(NodeInfo *node)
     req.setDstEndpoint(ZDO_ENDPOINT);
     req.setSrcEndpoint(ZDO_ENDPOINT);
     req.setDstAddressMode(deCONZ::ApsNwkAddress);
-    req.dstAddress().setExt(node->data->address().ext()); // reference
+    req.dstAddress().setExt(dst.ext()); // reference
     req.dstAddress().setNwk(deCONZ::BroadcastRxOnWhenIdle);
     req.setProfileId(ZDP_PROFILE_ID);
     req.setClusterId(ZDP_NWK_ADDR_CLID);
@@ -6301,8 +6303,8 @@ bool zmController::sendNwkAddrRequest(NodeInfo *node)
 
     QDataStream stream(&req.asdu(), QIODevice::WriteOnly);
     stream.setByteOrder(QDataStream::LittleEndian);
-    stream << genSequenceNumber(); // seq no.
-    stream << (quint64)node->data->address().ext(); // device address
+    stream << apsCtrl->genSequenceNumber(); // seq no.
+    stream << (quint64)dst.ext(); // device address
 
     //uint8_t requestType = 0x01; // extended request
     uint8_t requestType = 0x00; // single device request
@@ -6311,16 +6313,12 @@ bool zmController::sendNwkAddrRequest(NodeInfo *node)
     stream << requestType;
     stream << startIndex;
 
-    if (apsdeDataRequest(req) == deCONZ::Success)
+    if (apsCtrl->apsdeDataRequest(req) == deCONZ::Success)
     {
-//        DBG_Printf(DBG_ZDP, "send NWK_addr_req to %s, last seen %" PRId64 " s, last seen by neighbors %" PRId64 " s\n",
-//                   node->data->extAddressString().c_str(), (int64_t)(node->data->lastSeenElapsed() / 1000), (node->data->lastSeenByNeighbor() / 1000));
         return true;
     }
-    else
-    {
-        DBG_Printf(DBG_ZDP, "failed to send NWK_Addr_req to %s\n", node->data->extAddressString().c_str());
-    }
+
+    DBG_Printf(DBG_ZDP, "failed to send NWK_Addr_req to " FMT_MAC "\n", FMT_MAC_CAST(dst.ext()));
 
     return false;
 }
@@ -6358,42 +6356,6 @@ bool ZDP_SendIeeeAddrRequest(zmController *apsCtrl, const deCONZ::Address &dst)
     {
         return true;
     }
-    return false;
-}
-
-bool zmController::sendIeeeAddrRequest(NodeInfo *node)
-{
-    if (!node || !node->data)
-    {
-        return false;
-    }
-
-    // unicast to the node, if the node answers it will be marked as non-zombie
-    // in the APS-DATA.indication
-    ApsDataRequest req;
-    QDataStream stream(&req.asdu(), QIODevice::WriteOnly);
-    stream.setByteOrder(QDataStream::LittleEndian);
-
-    req.dstAddress().setNwk(node->data->address().nwk());
-    req.setDstAddressMode(deCONZ::ApsNwkAddress);
-
-    req.setDstEndpoint(ZDO_ENDPOINT);
-    req.setSrcEndpoint(ZDO_ENDPOINT);
-    req.setProfileId(ZDP_PROFILE_ID);
-//    req.setTxOptions(deCONZ::ApsTxAcknowledgedTransmission);
-    req.setRadius(0);
-    req.setClusterId(ZDP_IEEE_ADDR_CLID);
-    stream << genSequenceNumber();
-    stream << node->data->address().nwk();
-
-    stream << (uint8_t)0x00; // single request type
-    stream << (uint8_t)0x00; // ignore start index
-
-    if (apsdeDataRequest(req) == deCONZ::Success)
-    {
-        return true;
-    }
-
     return false;
 }
 
@@ -9092,10 +9054,20 @@ void zmController::deviceDiscoverTick()
 
         NodeInfo &node = m_nodes[m_lqiIter];
 
-        if (!node.data || node.data->isZombie() || node.data->isEndDevice() ||
+        if (!node.data || node.data->isEndDevice() ||
              node.data->isInWaitState() || !node.data->address().hasNwk())
         {
             m_lqiIter++;
+        }
+        else if (node.data->isZombie() || 2 < node.data->recvErrors())
+        {
+            m_lqiIter++;
+
+            AddressPair addressPair;
+            addressPair.bAddr = node.data->address();
+            addressPair.bMacCapabilities = node.data->nodeDescriptor().macCapabilities();
+
+            addDeviceDiscover(addressPair);
         }
         else if (isValid(node.data->lastSeen()) || node.data->lastSeenByNeighbor() < 9000 ||
                  (!node.data->sourceRoutes().empty() && node.data->sourceRoutes().front().errors() < 1))
@@ -9151,48 +9123,6 @@ void zmController::deviceDiscoverTick()
         {
             m_discoverIter = 0;
         }
-
-#if 0 // TODO(mpi): reactivate?!
-        NodeInfo *node = &m_nodes[m_discoverIter];
-        if (getParameter(deCONZ::ParamPermitJoin) > 0)
-        {
-            // wait
-        }
-        else if (node->data && !node->data->isZombie() && m_apsRequestQueue.size() < 2 && node->data->nodeDescriptor().receiverOnWhenIdle())
-        {
-            if (isValid(node->data->lastSeen()) && node->data->lastSeenElapsed() < (1000 * 60 * 8) &&
-                !node->data->simpleDescriptors().empty()) // already queried?
-            {
-            }
-            else if (m_steadyTimeRef - m_lastNwkAddrRequest < deCONZ::TimeSeconds{45})
-            {
-            }
-            else if (node->data->nodeDescriptor().manufacturerCode() == VENDOR_DDEL && node->data->address().nwk() == 0x0000)
-            { // coordinator ghost nodes
-            }
-#if 0
-            else if (node->data->lastDiscoveryTryMs(m_steadyTimeRef).val == 0 ||
-                     ZombieDiscoveryEmptyInterval < node->data->lastDiscoveryTryMs(m_steadyTimeRef))
-            {
-                if (m_nodes.size() > 80 && !node->data->sourceRoutes().empty())
-                {
-                    if (sendIeeeAddrRequest(node))
-                    {
-                        m_lastNwkAddrRequest = m_steadyTimeRef;
-                    }
-                }
-                else if (sendNwkAddrRequest(node))
-                {
-                    m_lastNwkAddrRequest = m_steadyTimeRef;
-                    m_discoverIter++;
-                    node->data->discoveryTimerReset(m_steadyTimeRef);
-                    node->data->retryIncr(deCONZ::ReqNwkAddr);
-                    return;
-                }
-            }
-#endif
-        }
-#endif // if 0
 
         m_discoverIter++;
     }
@@ -9370,18 +9300,26 @@ void zmController::deviceDiscoverTick()
             {
 
             }
-            else if (m_steadyTimeRef - m_lastNwkAddrRequest < deCONZ::TimeSeconds{15})
+            else if (m_steadyTimeRef - m_lastDiscoveryRequest < deCONZ::TimeSeconds{60})
             {
               // wait
                 m_deviceDiscoverQueue.push_back(addrPair);
             }
-            //else if (node->data->isZombie() && sendNwkAddrRequest(node))
-            else if (ZDP_SendIeeeAddrRequest(this, addrPair.bAddr))
+            else if (node->data->recvErrors() >= 2 && deCONZ::TimeSeconds{60 * 5} < node->data->lastDiscoveryTryMs(m_steadyTimeRef) && ZDP_SendNwkAddrRequest(this, addrPair.bAddr))
             {
-                m_lastNwkAddrRequest = m_steadyTimeRef;
-                node->data->retryIncr(deCONZ::ReqNwkAddr);
+                m_lastDiscoveryRequest = m_steadyTimeRef;
                 node->data->discoveryTimerReset(m_steadyTimeRef);
                 return;
+            }
+            else if (node->data->recvErrors() < 2 && ZDP_SendIeeeAddrRequest(this, addrPair.bAddr))
+            {
+                m_lastDiscoveryRequest = m_steadyTimeRef;
+                node->data->discoveryTimerReset(m_steadyTimeRef);
+                return;
+            }
+            else
+            {
+                m_deviceDiscoverQueue.push_back(addrPair);
             }
         }
     }
