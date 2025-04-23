@@ -952,6 +952,52 @@ QVariant ActorVfsModel::data(const QModelIndex &index, int role) const
     return QVariant();
 }
 
+QModelIndex ActorVfsModel:: indexWithName(unsigned atomIndex, const QModelIndex &parent) const
+{
+    if (priv->entries.empty())
+        return QModelIndex();
+
+    int e;
+
+    if (parent.isValid())
+    {
+        e = (int)parent.internalId();
+        U_ASSERT(0 < e);
+        U_ASSERT(e < (int)priv->entries.size());
+        e = priv->entries[e].child;
+    }
+    else
+    {
+        e = 0;
+        U_ASSERT(priv->entries[e].parent == ENTRY_PARENT_NONE);
+    }
+
+    if (e < 0)
+        return QModelIndex();
+
+    int row = 0;
+    int column = 0;
+    for (; e >= 0;)
+    {
+        U_ASSERT(e < (int)priv->entries.size());
+        const Entry &entry = priv->entries[e];
+
+        if (entry.name.index == atomIndex)
+            return createIndex(row, column, (quintptr)e);
+
+        if (entry.sibling < 0)
+        {
+            U_ASSERT(entry.sibling == ENTRY_SIBLING_NONE);
+            break;
+        }
+
+        row++;
+        e = entry.sibling;
+    }
+
+    return QModelIndex();
+}
+
 QModelIndex ActorVfsModel::index(int row, int column, const QModelIndex &parent) const
 {
     const auto &entries = priv->entries;
