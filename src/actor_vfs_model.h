@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2024 dresden elektronik ingenieurtechnik gmbh.
+ * Copyright (c) 2013-2025 dresden elektronik ingenieurtechnik gmbh.
  * All rights reserved.
  *
  * The software in this package is published under the terms of the BSD
@@ -21,6 +21,15 @@ class ActorVfsModel : public QAbstractItemModel
     Q_OBJECT
 
 public:
+    enum Column
+    {
+        ColumnName = 0,
+        ColumnType = 1,
+        ColumnValue = 2,
+
+        ColumnMax = 3
+    };
+
     explicit ActorVfsModel(QObject *parent = nullptr);
     ~ActorVfsModel();
 

@@ -880,26 +880,24 @@ QVariant ActorVfsModel::data(const QModelIndex &index, int role) const
         AT_Atom a;
         a.len = 0;
 
-        if (index.column() == 0)
+        if (index.column() == ColumnName)
         {
             a = AT_GetAtomByIndex(entry.name);
         }
-        else if (index.column() == 1)
+        else if (index.column() == ColumnType)
         {
             if (entry.parent == ENTRY_PARENT_NONE)
                 return QLatin1String("actor");
 
             a = AT_GetAtomByIndex(entry.type);
         }
-        else if (index.column() == 2)
+        else if (index.column() == ColumnValue)
         {
-            if (entry.type == ati_type_dir)
-            {
-                return QVariant();
-            }
-
             if (entry.parent > 0)
             {
+                if (entry.type == ati_type_dir)
+                    return QVariant();
+
                 unsigned display = (entry.mode & 0xF0000);
 
                 if (display == VFS_ENTRY_MODE_DISPLAY_HEX)
@@ -941,7 +939,7 @@ QVariant ActorVfsModel::data(const QModelIndex &index, int role) const
     }
     else if  (role == Qt::DecorationRole)
     {
-        if (index.column() == 0)
+        if (index.column() == ColumnName)
         {
             if (entry.parent == ENTRY_PARENT_NONE)
                 return priv->iconActor;
@@ -958,13 +956,18 @@ QModelIndex ActorVfsModel::index(int row, int column, const QModelIndex &parent)
 {
     const auto &entries = priv->entries;
 
+    if (entries.empty())
+        return QModelIndex();
+
     if (!parent.isValid())
     {
         int e = 0;
 
         for (int i = 0; i < row; i++)
         {
-            int sibling = entries.at((size_t)e).sibling;
+            U_ASSERT(e < entries.size());
+            int sibling = entries[e].sibling;
+            U_ASSERT(sibling < (int)entries.size());
             if (sibling >= 0)
             {
                 e = sibling;
@@ -1069,7 +1072,11 @@ int ActorVfsModel::rowCount(const QModelIndex &parent) const
     {
         i = 1;
         for (int e = 0; entries[e].sibling != ENTRY_SIBLING_NONE; i++)
+        {
+            U_ASSERT(0 < entries[e].sibling);
+            U_ASSERT(entries[e].sibling < entries.size());
             e = entries[e].sibling;
+        }
 
     }
 
@@ -1079,10 +1086,10 @@ int ActorVfsModel::rowCount(const QModelIndex &parent) const
 int ActorVfsModel::columnCount(const QModelIndex &parent) const
 {
     if (parent.isValid())
-        return 3;
+        return ColumnMax;
 
     if (!priv->entries.empty())
-        return 3;
+        return ColumnMax;
 
     return 0;
 }
@@ -1141,9 +1148,9 @@ QVariant ActorVfsModel::headerData(int section, Qt::Orientation orientation, int
 {
     if (orientation == Qt::Horizontal && role == Qt::DisplayRole)
     {
-        if      (section == 0) return QLatin1String("Name");
-        else if (section == 1) return QLatin1String("Type");
-        else if (section == 2) return QLatin1String("Value");
+        if      (section == ColumnName) return QLatin1String("Name");
+        else if (section == ColumnType) return QLatin1String("Type");
+        else if (section == ColumnValue) return QLatin1String("Value");
     }
 
     return QVariant();
