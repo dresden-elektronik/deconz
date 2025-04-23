@@ -171,6 +171,8 @@ public:
     ~zmController();
     int zombieCount() const { return m_zombieCount; }
     int nodeCount() const { return static_cast<int>(m_nodes.size()); }
+    NodeInfo nodeAt(size_t index);
+    NodeInfo nodeWithMac(uint64_t mac);
     int zclCommandRequest(const deCONZ::Address &address, deCONZ::ApsAddressMode addressMode, const deCONZ::SimpleDescriptor &simpleDescriptor, const deCONZ::ZclCluster &cluster, const deCONZ::ZclCommand &command);
     const deCONZ::SimpleDescriptor *getCompatibleEndpoint(const deCONZ::SimpleDescriptor &other);
     void setNetworkConfig(const zmNet &net, const uint8_t *items);
