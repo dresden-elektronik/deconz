@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2024 dresden elektronik ingenieurtechnik gmbh.
+ * Copyright (c) 2013-2025 dresden elektronik ingenieurtechnik gmbh.
  * All rights reserved.
  *
  * The software in this package is published under the terms of the BSD
@@ -10,10 +10,18 @@
 
 #include <QStandardItemModel>
 
+#include "deconz/atom_table.h"
+#include "deconz/dbg_trace.h"
+#include "deconz/u_sstream_ex.h"
+
+#include "actor_vfs_model.h"
 #include "zm_node_info.h"
 #include "ui_zm_node_info.h"
 #include "zm_node.h"
 #include "zm_node_model.h"
+
+static AT_AtomIndex ati_core_aps;
+static AT_AtomIndex ati_devices;
 
 namespace {
     const char *InfoKeys[] = {
@@ -107,6 +115,9 @@ zmNodeInfo::zmNodeInfo(QWidget *parent) :
 {
     ui->setupUi(this);
 
+    AT_AddAtom("core_aps", qstrlen("core_aps"), &ati_core_aps);
+    AT_AddAtom("devices", qstrlen("devices"), &ati_devices);
+
     // create new model
     QStandardItemModel *model = new QStandardItemModel(this);
 
@@ -155,6 +166,67 @@ zmNodeInfo::zmNodeInfo(QWidget *parent) :
 zmNodeInfo::~zmNodeInfo()
 {
     delete ui;
+}
+
+QModelIndex VFS_GetActorIndex(ActorVfsModel *vfs, unsigned actorId)
+{
+    for (int row = 0; row < vfs->rowCount(); row++)
+    {
+        QModelIndex ia = vfs->index(row, ActorVfsModel::ColumnValue);
+        if (ia.isValid() && ia.data().toUInt() == actorId)
+        {
+            return ia;
+        }
+    }
+
+    return QModelIndex();
+}
+
+void zmNodeInfo::setNode(ActorVfsModel *vfs, uint64_t mac)
+{
+    Q_ASSERT(vfs);
+
+    if (mac == 0)
+    {
+        return;
+    }
+
+    AT_AtomIndex ati_mac;
+
+    {
+        char buf[28];
+        U_SStream ss;
+        U_sstream_init(&ss, buf, sizeof(buf));
+        U_sstream_put_mac_address(&ss, mac);
+
+        if (AT_GetAtomIndex(ss.str, ss.pos, &ati_mac) == 0)
+        {
+            return;
+        }
+    }
+
+    QModelIndex index = vfs->indexWithName(ati_core_aps.index, QModelIndex());
+
+    if (!index.isValid())
+    {
+        return;
+    }
+
+    index = vfs->indexWithName(ati_devices.index, index);
+    if (!index.isValid())
+    {
+        return;
+    }
+
+    index = vfs->indexWithName(ati_mac.index, index);
+
+    if (!index.isValid())
+    {
+        return;
+    }
+
+    QString name = index.data().toString();
+    DBG_Printf(DBG_INFO, "AM selected %s\n", qPrintable(name));
 }
 
 

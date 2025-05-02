@@ -483,105 +483,7 @@ static int CoreNet_ReadEntryRequest(struct am_message *msg)
     return AM_CB_STATUS_OK;
 }
 
-#define AM_MAX_URL_ELEMENTS 16
 
-struct am_url_parse
-{
-    am_string url;
-    unsigned element_count;
-    uint8_t elements[AM_MAX_URL_ELEMENTS];
-};
-
-struct am_ls_dir_req
-{
-    unsigned short tag;
-    unsigned req_index;
-    unsigned max_count;
-    am_url_parse url_parse;
-};
-
-struct am_read_entry_req
-{
-    unsigned short tag;
-    am_url_parse url_parse;
-};
-
-am_string AM_UrlElementAt(am_url_parse *up, unsigned idx)
-{
-    am_string result;
-    result.size = 0;
-    result.data = nullptr;
-
-    if (up->element_count <= idx)
-        return result;
-
-    unsigned i;
-    unsigned pos = 0;
-
-    for (i = 0; i < idx; i++)
-    {
-        pos += up->elements[i] + 1; // +1 for '/'
-    }
-
-    result.data = &up->url.data[pos];
-    result.size = up->elements[i];
-
-    return result;
-}
-
-int AM_ParseUrl(am_url_parse *up)
-{
-    up->element_count = 0;
-    up->elements[0] = 0;
-
-    for (unsigned i = 0; i < up->url.size; i++)
-    {
-        if (up->url.data[i] == '/')
-        {
-            U_ASSERT(AM_MAX_URL_ELEMENTS >= up->element_count + 1);
-            if (AM_MAX_URL_ELEMENTS < up->element_count + 1)
-                return 0; // TODO too many elements
-
-            up->element_count++;
-            up->elements[up->element_count] = 0;
-        }
-        else
-        {
-            up->elements[up->element_count] += 1;
-        }
-    }
-
-    if (up->url.size)
-        up->element_count++;
-
-    return 1;
-}
-
-int AM_ParseListDirectoryRequest(struct am_message *msg, am_ls_dir_req *req)
-{
-    req->tag = am->msg_get_u16(msg);
-    req->url_parse.url = am->msg_get_string(msg);
-    req->req_index = am->msg_get_u32(msg);
-    req->max_count = am->msg_get_u32(msg);
-
-    if (msg->status == AM_MSG_STATUS_OK)
-        if (AM_ParseUrl(&req->url_parse))
-            return msg->status;
-
-    return AM_MSG_STATUS_ERROR;
-}
-
-int AM_ParseReadEntryRequest(struct am_message *msg, am_read_entry_req *req)
-{
-    req->tag = am->msg_get_u16(msg);
-    req->url_parse.url = am->msg_get_string(msg);
-
-    if (msg->status == AM_MSG_STATUS_OK)
-        if (AM_ParseUrl(&req->url_parse))
-            return msg->status;
-
-    return AM_MSG_STATUS_ERROR;
-}
 
 static void CoreAps_ListDevicesNodeDirectoryRequest(struct am_message *m, am_ls_dir_req *req)
 {
@@ -700,9 +602,9 @@ static void CoreAps_ListDevicesDirectoryRequest(struct am_message *m, am_ls_dir_
 static int CoreAps_ListDirectoryRequest(struct am_message *msg)
 {
     struct am_message *m;
-    struct am_ls_dir_req req;
+    am_ls_dir_req req;
 
-    if (AM_ParseListDirectoryRequest(msg, &req) != AM_MSG_STATUS_OK)
+    if (AM_ParseListDirectoryRequest(am, msg, &req) != AM_MSG_STATUS_OK)
         return AM_CB_STATUS_INVALID;
 
     /* end of parsing */
@@ -784,7 +686,7 @@ static int CoreAps_ListDirectoryRequest(struct am_message *msg)
     return AM_CB_STATUS_OK;
 }
 
-static void Core_ReadEntryDevicesReq(struct am_message *m, struct am_read_entry_req *req)
+static void Core_ReadEntryDevicesReq(struct am_message *m, am_read_entry_req *req)
 {
 
     uint64_t mac;
@@ -804,7 +706,6 @@ static void Core_ReadEntryDevicesReq(struct am_message *m, struct am_read_entry_
         ni = _apsCtrl->nodeWithMac(mac);
         if (!ni.data)
             return;
-
     }
 
     if (req->url_parse.element_count == 3)
@@ -834,9 +735,9 @@ static void Core_ReadEntryDevicesReq(struct am_message *m, struct am_read_entry_
 static int CoreAps_ReadEntryRequest(struct am_message *msg)
 {
     struct am_message *m;
-    struct am_read_entry_req req;
+    am_read_entry_req req;
 
-    if (AM_ParseReadEntryRequest(msg, &req) != AM_MSG_STATUS_OK)
+    if (AM_ParseReadEntryRequest(am, msg, &req) != AM_MSG_STATUS_OK)
         return AM_CB_STATUS_INVALID;
 
     uint32_t mode = VFS_ENTRY_MODE_WRITEABLE;

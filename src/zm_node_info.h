@@ -22,6 +22,7 @@ class zmNodeInfo;
 class zmgNode;
 class QStandardItem;
 class QModelIndex;
+class ActorVfsModel;
 
 namespace deCONZ {
     class zmNode;
@@ -35,6 +36,7 @@ class zmNodeInfo : public QWidget
 public:
     explicit zmNodeInfo(QWidget *parent = nullptr);
     ~zmNodeInfo();
+    void setNode(ActorVfsModel *vfs, uint64_t mac);
     void setNode(deCONZ::zmNode *data);
     void dataChanged(deCONZ::zmNode *data);
 
