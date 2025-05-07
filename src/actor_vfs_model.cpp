@@ -33,10 +33,15 @@ static struct am_api_functions *am = nullptr;
 static struct am_actor am_actor_vfs_model;
 
 static AT_AtomIndex ati_type_dir;
+static AT_AtomIndex ati_type_bool;
 static AT_AtomIndex ati_type_u8;
 static AT_AtomIndex ati_type_u16;
 static AT_AtomIndex ati_type_u32;
 static AT_AtomIndex ati_type_u64;
+static AT_AtomIndex ati_type_i8;
+static AT_AtomIndex ati_type_i16;
+static AT_AtomIndex ati_type_i32;
+static AT_AtomIndex ati_type_i64;
 static AT_AtomIndex ati_type_blob;
 static AT_AtomIndex ati_type_str;
 static AT_AtomIndex ati_dot_actor;
@@ -560,6 +565,7 @@ int ActorVfsModel::readEntryResponse(am_message *msg)
         type = am->msg_get_string(msg);
         mode = am->msg_get_u32(msg);
         mtime = am->msg_get_u64(msg);
+        (void)mtime;
 
         AT_AtomIndex ati_type = ati_unknown;
         if (type.size)
@@ -573,10 +579,15 @@ int ActorVfsModel::readEntryResponse(am_message *msg)
             entry.mode = mode;
             entry.type = ati_type;
 
-            if      (type == "u8")  { entry.value = am->msg_get_u8(msg); }
-            else if (type == "u16") { entry.value = am->msg_get_u16(msg); }
-            else if (type == "u32") { entry.value = am->msg_get_u32(msg); }
-            else if (type == "u64") { entry.value = am->msg_get_u64(msg); }
+            if      (type == "bool") { entry.value = am->msg_get_u8(msg); }
+            else if (type == "u8")   { entry.value = am->msg_get_u8(msg); }
+            else if (type == "u16")  { entry.value = am->msg_get_u16(msg); }
+            else if (type == "u32")  { entry.value = am->msg_get_u32(msg); }
+            else if (type == "u64")  { entry.value = am->msg_get_u64(msg); }
+            else if (type == "i8")   { entry.value = am->msg_get_s8(msg); }
+            else if (type == "i16")  { entry.value = am->msg_get_s16(msg); }
+            else if (type == "i32")  { entry.value = am->msg_get_s32(msg); }
+            else if (type == "i64")  { entry.value = am->msg_get_s64(msg); }
             else if (type == "str")
             {
                 am_string str = am->msg_get_string(msg);
@@ -824,6 +835,8 @@ ActorVfsModel::ActorVfsModel(QObject *parent) :
     AT_AddAtom(str, U_strlen(str), &ati_name);
     str = "dir";
     AT_AddAtom(str, U_strlen(str), &ati_type_dir);
+    str = "bool";
+    AT_AddAtom(str, U_strlen(str), &ati_type_bool);
     str = "u8";
     AT_AddAtom(str, U_strlen(str), &ati_type_u8);
     str = "u16";
@@ -832,6 +845,14 @@ ActorVfsModel::ActorVfsModel(QObject *parent) :
     AT_AddAtom(str, U_strlen(str), &ati_type_u32);
     str = "u64";
     AT_AddAtom(str, U_strlen(str), &ati_type_u64);
+    str = "i8";
+    AT_AddAtom(str, U_strlen(str), &ati_type_i8);
+    str = "i16";
+    AT_AddAtom(str, U_strlen(str), &ati_type_i16);
+    str = "i32";
+    AT_AddAtom(str, U_strlen(str), &ati_type_i32);
+    str = "i64";
+    AT_AddAtom(str, U_strlen(str), &ati_type_i64);
     str = "str";
     AT_AddAtom(str, U_strlen(str), &ati_type_str);
     str = "blob";
@@ -845,6 +866,7 @@ ActorVfsModel::ActorVfsModel(QObject *parent) :
 
     addActorId(AM_ACTOR_ID_CORE_NET);
     addActorId(AM_ACTOR_ID_CORE_APS);
+    addActorId(4001); //  plugin test
     //addActorId(AM_ACTOR_ID_OTA);
 
     connect(&priv->fetchTimer, &QTimer::timeout, this, &ActorVfsModel::fetchTimerFired);
@@ -917,13 +939,21 @@ QVariant ActorVfsModel::data(const QModelIndex &index, int role) const
                     if (entry.value && entry.value <= sizeof(entry.data))
                         return QString::fromUtf8((const char*)entry.data, entry.value);
                 }
+                else if (entry.type == ati_type_bool)
+                {
+                    return entry.value != 0;
+                }
                 else if (entry.type == ati_type_blob)
                 {
                     if (entry.value && entry.value <= sizeof(entry.data))
                         return QLatin1String("0x") + QByteArray::fromRawData((const char*)entry.data, entry.value).toHex();
                 }
+                else if (entry.type == ati_type_u64)
+                {
+                    return (qulonglong)entry.value;
+                }
 
-                return (qulonglong)entry.value;
+                return (qlonglong)entry.value;
             }
             else
             {
