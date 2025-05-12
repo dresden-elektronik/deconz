@@ -20,6 +20,7 @@ ActorVfsView::ActorVfsView(ActorVfsModel *model, QWidget *parent) :
 
     ui->treeView->setModel(model);
     ui->treeView->header()->resizeSection(0, 340);
+    ui->treeView->setAlternatingRowColors(true);
 }
 
 ActorVfsView::~ActorVfsView()
