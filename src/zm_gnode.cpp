@@ -131,7 +131,6 @@ zmgNode::zmgNode(deCONZ::zmNode *data, QGraphicsItem *parent) :
     m_data(data),
     m_epDropDownVisible(false),
     m_configVisible(false),
-    m_nodeState(ComplexState),
     m_needSaveToDatabase(false)
 {
     m_height = 32;
@@ -652,35 +651,32 @@ void zmgNode::updateParameters()
         m_isZombie = m_data->isZombie();
     }
 
-    if (m_nodeState == ComplexState)
+    if (!m_name.isEmpty())
     {
-        if (!m_name.isEmpty())
+        QFont fn;
+        fn.setPointSize(NamePointSize);
+        fn.setWeight(QFont::Bold);
+        QFontMetrics fm(fn);
+
+        QString placeHolder = m_name + "DDF_M";
+
+        QRect bb = fm.boundingRect(placeHolder);
+        int w = bb.width();
+        w += NamePad + ToggleSize;
+        int h = bb.height() * 2.4;
+
+        if (w < 220)
+            w = 220;
+
+        if (h < 42)
+            h = 42;
+
+        if (m_width != w || m_height != h)
         {
-            QFont fn;
-            fn.setPointSize(NamePointSize);
-            fn.setWeight(QFont::Bold);
-            QFontMetrics fm(fn);
-
-            QString placeHolder = m_name + "DDF_M";
-
-            QRect bb = fm.boundingRect(placeHolder);
-            int w = bb.width();
-            w += NamePad + ToggleSize;
-            int h = bb.height() * 2.4;
-
-            if (w < 220)
-                w = 220;
-
-            if (h < 42)
-                h = 42;
-
-            if (m_width != w || m_height != h)
-            {
-                prepareGeometryChange();
-                m_width = w;
-                m_height = h;
-                m_epBox->setPos(0, m_height + 2);
-            }
+            prepareGeometryChange();
+            m_width = w;
+            m_height = h;
+            m_epBox->setPos(0, m_height + 2);
         }
     }
 

@@ -128,7 +128,6 @@ protected:
     const IndicationDef *m_indDef = nullptr;
     int m_indCount = 0;
     QRectF m_indRect;
-    NodeState m_nodeState;
     QString m_name;
     QString m_extAddress;
     quint64 m_extAddressCache = 0;
