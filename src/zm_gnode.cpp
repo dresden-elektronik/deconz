@@ -562,7 +562,12 @@ void zmgNode::mousePressEvent(QGraphicsSceneMouseEvent *event)
 
     if (event->button() == Qt::RightButton)
     {
-        emit contextMenuRequest();
+        if (!isSelected())
+        {
+            setSelected(true); // does also emit selected message in itemChange()
+        }
+
+        SendNotifyMessage1(M_ID_GUI_NODE_CONTEXT_MENU, m_extAddressCache);
     }
 
     m_moveWatcher = 0;

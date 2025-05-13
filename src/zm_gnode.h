@@ -102,7 +102,6 @@ signals:
 
     void socketConnectRequest(NodeSocket *src, NodeSocket *dst);
     void linkDisconnectRequest(NodeLink *link);
-    void contextMenuRequest();
 
 protected:
     QVariant itemChange(GraphicsItemChange change, const QVariant &value) override;

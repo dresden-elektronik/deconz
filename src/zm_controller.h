@@ -230,6 +230,7 @@ public:
     const deCONZ::ApsDataRequest *getApsRequest(uint id) const;
     void onApsdeDataConfirm(const deCONZ::ApsDataConfirm &confirm);
 
+    void onNodeContextMenuRequest(uint64_t mac);
     uint8_t nextRequestId();
 
 private slots:
@@ -242,7 +243,6 @@ private slots:
     void onMacPoll(const deCONZ::Address &address, uint32_t lifeTime);
     void onBeacon(const deCONZ::Beacon &beacon);
     void verifyChildNode(NodeInfo *node);
-    void onNodeContextMenuRequest();
     void onSourceRouteChanged(const deCONZ::SourceRoute &sourceRoute);
     void onSourceRouteDeleted(const QString &uuid);
     void initSourceRouting(const QSettings &config);

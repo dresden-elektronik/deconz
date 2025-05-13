@@ -854,7 +854,12 @@ static int CoreNode_GuiNodeMessageCallback(struct am_message *msg)
 
     if (msg->id == M_ID_GUI_NODE_SELECTED || msg->id == M_ID_GUI_NODE_DESELECTED)
     {
+        // TODO emit event
         return AM_CB_STATUS_OK;
+    }
+    else if (msg->id == M_ID_GUI_NODE_CONTEXT_MENU)
+    {
+        deCONZ::controller()->onNodeContextMenuRequest(extaddr);
     }
     else if (msg->id == M_ID_GUI_NODE_MOVED)
     {
@@ -5967,8 +5972,6 @@ NodeInfo zmController::createNode(const Address &addr, deCONZ::MacCapabilities m
     info.data = new deCONZ::zmNode(macCapabilities);
     info.g = new zmgNode(info.data, nullptr);
 
-    connect(info.g, &zmgNode::contextMenuRequest, this, &zmController::onNodeContextMenuRequest);
-
     info.id = m_nodes.size() + 1;
 
     QPointF p;
@@ -7530,21 +7533,18 @@ void zmController::verifyChildNode(NodeInfo *node)
     node->data->touch(m_steadyTimeRef);
 }
 
-void zmController::onNodeContextMenuRequest()
+void zmController::onNodeContextMenuRequest(uint64_t mac)
 {
-    auto *node = dynamic_cast<zmgNode*>(sender());
-    Q_ASSERT(node);
-    Q_ASSERT(node->data());
-
-    if (!node->isSelected())
+    deCONZ::Address addr;
+    addr.setExt(mac);
+    NodeInfo *node = getNode(addr, deCONZ::ExtAddress);
+    U_ASSERT(node);
+    U_ASSERT(node->data);
+    if (node && node->data)
     {
-        node->setSelected(true);
-        NodeEvent event(NodeEvent::NodeSelected, node->data());
+        NodeEvent event(NodeEvent::NodeContextMenu, node->data);
         emit nodeEvent(event);
     }
-
-    NodeEvent event(NodeEvent::NodeContextMenu, node->data());
-    emit nodeEvent(event);
 }
 
 void zmController::onSourceRouteChanged(const SourceRoute &sourceRoute)
