@@ -45,12 +45,6 @@ public:
         DataSocket = 1
     };
 
-    enum NodeState
-    {
-//        CompactState,
-        ComplexState
-    };
-
     explicit zmgNode(deCONZ::zmNode *data, QGraphicsItem *parent = 0);
     virtual ~zmgNode();
     QRectF boundingRect() const override;
