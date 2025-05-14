@@ -533,10 +533,7 @@ MainWindow::MainWindow(QWidget *parent) :
 
     deCONZ::utilSetNotifyHandler(deCONZ::notifyHandler);
 
-    // forward
-    connect(this, SIGNAL(nodeEvent(deCONZ::NodeEvent)),
-            deCONZ::controller(), SIGNAL(nodeEvent(deCONZ::NodeEvent)));
-
+    // TODO(mpi): Remove when events come from AM_ACTOR_ID_GUI_NODE
     connect(deCONZ::controller(), &zmController::nodeEvent, this, &MainWindow::onNodeEvent);
 
     setState(StateIdle, __LINE__);
@@ -782,6 +779,9 @@ void MainWindow::onSelectionChanged()
 
 void MainWindow::onNodeEvent(const deCONZ::NodeEvent &event)
 {
+    // TODO(mpi): Currently these events come from the controller. However the mainwindow
+    // shall subscribe to AM_ACTOR_ID_GUI_NODE to receive these events within the GUI.
+
     if (event.node() && event.event() == deCONZ::NodeEvent::NodeContextMenu)
     {
         QMenu menu;

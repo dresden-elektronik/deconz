@@ -99,9 +99,6 @@ private Q_SLOTS:
     void openWebApp();
     void openPhosconApp();
 
-Q_SIGNALS:
-    void nodeEvent(const deCONZ::NodeEvent&);
-
 protected:
     void timerEvent(QTimerEvent *event);
     void createMainToolbar();
