@@ -231,6 +231,8 @@ public:
     void onApsdeDataConfirm(const deCONZ::ApsDataConfirm &confirm);
 
     void onNodeContextMenuRequest(uint64_t mac);
+    void onNodeSelected(uint64_t mac);
+    void onNodeDeselected(uint64_t mac);
     uint8_t nextRequestId();
 
 private slots:

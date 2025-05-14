@@ -772,15 +772,11 @@ void MainWindow::onSelectionChanged()
     if (nodes.isEmpty() || (nodes.size() > 1)) // only display one
     {
         m_nodeInfo->setNode(nullptr);
-        deCONZ::NodeEvent event(deCONZ::NodeEvent::NodeDeselected, nullptr);
-        emit nodeEvent(event);
     }
     else
     {
         m_nodeInfo->setNode(m_vfsModel, nodes.first()->data()->address().ext());
         m_nodeInfo->setNode(nodes.first()->data());
-        deCONZ::NodeEvent event(deCONZ::NodeEvent::NodeSelected, nodes.first()->data());
-        emit nodeEvent(event);
     }
 }
 

@@ -852,14 +852,23 @@ static int CoreNode_GuiNodeMessageCallback(struct am_message *msg)
     if (msg->status != AM_MSG_STATUS_OK)
         return AM_CB_STATUS_UNSUPPORTED;
 
-    if (msg->id == M_ID_GUI_NODE_SELECTED || msg->id == M_ID_GUI_NODE_DESELECTED)
+    if (!deCONZ::controller())
+        return AM_CB_STATUS_UNSUPPORTED;
+
+    if (msg->id == M_ID_GUI_NODE_SELECTED)
     {
-        // TODO emit event
+        deCONZ::controller()->onNodeSelected(extaddr);
+        return AM_CB_STATUS_OK;
+    }
+    else if (msg->id == M_ID_GUI_NODE_DESELECTED)
+    {
+        deCONZ::controller()->onNodeDeselected(extaddr);
         return AM_CB_STATUS_OK;
     }
     else if (msg->id == M_ID_GUI_NODE_CONTEXT_MENU)
     {
         deCONZ::controller()->onNodeContextMenuRequest(extaddr);
+        return AM_CB_STATUS_OK;
     }
     else if (msg->id == M_ID_GUI_NODE_MOVED)
     {
@@ -7531,6 +7540,34 @@ void zmController::verifyChildNode(NodeInfo *node)
     }
 
     node->data->touch(m_steadyTimeRef);
+}
+
+void zmController::onNodeSelected(uint64_t mac)
+{
+    deCONZ::Address addr;
+    addr.setExt(mac);
+    NodeInfo *node = getNode(addr, deCONZ::ExtAddress);
+    U_ASSERT(node);
+    U_ASSERT(node->data);
+    if (node && node->data)
+    {
+        deCONZ::NodeEvent event(deCONZ::NodeEvent::NodeSelected, node->data);
+        emit nodeEvent(event);
+    }
+}
+
+void zmController::onNodeDeselected(uint64_t mac)
+{
+    deCONZ::Address addr;
+    addr.setExt(mac);
+    NodeInfo *node = getNode(addr, deCONZ::ExtAddress);
+    U_ASSERT(node);
+    U_ASSERT(node->data);
+    if (node && node->data)
+    {
+        deCONZ::NodeEvent event(deCONZ::NodeEvent::NodeDeselected, node->data);
+        emit nodeEvent(event);
+    }
 }
 
 void zmController::onNodeContextMenuRequest(uint64_t mac)
