@@ -7561,8 +7561,7 @@ void zmController::onNodeDeselected(uint64_t mac)
     deCONZ::Address addr;
     addr.setExt(mac);
     NodeInfo *node = getNode(addr, deCONZ::ExtAddress);
-    U_ASSERT(node);
-    U_ASSERT(node->data);
+
     if (node && node->data)
     {
         deCONZ::NodeEvent event(deCONZ::NodeEvent::NodeDeselected, node->data);
