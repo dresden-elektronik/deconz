@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2024 dresden elektronik ingenieurtechnik gmbh.
+ * Copyright (c) 2013-2025 dresden elektronik ingenieurtechnik gmbh.
  * All rights reserved.
  *
  * The software in this package is published under the terms of the BSD
@@ -61,7 +61,6 @@
 typedef struct stProtocol_s
 {
   unsigned char   u8Escaped;
-  unsigned short  u16Crc;
   unsigned char   u8Options;
   tGetCFN         pGetC;
   tIsCFN          pIsC;
@@ -313,6 +312,7 @@ void protocol_receive(unsigned char u8Instance)
   *****************************************************************************/
 static void protocol_receive_flagged(tProtocol* pDev)
 {
+   unsigned i;
    unsigned char c;
 
    do
@@ -325,34 +325,35 @@ static void protocol_receive_flagged(tProtocol* pDev)
          if (pDev->u8Escaped)
          {
             pDev->u16BufferPos = 0;
-            pDev->u16Crc = 0;
+            pDev->u8Escaped &= ~ASC_FLAG;
          }
          else
          {
             if (pDev->u16BufferPos >= 2)
             {
-               unsigned char bCRCok = 0;
-               // Checksum bytes are added to the checksum pDev->u16Crc - substract them here
-               pDev->u16Crc -= pDev->pBuffer[pDev->u16BufferPos-1];
-               pDev->u16Crc -= pDev->pBuffer[pDev->u16BufferPos-2];
-               if ((((~(pDev->u16Crc)+1 ) & 0xFF) == pDev->pBuffer[pDev->u16BufferPos - 2]) &&
-                  ((((~(pDev->u16Crc)+1 ) >> 8) & 0xFF) == pDev->pBuffer[pDev->u16BufferPos - 1]))
-               {
-                  bCRCok = 1;
-               }
+                unsigned short crc;
+                unsigned short crcFrame;
 
-               if (bCRCok)
-               {
-                  if (pDev->pPacket)
-                  {
-                     pDev->pPacket(&pDev->pBuffer[0], (unsigned short)(pDev->u16BufferPos - 2));
-                  }
-               }
+                crc = 0;
+                for (i = 0; i < pDev->u16BufferPos - 2; i++)
+                    crc += pDev->pBuffer[i];
+
+                crc = (~crc + 1);
+                crcFrame = pDev->pBuffer[pDev->u16BufferPos - 1];
+                crcFrame <<= 8;
+                crcFrame |= pDev->pBuffer[pDev->u16BufferPos - 2];
+
+                if (crc == crcFrame)
+                {
+                    if (pDev->pPacket)
+                    {
+                        pDev->pPacket(&pDev->pBuffer[0], (unsigned short)(pDev->u16BufferPos - 2));
+                    }
+                }
             }
+
             pDev->u16BufferPos = 0;
-            pDev->u16Crc = 0;
          }
-         pDev->u8Escaped &= ~ASC_FLAG;
          return;
       case FR_ESC:
          pDev->u8Escaped |= ASC_FLAG;
@@ -368,16 +369,15 @@ static void protocol_receive_flagged(tProtocol* pDev)
          {
          case T_FR_ESC: c = FR_ESC; break;
          case T_FR_END: c = FR_END; break;
-         default: return;
+         default: // TODO(mpi) this is an error
+             return;
          }
       }
 
       // we reach here with every byte for the buffer
-      // BUG: checksum bytes are added but should not be
       if (pDev->pBuffer && (pDev->u16BufferPos < pDev->u16BufferLen))
       {
          pDev->pBuffer[pDev->u16BufferPos++] = c;
-         pDev->u16Crc += c;
       }
    }
    while(pDev->pIsC());
