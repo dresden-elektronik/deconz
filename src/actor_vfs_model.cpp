@@ -954,7 +954,7 @@ ActorVfsModel::ActorVfsModel(QObject *parent) :
 
     addActorId(AM_ACTOR_ID_CORE_NET);
     addActorId(AM_ACTOR_ID_CORE_APS);
-    addActorId(4001); //  plugin test
+    //addActorId(4001); //  plugin test
     am->subscribe(4001, AM_ACTOR_ID_UI_VFS);
     //addActorId(AM_ACTOR_ID_OTA);
 
