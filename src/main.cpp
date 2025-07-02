@@ -255,6 +255,11 @@ int main(int argc, char *argv[])
             DBG_Enable(DBG_VFS);
         }
 
+        if (deCONZ::appArgumentNumeric("--dbg-fw", 0) > 0)
+        {
+            DBG_Enable(DBG_FIRMWARE);
+        }
+
         QCoreApplication::setOrganizationName("dresden-elektronik");
         QCoreApplication::setOrganizationDomain("dresden-elektronik.de");
         QCoreApplication::setApplicationName("deCONZ");

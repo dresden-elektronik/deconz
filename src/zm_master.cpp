@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2024 dresden elektronik ingenieurtechnik gmbh.
+ * Copyright (c) 2013-2025 dresden elektronik ingenieurtechnik gmbh.
  * All rights reserved.
  *
  * The software in this package is published under the terms of the BSD
@@ -47,6 +47,9 @@
 #define FW_PLATFORM_AVR           0x00000500UL
 #define FW_PLATFORM_R21           0x00000700UL
 
+#define FW_DEBUG_LEVEL_UNSUPPORTED 0xFFFFFFFF
+#define FW_DEBUG_LEVEL_DISABLED    0xEFFFFFFF
+
 enum MasterConfig
 {
     MAX_QUEUE_ITEMS = 32,
@@ -67,6 +70,7 @@ static const int StatusQueryDelay = 500;
 static const int SendDelay = 20;
 static const int MaxCommandFails = 10;
 static int needStatus = 1;
+static uint32_t fwDebugLevel = FW_DEBUG_LEVEL_DISABLED;
 static int64_t tSend;
 static int64_t tStatus;
 #ifdef Q_OS_LINUX
@@ -1044,6 +1048,36 @@ void zmMaster::timerEvent(QTimerEvent *event)
         }
 
         handleTimeouts();
+
+        // TODO(mpi): find a better place to handle this
+        if (DBG_IsEnabled(DBG_FIRMWARE))
+        {
+            if (fwDebugLevel == FW_DEBUG_LEVEL_DISABLED)
+            {
+                uint32_t level = 0;
+                if (DBG_IsEnabled(DBG_INFO)) level |= DBG_INFO;
+                if (DBG_IsEnabled(DBG_INFO_L2)) level |= DBG_INFO_L2;
+                if (DBG_IsEnabled(DBG_APS)) level |= DBG_APS;
+                if (DBG_IsEnabled(DBG_APS_L2)) level |= DBG_APS_L2;
+                if (DBG_IsEnabled(DBG_ERROR)) level |= DBG_ERROR;
+                if (DBG_IsEnabled(DBG_ERROR_L2)) level |= DBG_ERROR_L2;
+
+                if (level != 0)
+                {
+                    fwDebugLevel = level;
+                    writeParameter(ZM_DID_STK_DEBUG_LOG_LEVEL, (const uint8_t*)&fwDebugLevel, 4);
+                }
+            }
+        }
+        else
+        {
+            if (fwDebugLevel != FW_DEBUG_LEVEL_DISABLED && fwDebugLevel != FW_DEBUG_LEVEL_UNSUPPORTED)
+            {
+                fwDebugLevel = 0;
+                writeParameter(ZM_DID_STK_DEBUG_LOG_LEVEL, (const uint8_t*)&fwDebugLevel, 4);
+                fwDebugLevel = FW_DEBUG_LEVEL_DISABLED;
+            }
+        }
     }
 }
 
@@ -1416,6 +1450,20 @@ void zmMaster::processPacked(const zm_command *cmd)
                 readParameterWithArg(ZM_DID_STK_LINK_KEY, &cmd->buffer.data[1], sizeof(uint64_t));
             }
         }
+        else if (id == ZM_DID_STK_DEBUG_LOG_LEVEL)
+        {
+            if (status == ZM_STATE_SUCCESS)
+            {
+                uint32_t level;
+                get_u32_le(cmd->buffer.data + 1, &level);
+                fwDebugLevel = level;
+            }
+            else
+            {
+                // 0x26550900 always returns unsupported, althought it supports it
+                // fwDebugLevel = FW_DEBUG_LEVEL_UNSUPPORTED; // mark as n/a
+            }
+        }
 
         deCONZ::controller()->readParameterResponse(status, id, &cmd->buffer.data[1], cmd->buffer.len - 1);
         emit parameterUpdated(id);
@@ -1651,7 +1699,7 @@ void zmMaster::processPacked(const zm_command *cmd)
 
     case ZM_CMD_DEBUG_LOG:
     {
-        if (DBG_IsEnabled(DBG_PROT))
+        if (DBG_IsEnabled(DBG_FIRMWARE))
         {
             if (cmd->buffer.len < sizeof(cmd->buffer.data))
             {
@@ -1665,11 +1713,11 @@ void zmMaster::processPacked(const zm_command *cmd)
                 }
 
                 beg[i] = '\0';
-                DBG_Printf(DBG_INFO, "%s\n", beg);
+                DBG_Printf(DBG_FIRMWARE, "%s\n", beg);
             }
             else
             {
-                DBG_Printf(DBG_INFO, "FW debug string too large\n");
+                DBG_Printf(DBG_FIRMWARE, "FW debug string too large\n");
             }
         }
     }
@@ -1963,10 +2011,6 @@ void zmMaster::onDeviceConnected()
     needStatus = 1;
     setState(MASTER_IDLE);
     startTaskTimer(ACTION_PROCESS, SendDelay, __LINE__);
-
-    uint32_t loglevel = DBG_APS | DBG_APS_L2;
-
-    writeParameter(ZM_DID_STK_DEBUG_LOG_LEVEL, (unsigned char*)&loglevel, 4);
 }
 
 void zmMaster::onDeviceDisconnected(int reason)
@@ -2657,6 +2701,7 @@ int zmMaster::readParameters()
         readParameter(ZM_DID_STK_NWK_UPDATE_ID);
         readParameter(ZM_DID_STK_ANT_CTRL);
         readParameter(ZM_DID_STK_NO_ZDP_RESPONSE);
+        readParameter(ZM_DID_STK_DEBUG_LOG_LEVEL);
         //readParameter(ZM_DID_ZLL_KEY);
         //readParameter(ZM_DID_ZLL_FACTORY_NEW);
         uint8_t keyNum = 0;

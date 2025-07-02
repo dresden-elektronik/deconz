@@ -36,10 +36,8 @@ DebugView::DebugView(QWidget *parent) :
     const std::vector<int> levels = { DBG_INFO, DBG_INFO_L2, DBG_ERROR, DBG_ERROR_L2,
                                       DBG_DDF, DBG_DEV, DBG_JS, DBG_APS, DBG_APS_L2, DBG_ZGP,
                                       DBG_ZDP, DBG_ZCL, DBG_ZCLDB, DBG_IAS, DBG_OTA,
-                                      DBG_HTTP, DBG_TLINK, DBG_ROUTING, DBG_MEASURE
-#ifdef QT_DEBUG
-        , DBG_PROT, DBG_VFS
-#endif
+                                      DBG_HTTP, DBG_TLINK, DBG_ROUTING, DBG_MEASURE,
+                                      DBG_PROT, DBG_VFS, DBG_FIRMWARE
     };
 
     for (const auto level : levels)
