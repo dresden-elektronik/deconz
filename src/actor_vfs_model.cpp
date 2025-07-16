@@ -746,7 +746,7 @@ int ActorVfsModel::readEntryResponse(am_message *msg)
         }
     }
 
-    DBG_Printf(DBG_VFS, "vfs model: read entry: %d response error, tag: %u, status: %u\n", e, tag, status);
+    DBG_Printf(DBG_VFS, "vfs model: read entry: %d response error, tag: %u, status: %s (%u)\n", e, tag, amResponseStatusToString(status), status);
     return AM_CB_STATUS_OK;
 }
 
@@ -969,7 +969,6 @@ ActorVfsModel::ActorVfsModel(QObject *parent) :
     addActorId(4001); //  plugin test
     am->subscribe(4001, AM_ACTOR_ID_UI_VFS);
     //addActorId(AM_ACTOR_ID_OTA);
-    addActorId(99199); //  test non existing actor
 
     connect(&priv->fetchTimer, &QTimer::timeout, this, &ActorVfsModel::fetchTimerFired);
     priv->fetchTimer.setSingleShot(true);
