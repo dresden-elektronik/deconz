@@ -128,6 +128,16 @@ public:
 static ActorVfsModelPrivate *_priv = nullptr;
 static ActorVfsModel *_instance = nullptr;
 
+static const char* amResponseStatusToString(unsigned status)
+{
+    if (status == AM_RESPONSE_STATUS_OK) return "OK";
+    if (status == AM_RESPONSE_STATUS_NOT_FOUND) return "NOT_FOUND";
+    if (status == AM_RESPONSE_STATUS_TIMEOUT) return "NTIMEOUT";
+    if (status == AM_RESPONSE_STATUS_FAIL) return "FAIL";
+    if (status == AM_RESPONSE_STATUS_UNSUPPORTED) return "UNSUPPORTED";
+    return "UNKNOWN";
+}
+
 int findChildEntry(const std::vector<Entry> &entries, int parent_e, AT_AtomIndex name)
 {
     if (parent_e < 0)
@@ -196,10 +206,11 @@ static void addEntryToParent(std::vector<Entry> &entries, int parent_e, Entry &e
         if (entry.name == ati_dot_actor)
         {
 
-            DirFetcher df;
+            DirFetcher df = {};
             df.entryIndex = entries.size() - 1;
             df.index = 0;
             df.state = ENTRY_FETCH_STATE_WAIT_START;
+            df.timeout = 0;
 
             _priv->dirFetchers.push_back(df);
         }
@@ -262,7 +273,6 @@ static void listDirectoryRequest(DirFetcher &df)
 
     _priv->allocTag++;
     df.tag = _priv->allocTag;
-    df.timeout = 0;
 
     am->msg_put_u16(m, df.tag);    /* tag */
     am->msg_put_cstring(m, url);   /* url */
@@ -513,12 +523,13 @@ int ActorVfsModel::listDirectoryResponse(am_message *msg)
             // no errors so far, continue
             df.state = ENTRY_FETCH_STATE_WAIT_START;
             df.index = next_index;
+            df.timeout = 0;
             priv->dirFetchers.push_back(df);
         }
     }
     else
     {
-        DBG_Printf(DBG_VFS, "vfs model: list directory error: %u\n", status);
+        DBG_Printf(DBG_VFS, "vfs model: list directory error: %s (%u)\n", amResponseStatusToString(status), status);
     }
 
     return AM_CB_STATUS_OK;
@@ -807,10 +818,11 @@ void ActorVfsModel::addActorId(unsigned int actorId)
         priv->entries[prev_e].sibling = e;
     }
 
-    DirFetcher df;
+    DirFetcher df = {};
     df.entryIndex = e;
     df.index = 0;
     df.state = ENTRY_FETCH_STATE_WAIT_START;
+    df.timeout = 0;
 
     priv->dirFetchers.push_back(df);
 
@@ -838,7 +850,7 @@ int ActorVfsModel::indexForActorId(unsigned actorId)
 
 void ActorVfsModel::fetchTimerFired()
 {
-    DBG_Printf(DBG_VFS, "vfs timer fired after %d, dirf: %zu, entryf: %zu\n", priv->fetchTimer.interval(), priv->dirFetchers.size(), priv->entryFetchers.size());
+    DBG_Printf(DBG_VFS, "vfs timer fired after %d, dirf: %zu, entryFetchers.size: %zu\n", priv->fetchTimer.interval(), priv->dirFetchers.size(), priv->entryFetchers.size());
 
     if (!priv->dirFetchers.empty())
     {
@@ -954,9 +966,10 @@ ActorVfsModel::ActorVfsModel(QObject *parent) :
 
     addActorId(AM_ACTOR_ID_CORE_NET);
     addActorId(AM_ACTOR_ID_CORE_APS);
-    //addActorId(4001); //  plugin test
+    addActorId(4001); //  plugin test
     am->subscribe(4001, AM_ACTOR_ID_UI_VFS);
     //addActorId(AM_ACTOR_ID_OTA);
+    addActorId(99199); //  test non existing actor
 
     connect(&priv->fetchTimer, &QTimer::timeout, this, &ActorVfsModel::fetchTimerFired);
     priv->fetchTimer.setSingleShot(true);
@@ -1305,11 +1318,12 @@ void ActorVfsModel::fetchMore(const QModelIndex &parent)
 
         entry.value = DIR_VALUE_INITIAL + 1; // prevent canFetchMore
 
-        DirFetcher df;
+        DirFetcher df = {};
 
         df.entryIndex = e;
         df.index = 0;
         df.state = ENTRY_FETCH_STATE_WAIT_START;
+        df.timeout = 0;
 
         priv->dirFetchers.push_back(df);
         continueFetching();
