@@ -158,7 +158,8 @@ typedef enum
     ZM_DID_DEV_WATCHDOG_TTL                   = 0x26,//!< DEV devWatchdogTtl.
     ZM_DID_STK_FRAME_COUNTER                  = 0x27,//!  STK stkFrameCounter.
     ZM_DID_STK_NO_ZDP_RESPONSE                = 0x28,//!< STK stkNoZdpResponse.
-    ZM_DID_STK_DEBUG_LOG_LEVEL                = 0x29 //!< STK stkDebugLogLevel.
+    ZM_DID_STK_DEBUG_LOG_LEVEL                = 0x29,//!< STK stkDebugLogLevel.
+    ZM_DID_STK_NETWORK_KEY2                   = 0x31 //!< Network key with sequence number.
 } ZM_DataId_t;
 // ZM_DID_END
 

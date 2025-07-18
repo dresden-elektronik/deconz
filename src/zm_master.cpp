@@ -2706,7 +2706,7 @@ int zmMaster::readParameters()
         //readParameter(ZM_DID_ZLL_FACTORY_NEW);
         uint8_t keyNum = 0;
         readParameterWithArg(ZM_DID_STK_NETWORK_KEY, &keyNum, 1);
-
+        readParameterWithArg(ZM_DID_STK_NETWORK_KEY2, &keyNum, 1); // key with sequence number, might return unsupported
 
 #if 0
         // test reading link key for index 0-3

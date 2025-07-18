@@ -2168,6 +2168,31 @@ void zmController::readParameterResponse(ZM_State_t status, ZM_DataId_t id, cons
         }
         break;
 
+    case ZM_DID_STK_NETWORK_KEY2:
+        DBG_Assert(length == 18);
+        // u8 keyIndex
+        // u8 sequenceNumber
+        // u8[16] key
+        if (data[0] == 0 && length == 18)
+        {
+            if (net.networkKeySequenceNumber() != data[1])
+            {
+                net.setNetworkKeySequenceNumber(data[1]);
+                updateCount++;
+            }
+            if (net.networkKey().size() < 16 ||
+                (net.networkKey().size() == 16 && memcmp(net.networkKey().data(), &data[2], 16) != 0))
+            {
+                net.setNetworkKey(QByteArray((const char*)&data[1], 16));
+                updateCount++;
+            }
+        }
+        else
+        {
+            DBG_Printf(DBG_ERROR, "CTRL got network key with invalid index %u\n", data[0]);
+        }
+        break;
+
     case ZM_DID_STK_LINK_KEY:
         if (length == 24)
         {

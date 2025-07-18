@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2024 dresden elektronik ingenieurtechnik gmbh.
+ * Copyright (c) 2013-2025 dresden elektronik ingenieurtechnik gmbh.
  * All rights reserved.
  *
  * The software in this package is published under the terms of the BSD
@@ -53,6 +53,8 @@ public:
     void setPermitJoin(uint8_t permitJoin) { m_permitJoin = permitJoin; }
     const QByteArray &networkKey() const { return m_networkKey; }
     void setNetworkKey(const QByteArray &key) { m_networkKey = key; }
+    uint8_t networkKeySequenceNumber() const { return m_networkKeySequenceNumber; }
+    void setNetworkKeySequenceNumber(uint8_t seqno) { m_networkKeySequenceNumber = seqno; }
     const QByteArray &trustCenterLinkKey() const { return m_tcLinkKey; }
     void setTrustCenterLinkKey(const QByteArray &key) { m_tcLinkKey = key; }
     const QByteArray &trustCenterMasterKey() const { return m_tcMasterKey; }
@@ -90,6 +92,7 @@ private:
     QByteArray m_zllKey; //!< ZigBee Light Link key (16 byte).
     uint32_t m_channelMask = 0; //!< Channel mask.
     uint8_t m_nwkUpdateId = 0; //!< NWK update id.
+    uint8_t m_networkKeySequenceNumber = 0; //! Network key sequence number.
     uint8_t m_channel = 0; //!< Logical channel.
     uint8_t m_zigbeeVersion = 2; //!< Zigbee version.
     uint8_t m_stackProfileId = 2; //!< Stack profile id.
