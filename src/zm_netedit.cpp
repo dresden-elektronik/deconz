@@ -15,6 +15,7 @@
 #include <QTimer>
 #include <QStandardItemModel>
 #include <QFontDatabase>
+#include <QFontMetrics>
 #include "gui/theme.h"
 #include "zm_netedit.h"
 #include "zm_netdescriptor_model.h"
@@ -42,6 +43,25 @@ zmNetEdit::zmNetEdit(QWidget *parent) :
     ui->networkKeyEdit->setFont(monoFont);
     ui->tcLinkKeyEdit->setFont(monoFont);
     ui->tcMasterKeyEdit->setFont(monoFont);
+
+    QFontMetrics fm(monoFont);
+
+#if (QT_VERSION < QT_VERSION_CHECK(5, 11, 0))
+    int w64 = fm.width("=0x0011223344556677=");
+    int w128 = fm.width("=0x00112233445566770011223344556677=");
+#else
+    int w64 = fm.horizontalAdvance("=0x0011223344556677=");
+    int w128 = fm.horizontalAdvance("=0x00112233445566770011223344556677=");
+#endif
+
+    ui->extPanIdEdit->setMinimumWidth(w64);
+    ui->apsUseExtPanIdEdit->setMinimumWidth(w64);
+    ui->extEdit->setMinimumWidth(w64);
+    ui->tcAddressEdit->setMinimumWidth(w64);
+
+    ui->networkKeyEdit->setMinimumWidth(w128);
+    ui->tcLinkKeyEdit->setMinimumWidth(w128);
+    ui->tcMasterKeyEdit->setMinimumWidth(w128);
 
     connect(ui->refreshButton, SIGNAL(clicked()),
             this, SLOT(onRefresh()));

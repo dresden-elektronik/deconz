@@ -27,6 +27,8 @@ void Theme_Init()
         _theme->monospace = QFontDatabase::systemFont(QFontDatabase::FixedFont);
 
         QFontDatabase fdb;
+        // this looks pretty good on all platforms
+        // especially on macOS where the default is way too bold compared to regular font
         if (fdb.hasFamily("Source Code Pro"))
         {
             _theme->monospace = fdb.font("Source Code Pro", "", _theme->regular.pointSize());
