@@ -20,6 +20,7 @@ set(PUB_INCLUDE_FILES
     db_nodes.h
     debug_view.h
     gui/actor_vfs_view.h
+    gui/theme.h
     mainwindow.h
     send_to_dialog.h
     source_route_info.h
@@ -88,6 +89,7 @@ add_executable(${PROJECT_NAME}
     db_nodes.cpp
     debug_view.cpp
     gui/actor_vfs_view.cpp
+    gui/theme.cpp
     main.cpp
     mainwindow.cpp
     send_to_dialog.cpp

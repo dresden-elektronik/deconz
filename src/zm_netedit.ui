@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>948</width>
-    <height>603</height>
+    <width>925</width>
+    <height>471</height>
    </rect>
   </property>
   <property name="sizePolicy">
@@ -73,39 +73,6 @@
       </attribute>
       <layout class="QVBoxLayout" name="verticalLayout_3">
        <item>
-        <widget class="QLabel" name="label_19">
-         <property name="text">
-          <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-weight:700; color:#e01b24;&quot;&gt;[Danger Zone]&lt;br/&gt;&lt;/span&gt;&lt;span style=&quot; color:#e01b24;&quot;&gt;Only change the configuration if you know what you're doing!&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-         </property>
-         <property name="alignment">
-          <set>Qt::AlignCenter</set>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <widget class="Line" name="line_2">
-         <property name="orientation">
-          <enum>Qt::Horizontal</enum>
-         </property>
-        </widget>
-       </item>
-       <item>
-        <spacer name="verticalSpacer_2">
-         <property name="orientation">
-          <enum>Qt::Vertical</enum>
-         </property>
-         <property name="sizeType">
-          <enum>QSizePolicy::MinimumExpanding</enum>
-         </property>
-         <property name="sizeHint" stdset="0">
-          <size>
-           <width>20</width>
-           <height>16</height>
-          </size>
-         </property>
-        </spacer>
-       </item>
-       <item>
         <layout class="QHBoxLayout" name="horizontalLayout_3">
          <property name="spacing">
           <number>30</number>
@@ -123,6 +90,9 @@
            </property>
            <property name="fieldGrowthPolicy">
             <enum>QFormLayout::AllNonFixedFieldsGrow</enum>
+           </property>
+           <property name="labelAlignment">
+            <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
            </property>
            <property name="formAlignment">
             <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignTop</set>
@@ -180,9 +150,6 @@
                <verstretch>0</verstretch>
               </sizepolicy>
              </property>
-             <property name="text">
-              <string>Predefined PAN ID</string>
-             </property>
             </widget>
            </item>
            <item row="2" column="0">
@@ -218,12 +185,6 @@ p, li { white-space: pre-wrap; }
                <width>100</width>
                <height>16777215</height>
               </size>
-             </property>
-             <property name="font">
-              <font>
-               <family>Monospace</family>
-               <pointsize>9</pointsize>
-              </font>
              </property>
              <property name="inputMask">
               <string>\0\xHHHH</string>
@@ -273,12 +234,6 @@ p, li { white-space: pre-wrap; }
                <height>16777215</height>
               </size>
              </property>
-             <property name="font">
-              <font>
-               <family>Courier New</family>
-               <pointsize>9</pointsize>
-              </font>
-             </property>
              <property name="inputMask">
               <string>\0\xHHHHHHHHHHHHHHHH</string>
              </property>
@@ -327,12 +282,6 @@ p, li { white-space: pre-wrap; }
                <height>16777215</height>
               </size>
              </property>
-             <property name="font">
-              <font>
-               <family>Monospace</family>
-               <pointsize>9</pointsize>
-              </font>
-             </property>
              <property name="inputMask">
               <string>\0\xHHHHHHHHHHHHHHHH</string>
              </property>
@@ -342,11 +291,7 @@ p, li { white-space: pre-wrap; }
             </widget>
            </item>
            <item row="5" column="1">
-            <widget class="QCheckBox" name="customMacAddrCheckBox">
-             <property name="text">
-              <string>Custom MAC Address </string>
-             </property>
-            </widget>
+            <widget class="QCheckBox" name="customMacAddrCheckBox"/>
            </item>
            <item row="6" column="1">
             <widget class="QLineEdit" name="extEdit">
@@ -370,12 +315,6 @@ p, li { white-space: pre-wrap; }
                <width>250</width>
                <height>16777215</height>
               </size>
-             </property>
-             <property name="font">
-              <font>
-               <family>Monospace</family>
-               <pointsize>9</pointsize>
-              </font>
              </property>
              <property name="inputMask">
               <string>\0\xHHHHHHHHHHHHHHHH</string>
@@ -411,9 +350,6 @@ p, li { white-space: pre-wrap; }
              </property>
              <property name="autoFillBackground">
               <bool>false</bool>
-             </property>
-             <property name="text">
-              <string>Static NWK Address</string>
              </property>
             </widget>
            </item>
@@ -451,12 +387,6 @@ p, li { white-space: pre-wrap; }
                <height>16777215</height>
               </size>
              </property>
-             <property name="font">
-              <font>
-               <family>Monospace</family>
-               <pointsize>9</pointsize>
-              </font>
-             </property>
              <property name="inputMask">
               <string>\0\xHHHH</string>
              </property>
@@ -473,15 +403,33 @@ p, li { white-space: pre-wrap; }
                <verstretch>0</verstretch>
               </sizepolicy>
              </property>
-             <property name="text">
-              <string>enabled</string>
-             </property>
             </widget>
            </item>
            <item row="9" column="0">
             <widget class="QLabel" name="label_15">
              <property name="text">
-              <string>APS Acks</string>
+              <string>Enable APS ACKs</string>
+             </property>
+            </widget>
+           </item>
+           <item row="7" column="0">
+            <widget class="QLabel" name="label_19">
+             <property name="text">
+              <string>Static NWK Address</string>
+             </property>
+            </widget>
+           </item>
+           <item row="5" column="0">
+            <widget class="QLabel" name="label_20">
+             <property name="text">
+              <string>Custom MAC Address </string>
+             </property>
+            </widget>
+           </item>
+           <item row="1" column="0">
+            <widget class="QLabel" name="label_21">
+             <property name="text">
+              <string>Predefined PAN ID</string>
              </property>
             </widget>
            </item>
@@ -497,6 +445,9 @@ p, li { white-space: pre-wrap; }
            </property>
            <property name="rowWrapPolicy">
             <enum>QFormLayout::DontWrapRows</enum>
+           </property>
+           <property name="labelAlignment">
+            <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
            </property>
            <property name="verticalSpacing">
             <number>6</number>
@@ -658,12 +609,6 @@ p, li { white-space: pre-wrap; }
                <height>16777215</height>
               </size>
              </property>
-             <property name="font">
-              <font>
-               <family>Monospace</family>
-               <pointsize>9</pointsize>
-              </font>
-             </property>
              <property name="inputMask">
               <string>\0\xHHHHHHHHHHHHHHHH</string>
              </property>
@@ -707,12 +652,6 @@ p, li { white-space: pre-wrap; }
                <width>16777215</width>
                <height>16777215</height>
               </size>
-             </property>
-             <property name="font">
-              <font>
-               <family>Monospace</family>
-               <pointsize>9</pointsize>
-              </font>
              </property>
              <property name="inputMask">
               <string>\0\xHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHHH</string>
@@ -787,12 +726,6 @@ p, li { white-space: pre-wrap; }
                <height>16777215</height>
               </size>
              </property>
-             <property name="font">
-              <font>
-               <family>Monospace</family>
-               <pointsize>9</pointsize>
-              </font>
-             </property>
              <property name="toolTip">
               <string>Trust center link key</string>
              </property>
@@ -839,12 +772,6 @@ p, li { white-space: pre-wrap; }
                <width>16777215</width>
                <height>16777215</height>
               </size>
-             </property>
-             <property name="font">
-              <font>
-               <family>Monospace</family>
-               <pointsize>9</pointsize>
-              </font>
              </property>
              <property name="toolTip">
               <string>Trust center master key</string>
@@ -1002,8 +929,8 @@ p, li { white-space: pre-wrap; }
            <rect>
             <x>0</x>
             <y>0</y>
-            <width>906</width>
-            <height>496</height>
+            <width>869</width>
+            <height>357</height>
            </rect>
           </property>
          </widget>
@@ -1130,7 +1057,7 @@ p, li { white-space: pre-wrap; }
      <item>
       <widget class="QLabel" name="label_18">
        <property name="text">
-        <string>&lt;b&gt;Important:&lt;/b&gt; After &lt;b&gt;Save&lt;/b&gt; click &lt;b&gt;Leave&lt;/b&gt; and then &lt;b&gt;Join&lt;/b&gt; to apply the configuration.</string>
+        <string>&lt;b&gt;Important:&lt;/b&gt; After &quot;Save&quot; click &quot;Leave&quot; and then &quot;Join&quot; to apply the configuration.</string>
        </property>
       </widget>
      </item>

@@ -36,6 +36,7 @@
 #include "actor/service.h"
 #endif
 #include "gui/actor_vfs_view.h"
+#include "gui/theme.h"
 #include "actor_vfs_model.h"
 #include "mainwindow.h"
 #include "source_route_info.h"
@@ -194,6 +195,8 @@ MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
     ui(new Ui::MainWindow)
 {
+    Theme_Init();
+
     ui->setupUi(this);
     ui->stackedView->setCurrentWidget(ui->pageOffline);
 
@@ -558,6 +561,7 @@ MainWindow::~MainWindow()
     _mainWindow = nullptr;
     delete ui;
     ui = nullptr;
+    Theme_Destroy();
 }
 
 void MainWindow::onControllerEvent(const zmNetEvent &event)

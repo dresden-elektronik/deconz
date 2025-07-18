@@ -15,6 +15,7 @@
 #include <QTimer>
 #include <QStandardItemModel>
 #include <QFontDatabase>
+#include "gui/theme.h"
 #include "zm_netedit.h"
 #include "zm_netdescriptor_model.h"
 #include "zm_controller.h"
@@ -30,20 +31,17 @@ zmNetEdit::zmNetEdit(QWidget *parent) :
 
     setWindowTitle(tr("deCONZ Network Settings"));
 
-    QFont monoFont = QFontDatabase::systemFont(QFontDatabase::FixedFont);
-//     QFont monoFont("Courier New");
-// #ifdef Q_OS_OSX
-//     monoFont.setPointSize(13);
-// #endif
-     ui->panIdEdit->setFont(monoFont);
-     ui->extPanIdEdit->setFont(monoFont);
-     ui->apsUseExtPanIdEdit->setFont(monoFont);
-     ui->extEdit->setFont(monoFont);
-     ui->nwkEdit->setFont(monoFont);
-     ui->tcAddressEdit->setFont(monoFont);
-     ui->networkKeyEdit->setFont(monoFont);
-     ui->tcLinkKeyEdit->setFont(monoFont);
-     ui->tcMasterKeyEdit->setFont(monoFont);
+    QFont monoFont = Theme_FontMonospace();
+
+    ui->panIdEdit->setFont(monoFont);
+    ui->extPanIdEdit->setFont(monoFont);
+    ui->apsUseExtPanIdEdit->setFont(monoFont);
+    ui->extEdit->setFont(monoFont);
+    ui->nwkEdit->setFont(monoFont);
+    ui->tcAddressEdit->setFont(monoFont);
+    ui->networkKeyEdit->setFont(monoFont);
+    ui->tcLinkKeyEdit->setFont(monoFont);
+    ui->tcMasterKeyEdit->setFont(monoFont);
 
     connect(ui->refreshButton, SIGNAL(clicked()),
             this, SLOT(onRefresh()));
@@ -543,7 +541,7 @@ zmNetEdit::Endpoint * zmNetEdit::getEndpointWidget(int index)
     ep->outClusters = new QLineEdit;
 
     m_endpointLayout->invalidate();
-    ui->endpointGroupBox->setSizePolicy(QSizePolicy::Preferred,
+    ui->endpointGroupBox->setSizePolicy(QSizePolicy::Expanding,
                                         QSizePolicy::Expanding);
     m_endpointLayout->setSizeConstraint(QLayout::SetMinimumSize);
 
@@ -554,6 +552,7 @@ zmNetEdit::Endpoint * zmNetEdit::getEndpointWidget(int index)
     form->addRow(tr("&Device version"), ep->deviceVersion);
     form->addRow(tr("&In clusters"), ep->inClusters);
     form->addRow(tr("&Out clusters"), ep->outClusters);
+    form->setFieldGrowthPolicy(QFormLayout::FieldGrowthPolicy::ExpandingFieldsGrow);
     ep->groupBox->setLayout(form);
 
     m_endpointLayout->addWidget(ep->groupBox);
