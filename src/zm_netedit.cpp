@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2024 dresden elektronik ingenieurtechnik gmbh.
+ * Copyright (c) 2013-2025 dresden elektronik ingenieurtechnik gmbh.
  * All rights reserved.
  *
  * The software in this package is published under the terms of the BSD
@@ -14,6 +14,7 @@
 #include <QGroupBox>
 #include <QTimer>
 #include <QStandardItemModel>
+#include <QFontDatabase>
 #include "zm_netedit.h"
 #include "zm_netdescriptor_model.h"
 #include "zm_controller.h"
@@ -29,19 +30,20 @@ zmNetEdit::zmNetEdit(QWidget *parent) :
 
     setWindowTitle(tr("deCONZ Network Settings"));
 
-    QFont monoFont("Courier New");
-#ifdef Q_OS_OSX
-    monoFont.setPointSize(13);
-#endif
-    ui->panIdEdit->setFont(monoFont);
-    ui->extPanIdEdit->setFont(monoFont);
-    ui->apsUseExtPanIdEdit->setFont(monoFont);
-    ui->extEdit->setFont(monoFont);
-    ui->nwkEdit->setFont(monoFont);
-    ui->tcAddressEdit->setFont(monoFont);
-    ui->networkKeyEdit->setFont(monoFont);
-    ui->tcLinkKeyEdit->setFont(monoFont);
-    ui->tcMasterKeyEdit->setFont(monoFont);
+    QFont monoFont = QFontDatabase::systemFont(QFontDatabase::FixedFont);
+//     QFont monoFont("Courier New");
+// #ifdef Q_OS_OSX
+//     monoFont.setPointSize(13);
+// #endif
+     ui->panIdEdit->setFont(monoFont);
+     ui->extPanIdEdit->setFont(monoFont);
+     ui->apsUseExtPanIdEdit->setFont(monoFont);
+     ui->extEdit->setFont(monoFont);
+     ui->nwkEdit->setFont(monoFont);
+     ui->tcAddressEdit->setFont(monoFont);
+     ui->networkKeyEdit->setFont(monoFont);
+     ui->tcLinkKeyEdit->setFont(monoFont);
+     ui->tcMasterKeyEdit->setFont(monoFont);
 
     connect(ui->refreshButton, SIGNAL(clicked()),
             this, SLOT(onRefresh()));
@@ -77,12 +79,11 @@ zmNetEdit::zmNetEdit(QWidget *parent) :
         QCheckBox *chBox = new QCheckBox;
         grid->addWidget(label, 0, col);
         grid->addWidget(chBox, 1, col);
-        chBox->setMinimumHeight(24);
-        label->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
-        chBox->setSizePolicy(QSizePolicy::Preferred, QSizePolicy::Fixed);
         m_channels.append(chBox);
         col++;
     }
+
+    grid->setMargin(4);
 
     ui->endpointGroupBox->setEnabled(true);
     m_endpointLayout = new QVBoxLayout(ui->endpointGroupBox);
@@ -176,6 +177,8 @@ void zmNetEdit::setNetwork(const zmNet &net)
     {
         ui->networkKeyEdit->setText("0x00000000000000000000000000000000");
     }
+
+    ui->networkKeySequenceNumberEdit->setValue((int)net.networkKeySequenceNumber());
 
     if (!net.zllKey().isEmpty())
     {
@@ -480,6 +483,7 @@ void zmNetEdit::onAccept()
     items[n++] = ZM_DID_ZLL_KEY;
     items[n++] = ZM_DID_ZLL_FACTORY_NEW;
 
+    Q_ASSERT(n < sizeof(items));
     items[0] = n - 1;
     m_configTimer->start(); // TODO: remove timeout based handling trust master instead
 
