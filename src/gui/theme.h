@@ -12,11 +12,45 @@
 #define GUI_THEME_H
 
 #include <QFont>
+#include <QProxyStyle>
+
+enum ThemeColor
+{
+    ColorNodeBase,
+    ColorNodeViewBackground
+};
 
 void Theme_Init();
 void Theme_Destroy();
 
 QFont Theme_FontMonospace();
 QFont Theme_FontRegular();
+void Theme_Activate(const QString &theme);
+QColor Theme_Color(ThemeColor color);
+
+// https://www.olivierclero.com/code/custom-qstyle/
+// https://github.com/oclero/qlementine/blob/dev/lib/src/style/QlementineStyle.cpp
+
+using ASuper = QProxyStyle;
+
+class AStyle : public ASuper
+{
+    Q_OBJECT
+
+public:
+    explicit AStyle(const QString &theme, QStyle *parent = nullptr);
+
+    void polish(QApplication *app) override;
+    void polish(QWidget *widget) override;
+    void polish(QPalette &pal) override;
+    void unpolish(QWidget *widget) override;
+    void unpolish(QApplication *app) override;
+    void drawPrimitive(PrimitiveElement element, const QStyleOption *option, QPainter *painter, const QWidget *widget = nullptr) const override;
+    void drawControl(ControlElement element, const QStyleOption *option, QPainter *painter, const QWidget *widget = nullptr) const override;
+    int pixelMetric(PixelMetric metric, const QStyleOption *option = nullptr, const QWidget *widget = nullptr) const override;
+    QPalette standardPalette() const override;
+
+protected:
+};
 
 #endif // GUI_THEME_H

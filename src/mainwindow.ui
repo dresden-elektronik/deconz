@@ -27,73 +27,9 @@
        <enum>QFrame::Raised</enum>
       </property>
       <property name="currentIndex">
-       <number>1</number>
+       <number>0</number>
       </property>
       <widget class="QWidget" name="pageOffline">
-       <property name="palette">
-        <palette>
-         <active>
-          <colorrole role="Base">
-           <brush brushstyle="SolidPattern">
-            <color alpha="255">
-             <red>255</red>
-             <green>255</green>
-             <blue>255</blue>
-            </color>
-           </brush>
-          </colorrole>
-          <colorrole role="Window">
-           <brush brushstyle="SolidPattern">
-            <color alpha="255">
-             <red>250</red>
-             <green>250</green>
-             <blue>250</blue>
-            </color>
-           </brush>
-          </colorrole>
-         </active>
-         <inactive>
-          <colorrole role="Base">
-           <brush brushstyle="SolidPattern">
-            <color alpha="255">
-             <red>255</red>
-             <green>255</green>
-             <blue>255</blue>
-            </color>
-           </brush>
-          </colorrole>
-          <colorrole role="Window">
-           <brush brushstyle="SolidPattern">
-            <color alpha="255">
-             <red>250</red>
-             <green>250</green>
-             <blue>250</blue>
-            </color>
-           </brush>
-          </colorrole>
-         </inactive>
-         <disabled>
-          <colorrole role="Base">
-           <brush brushstyle="SolidPattern">
-            <color alpha="255">
-             <red>250</red>
-             <green>250</green>
-             <blue>250</blue>
-            </color>
-           </brush>
-          </colorrole>
-          <colorrole role="Window">
-           <brush brushstyle="SolidPattern">
-            <color alpha="255">
-             <red>250</red>
-             <green>250</green>
-             <blue>250</blue>
-            </color>
-           </brush>
-          </colorrole>
-         </disabled>
-        </palette>
-       </property>
        <property name="autoFillBackground">
         <bool>true</bool>
        </property>
@@ -625,9 +561,6 @@ p, li { white-space: pre-wrap; }
             <verstretch>0</verstretch>
            </sizepolicy>
           </property>
-          <property name="styleSheet">
-           <string notr="true">zmGraphicsWidget,  QFrame { border-top: 0; border-right: 0; border-left: 1px solid palette(midlight); border-bottom: 1px solid palette(midlight);}</string>
-          </property>
           <property name="frameShape">
            <enum>QFrame::StyledPanel</enum>
           </property>
@@ -744,9 +677,6 @@ p, li { white-space: pre-wrap; }
   <widget class="QToolBar" name="mainToolBar">
    <property name="autoFillBackground">
     <bool>false</bool>
-   </property>
-   <property name="styleSheet">
-    <string notr="true">QToolBar {background-color: transparent; border: none; border-bottom: 1px solid palette(midlight);}</string>
    </property>
    <property name="movable">
     <bool>false</bool>

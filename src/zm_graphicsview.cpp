@@ -8,11 +8,13 @@
  *
  */
 
+#include <QMimeData>
 #include <QTimerEvent>
 #include <QPixmap>
 #include <QWheelEvent>
 #include <qmath.h>
 #include <vector>
+#include "deconz/dbg_trace.h"
 #include "gui/gnode_link_group.h"
 #include "zm_graphicsview.h"
 
@@ -67,6 +69,7 @@ zmGraphicsView::zmGraphicsView(QWidget *parent) :
 {
     setDragMode(QGraphicsView::ScrollHandDrag);
     setRenderHint(QPainter::Antialiasing);
+    setAcceptDrops(true);
 
 //    setCacheMode(QGraphicsView::CacheBackground);
 
@@ -104,8 +107,8 @@ void zmGraphicsView::setScene(QGraphicsScene *scene)
     scene->setItemIndexMethod(QGraphicsScene::NoIndex);
     updateMargins();
 
-
     //QColor sceneColor(250, 250, 250);
+#if 0
     QColor sceneColor(245, 245, 245);
 
 #if 0
@@ -123,6 +126,7 @@ void zmGraphicsView::setScene(QGraphicsScene *scene)
     QBrush bgBrush(sceneColor);
 #endif
     scene->setBackgroundBrush(bgBrush);
+#endif
 
     connect(scene, SIGNAL(sceneRectChanged(QRectF)),
             this, SLOT(onSceneRectChanged(QRectF)));
@@ -187,6 +191,50 @@ void zmGraphicsView::drawBackground(QPainter *painter, const QRectF &rect)
     d_ptr->m_nodeLinkGroup->paint(painter, rect);
 }
 
+void zmGraphicsView::dragEnterEvent(QDragEnterEvent *event)
+{
+    const QMimeData *mimeData = event->mimeData();
+
+    if (mimeData)
+    {
+        const auto fmts = mimeData->formats();
+
+        for (const auto &fmt : fmts)
+        {
+            DBG_Printf(DBG_INFO, "fmt: %s\n", qPrintable(fmt));
+
+            DBG_Printf(DBG_INFO, "%s\n", mimeData->data(fmt).constData());
+        }
+
+        if (mimeData->hasFormat("application/vnd.wireshark.displayfilter"))
+        {
+            event->acceptProposedAction();
+        }
+    }
+}
+
+void zmGraphicsView::dragMoveEvent(QDragMoveEvent *event)
+{
+    Q_UNUSED(event)
+}
+
+void zmGraphicsView::dropEvent(QDropEvent *event)
+{
+    DBG_Printf(DBG_INFO, "drop event:\n");
+
+    const QMimeData *mimeData = event->mimeData();
+    if (!mimeData)
+    {
+        return;
+    }
+
+    if (mimeData->hasFormat("application/vnd.wireshark.displayfilter"))
+    {
+        const QByteArray data = mimeData->data("application/vnd.wireshark.displayfilter");
+        DBG_Printf(DBG_INFO, "%s\n", data.constData());
+    }
+}
+
 void zmGraphicsView::processIndications()
 {
     for (size_t i = 0; i < d_ptr->indicators.size(); i++)
@@ -234,6 +282,12 @@ void zmGraphicsView::updateMargins()
 
 
     d_ptr->m_marginTimer->stop();
+}
+
+void zmGraphicsView::repaintAll()
+{
+    d_ptr->m_nodeLinkGroup->repaintAll();
+    update();
 }
 
 void zmGraphicsView::onSceneRectChanged(const QRectF &rect)

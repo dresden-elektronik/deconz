@@ -98,12 +98,14 @@ private Q_SLOTS:
     void appAboutToQuit();
     void openWebApp();
     void openPhosconApp();
+    void switchTheme();
 
 protected:
     void timerEvent(QTimerEvent *event);
     void createMainToolbar();
     void createFileMenu();
     void createEditMenu();
+    void createViewMenu();
     void createHelpMenu();
     void createFetchMenu(bool enableRFD, bool enableFFD);
 
@@ -135,6 +137,8 @@ private:
     QAction *m_joinAction;
     QLabel *m_netStateLabel;
     QAction *m_netConfigAction;
+    QAction *m_lightThemeAction;
+    QAction *m_darkThemeAction;
     QPushButton *m_autoPushButton;
     QPushButton *m_openPhosconAppButton;
     QAction *m_sendToAction;

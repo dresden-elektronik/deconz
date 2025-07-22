@@ -242,14 +242,14 @@ void zmNetEdit::setNetwork(const zmNet &net)
 
         QCheckBox *checkBox = m_channels[i];
 
-        if (net.channel() == (i + 11))
-        {
-            checkBox->setStyleSheet("background-color: #ededed; border: 1px solid #dddddd; padding: 2px; border-radius: 5px;");
-        }
-        else
-        {
-            checkBox->setStyleSheet("");
-        }
+        // if (net.channel() == (i + 11))
+        // {
+        //     checkBox->setStyleSheet("background-color: #ededed; border: 1px solid #dddddd; padding: 2px; border-radius: 5px;");
+        // }
+        // else
+        // {
+        //     checkBox->setStyleSheet("");
+        // }
 
         if (net.channelMask() & (1 << ch))
         {

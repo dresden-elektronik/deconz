@@ -31,13 +31,16 @@ public:
 public Q_SLOTS:
     void onSceneRectChanged(const QRectF &rect);
     void updateMargins();
+    void repaintAll();
 //    void processForces();
-//    void displayNode(zmgNode *node);
 
 protected:
     void timerEvent(QTimerEvent *event) override;
     void wheelEvent(QWheelEvent *event) override;
     void drawBackground(QPainter *painter, const QRectF &rect) override;
+    void dragEnterEvent(QDragEnterEvent *event) override;
+    void dragMoveEvent(QDragMoveEvent *event) override;
+    void dropEvent(QDropEvent *event) override;
 
 private:
     void processIndications();

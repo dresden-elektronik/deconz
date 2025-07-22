@@ -19,6 +19,7 @@
 #include <deconz/dbg_trace.h>
 #include <deconz/timeref.h>
 #include "gui/gnode_link_group.h"
+#include "gui/theme.h"
 #include "zm_app.h"
 #include "zm_node.h"
 #include "zm_gcluster.h"
@@ -300,14 +301,14 @@ void zmgNode::paint(QPainter *painter, const QStyleOptionGraphicsItem *option, Q
 
     Q_UNUSED(widget)
 
-    static const QColor nodeColor(NODE_COLOR);
-    static const QColor nodeColorSelected = nodeColor.lighter(104);
+    const QColor nodeColor = Theme_Color(ColorNodeBase);
+    const QColor nodeColorSelected = nodeColor.lighter(104);
     static const QColor nodeColorNeutral(160, 160, 160);
     static const QColor colorCoordinator(0, 132, 209);
     static const QColor colorRouterDead(240, 190, 15);
     static const QColor colorRouter(255, 211, 32);
     static const QColor colorOtau(120, 250, 100);
-    static const QColor nodeShadowColor(165, 165, 165);
+    QColor nodeShadowColor(165, 165, 165);
     static const QColor colorToggleBackground(240, 240, 240);
     static const QColor colorInset(140, 140, 140);
     static const QColor colorInsetDark(100, 100, 100);
@@ -363,9 +364,11 @@ void zmgNode::paint(QPainter *painter, const QStyleOptionGraphicsItem *option, Q
     qreal roundBorder = 2;
     qreal shadowY = -1;
 
-    p.setBrush(nodeShadowColor);
-    p.setPen(QPen(nodeShadowColor, 1.8));
-    p.drawRoundedRect(QRectF(option->rect).adjusted(1.5, 1.5, -1, -1), roundBorder, roundBorder);
+    // nodeShadowColor = *m_color;
+
+    // p.setBrush(nodeShadowColor);
+    // p.setPen(QPen(nodeShadowColor, 2));
+    // p.drawRoundedRect(QRectF(option->rect).adjusted(-1, -1, 1, 1), roundBorder, roundBorder);
 
     // surface
     qreal inset = 1;
@@ -388,19 +391,19 @@ void zmgNode::paint(QPainter *painter, const QStyleOptionGraphicsItem *option, Q
     p.drawRoundedRect(option->rect.adjusted(inset, inset, -inset, -inset), roundBorder, roundBorder);
     p.setClipping(false);
 
-    if ((option->state & QStyle::State_Selected) == 0)
-    {
-        QRect rect = option->rect;
+    // if ((option->state & QStyle::State_Selected) == 0)
+    // {
+    //     QRect rect = option->rect;
 
-        QLinearGradient gradient(rect.topLeft(), rect.bottomLeft());
-        gradient.setColorAt(0, QColor(255, 255, 255, 96));
-        gradient.setColorAt(1, QColor(130, 130, 130, 64));
+    //     QLinearGradient gradient(rect.topLeft(), rect.bottomLeft());
+    //     gradient.setColorAt(0, QColor(255, 255, 255, 96));
+    //     gradient.setColorAt(1, QColor(130, 130, 130, 64));
 
-        p.setPen(QPen(gradient, 0.75));
-        p.setBrush(Qt::NoBrush);
+    //     p.setPen(QPen(gradient, 0.75));
+    //     p.setBrush(Qt::NoBrush);
 
-        p.drawRoundedRect(rect.adjusted(inset + 1.0, inset, -inset, -inset), roundBorder, roundBorder);
-    }
+    //     p.drawRoundedRect(rect.adjusted(inset + 1.0, inset, -inset, -inset), roundBorder, roundBorder);
+    // }
 
     // endpoint checkbox subcontrol
     p.setPen(Qt::NoPen);
@@ -438,18 +441,39 @@ void zmgNode::paint(QPainter *painter, const QStyleOptionGraphicsItem *option, Q
         }
     }
 
-    QFont fn;
+    QFont fn = Theme_FontRegular();
     fn.setPointSize(NamePointSize);
-    fn.setWeight(QFont::Bold);
+    if (nodeColor.red() > 120)
+    {
+        fn.setWeight(QFont::Bold);
+    }
+    else
+    {
+        fn.setWeight(QFont::Medium);
+    }
     p.setFont(fn);
 
     QFontMetrics fm(fn);
 
     // NWK address | Userdescriptor
-    static const QColor textColorDark(20, 20, 20);
-    static const QColor textColorDim(80, 80, 80);
+    auto textColorDark = qApp->palette().color(QPalette::Active, QPalette::Text);
+    auto textColorDim = qApp->palette().color(QPalette::Disabled, QPalette::Text);
 
-    p.setPen(QPen(textColorDark, 2));
+    //const QColor textColorDark(textBrightness, textBrightness, textBrightness);
+    //const QColor textColorDim(80, 80, 80);
+
+    //p.setPen(QPen(textColorDark, 2));
+
+    QRect rectName = option->rect.adjusted(NamePad, fm.capHeight() * 3 / 8, -2 * ToggleSize, 0);
+    rectName.setHeight(fm.capHeight() * 2);
+
+    // p.fillRect(rectName, Qt::cyan);
+    // text shadow
+    // p.setPen(QPen(nodeColor.darker(200), 2));
+    // p.drawText(rectName.translated(0,2), Qt::AlignVCenter, m_name);
+    // p.setPen(QPen(nodeColor.darker(300), 2));
+    // p.drawText(rectName.translated(0,1), Qt::AlignVCenter, m_name);
+
 
     if (ageSeconds >= tooOld)
     {
@@ -458,20 +482,16 @@ void zmgNode::paint(QPainter *painter, const QStyleOptionGraphicsItem *option, Q
     else
     {
         p.setPen(QPen(textColorDark, 2));
+        p.setPen(QPen(*m_color, 2));
     }
-
-    QRect rectName = option->rect.adjusted(NamePad, fm.capHeight() * 3 / 8, -2 * ToggleSize, 0);
-    rectName.setHeight(fm.capHeight() * 2);
-
-    // p.fillRect(rectName, Qt::cyan);
-    p.drawText(rectName, Qt::AlignVCenter, m_name);
+    p.drawText(rectName, Qt::AlignVCenter, m_name);    
 
     if (m_hasDDF != 0)
     {
         fn.setPointSize(8);
         fn.setBold(false);
         p.setFont(fn);
-        p.setPen(QPen(QColor(50, 50, 50), 2));
+        p.setPen(QPen(textColorDim, 2));
         if (m_hasDDF == 1)
         {
             p.drawText(rectName, Qt::AlignVCenter | Qt::AlignRight, QLatin1String("DDF"));
@@ -483,12 +503,14 @@ void zmgNode::paint(QPainter *painter, const QStyleOptionGraphicsItem *option, Q
     }
 
     // IEEE address
-    fn.setFamily(QLatin1String("monospace"));
+    fn = Theme_FontMonospace();
+    //fn.setFamily(QLatin1String("monospace"));
     fn.setBold(false);
     fn.setPointSize(MacPointSize);
     p.setFont(fn);
     fm = QFontMetrics(fn);
-    p.setPen(QPen(QColor(50, 50, 50), 2));
+    //p.setPen(QPen(QColor(50, 50, 50), 2));
+    p.setPen(QPen(textColorDim));
     if (m_extAddress.isEmpty())
     {
         m_extAddress = QString(QLatin1String("%1")).arg(m_extAddressCache, 16, 16, QLatin1Char('0')).toUpper();

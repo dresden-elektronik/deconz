@@ -22,6 +22,7 @@
 #include <QNetworkInterface>
 #include <QTableView>
 #include <QStandardItemModel>
+#include <QStyleFactory>
 #include <QToolButton>
 #include <QDesktopServices>
 #include <QDir>
@@ -30,6 +31,7 @@
 #include <QPluginLoader>
 #include <QScreen>
 #include <QSortFilterProxyModel>
+#include <QWindow>
 #include <cerrno>
 #ifdef USE_ACTOR_MODEL
 #include <actor/plugin_loader.h>
@@ -62,6 +64,7 @@
 #include "deconz/http_client_handler.h"
 #include "deconz/util.h"
 #include "deconz/util_private.h"
+#include "deconz/u_assert.h"
 #include "deconz/node_event.h"
 #include "deconz/node_interface.h"
 #include "zcl_private.h"
@@ -196,6 +199,18 @@ MainWindow::MainWindow(QWidget *parent) :
     ui(new Ui::MainWindow)
 {
     Theme_Init();
+    // TODO query from OS?
+    // gsettings get org.gnome.desktop.interface color-scheme
+#if 1
+    Theme_Activate("light");
+    QStyle *fusion = QStyleFactory::create("fusion");
+    qApp->setStyle(fusion);
+#else
+    Theme_Activate("dark");
+    QStyle *fusion = QStyleFactory::create("fusion");
+    qApp->setStyle(new AStyle("dark", fusion));
+    qApp->setPalette(qApp->style()->standardPalette());
+#endif
 
     ui->setupUi(this);
     ui->stackedView->setCurrentWidget(ui->pageOffline);
@@ -295,6 +310,7 @@ MainWindow::MainWindow(QWidget *parent) :
 
     createFileMenu();
     createEditMenu();
+    createViewMenu();
 
     setDockOptions(ForceTabbedDocks | AllowTabbedDocks);
 
@@ -321,6 +337,8 @@ MainWindow::MainWindow(QWidget *parent) :
     auto *dockClusterInfo = new QDockWidget(tr("Cluster Info"), this);
     dockClusterInfo->setObjectName("ClusterInfoDock");
     scrollArea = new QScrollArea(this);
+    scrollArea->setAutoFillBackground(true);
+    _clusterInfo->setAutoFillBackground(true);
     scrollArea->setWidget(deCONZ::clusterInfo());
     scrollArea->setWidgetResizable(true);
     dockClusterInfo->setWidget(scrollArea);
@@ -526,7 +544,6 @@ MainWindow::MainWindow(QWidget *parent) :
     deCONZ::controller()->restoreNodesState();
 
     m_dockNodeInfo->raise();
-
 
     m_showPanelActions.append(m_dockNodeInfo->toggleViewAction());
     m_showPanelActions.append(dockClusterInfo->toggleViewAction());
@@ -1657,6 +1674,19 @@ void MainWindow::createEditMenu()
     m_sendToAction->setShortcuts(QList<QKeySequence>() << Qt::Key_F6);
 }
 
+void MainWindow::createViewMenu()
+{
+    QMenu *menu = menuBar()->addMenu(tr("&View"));
+
+    m_lightThemeAction = menu->addAction(tr("Light theme"));
+    m_lightThemeAction->setData("light");
+    connect(m_lightThemeAction, &QAction::triggered, this, &MainWindow::switchTheme);
+
+    m_darkThemeAction = menu->addAction(tr("Dark theme"));
+    m_darkThemeAction->setData("dark");
+    connect(m_darkThemeAction, &QAction::triggered, this, &MainWindow::switchTheme);
+}
+
 void MainWindow::showAboutDialog()
 {
     zmAboutDialog *dlg = new zmAboutDialog(this);
@@ -2002,50 +2032,59 @@ void MainWindow::updateNetworkControls()
     if (deCONZ::master()->connected())
     {
         m_netConfigAction->setEnabled(true);
+        QColor netStateColor = m_netStateLabel->palette().color(QPalette::Text);
 
         switch (deCONZ::master()->netState())
         {
         case deCONZ::NotInNetwork:
             m_netStateLabel->setText(tr("Not In Network"));
-            m_netStateLabel->setStyleSheet("color: #ff0000;");
+            netStateColor = Qt::red;
             m_joinAction->setEnabled(true);
             m_leaveAction->setEnabled(false);
             break;
 
         case deCONZ::Connecting:
             m_netStateLabel->setText(tr("Joining ..."));
-            m_netStateLabel->setStyleSheet("color: #204a87;");
+            netStateColor = 0xFF204a87;
             m_joinAction->setEnabled(false);
             m_leaveAction->setEnabled(false);
             break;
 
         case deCONZ::InNetwork:
             m_netStateLabel->setText(tr("In Network"));
-            m_netStateLabel->setStyleSheet("color: #00dd00;");
+            netStateColor = 0xFF00dd00;
             m_joinAction->setEnabled(false);
             m_leaveAction->setEnabled(true);
             break;
 
         case deCONZ::Leaving:
             m_netStateLabel->setText(tr("Leaving ..."));
-            m_netStateLabel->setStyleSheet("color: #204a87;");
+            netStateColor = 0xFF204a87;
             m_joinAction->setEnabled(false);
             m_leaveAction->setEnabled(false);
             break;
 
         case deCONZ::Touchlink:
             m_netStateLabel->setText(tr("Touchlink"));
-            m_netStateLabel->setStyleSheet("color: #204a87;");
+            netStateColor = 0xFF204a87;
             m_joinAction->setEnabled(true);
             m_leaveAction->setEnabled(true);
             break;
 
         default:
-            m_netStateLabel->setStyleSheet("color: #ff0000;");
+            netStateColor = 0xFFff0000;
             m_netStateLabel->setText(tr("Unknown"));
             m_joinAction->setEnabled(false);
             m_leaveAction->setEnabled(false);
             break;
+        }
+
+        {
+            auto pal = m_netStateLabel->palette();
+            pal.setColor(QPalette::Text, netStateColor);
+            m_netStateLabel->setForegroundRole(QPalette::Text);
+            m_netStateLabel->setPalette(pal);
+            m_netStateLabel->update();
         }
 
         setWindowTitle(qApp->applicationName() + " - " + m_devEntry.friendlyName + " (" + m_devEntry.path + ")");
@@ -2227,6 +2266,52 @@ void MainWindow::openPhosconApp()
     // fallback: localhost
     const QString url = QString("http://127.0.0.1:%1%2").arg(port).arg(urlPath);
     QDesktopServices::openUrl(url);
+}
+
+#include <QPixmapCache>
+void MainWindow::switchTheme()
+{
+    QAction *action = qobject_cast<QAction*>(sender());
+    if (!action)
+        return;
+
+    QString theme = action->data().toString();
+
+    QStyle *fusion = QStyleFactory::create("fusion");
+
+    Theme_Activate(theme);
+    if (theme == "dark")
+    {
+        qApp->setStyle(new AStyle(theme, fusion));
+    }
+    else if (theme == "light")
+    {
+        qApp->setStyle(fusion);
+    }
+    else
+    {
+        U_ASSERT(0 && "unsupported theme");
+    }
+
+    QStyle *s = QApplication::style();
+
+    QPixmapCache::clear();
+    QApplication::setPalette(s->standardPalette());
+
+    // Repaint all top-level widgets.
+    for (auto* widget : QApplication::allWidgets())
+    {
+        //widget->updateGeometry();
+        widget->setPalette(s->standardPalette());
+        s->unpolish(widget);
+        s->polish(widget);
+        widget->update();
+    }
+
+    QApplication::setPalette(s->standardPalette());
+    updateNetworkControls(); // sets text color of m_netStateLabel
+
+    ui->graphicsView->repaintAll();
 }
 
 void MainWindow::resetNodesActionTriggered()

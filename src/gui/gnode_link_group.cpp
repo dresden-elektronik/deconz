@@ -14,6 +14,7 @@
 #include <array>
 #include <vector>
 #include "deconz/dbg_trace.h"
+#include "gui/theme.h"
 #include "zm_glink.h"
 #include "gnode_link_group.h"
 #include "zm_graphicsview.h"
@@ -74,9 +75,7 @@ NodeLinkGroup::~NodeLinkGroup()
 
 void NodeLinkGroup::paint(QPainter *painter, const QRectF &rect)
 {
-    static const QColor bgColor(250, 250, 250);
-    const QBrush sceneColor(bgColor);
-    // static const QColor sceneColor(245, 100, 100);
+    const QBrush sceneColor(Theme_Color(ColorNodeViewBackground));
 
     d->paintAge++;
     if (d->quality == RenderQualityHigh)
@@ -310,6 +309,12 @@ void NodeLinkGroup::removeLink(NodeLink *link)
         markDirty(link);
         d->links.erase(i);
     }
+}
+
+void NodeLinkGroup::repaintAll()
+{
+    d->dirtyRect = d->sceneRect;
+    d->view->scene()->invalidate();
 }
 
 void NodeLinkGroup::setRenderQuality(RenderQuality quality)
