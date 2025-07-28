@@ -111,6 +111,12 @@ int main(int argc, char *argv[])
             arg = arg + args[i].size() + 1;
         }
 
+#if 0
+// unfortunately this messes up node drawing and other widget stuff
+        QGuiApplication::setAttribute(Qt::AA_EnableHighDpiScaling, true);
+        QGuiApplication::setAttribute(Qt::AA_UseHighDpiPixmaps, true);
+        QGuiApplication::setHighDpiScaleFactorRoundingPolicy(Qt::HighDpiScaleFactorRoundingPolicy::PassThrough);
+#endif
         zmApp a(argc2, argv2);
 
         if (!pidInitialised) // needs to run after app instance created

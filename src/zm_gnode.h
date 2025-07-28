@@ -105,6 +105,7 @@ protected:
     void keyPressEvent(QKeyEvent *event) override;
 
     void updateParameters();
+    void resetIndicator();
 
 protected:
     deCONZ::SteadyTimeRef m_otauActiveTime{};
@@ -120,6 +121,7 @@ protected:
     QRectF m_endpointToggle;
     const IndicationDef *m_indDef = nullptr;
     int m_indCount = 0;
+    deCONZ::Indication m_indType;
     QRectF m_indRect;
     QString m_name;
     QString m_extAddress;

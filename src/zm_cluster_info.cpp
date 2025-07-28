@@ -43,6 +43,7 @@ zmClusterInfo::zmClusterInfo(QWidget *parent) :
     m_attributeDialog(0)
 {
     ui->setupUi(this);
+    setProperty("theme.bgrole", QPalette::Mid);
     m_attrModel = new QStandardItemModel(this);
     m_init = false;
     QStringList attrHeaders;

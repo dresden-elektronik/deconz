@@ -105,7 +105,13 @@ zmNetEdit::zmNetEdit(QWidget *parent) :
 
     ui->endpointGroupBox->setEnabled(true);
     m_endpointLayout = new QVBoxLayout(ui->endpointGroupBox);
+    m_endpointLayout->setSpacing(24);
     ui->endpointGroupBox->setLayout(m_endpointLayout);
+
+    // fix endpoint tab not having active background color due QScrollArea
+    ui->scrollArea->viewport()->setAutoFillBackground(false);
+    ui->scrollArea->widget()->setAutoFillBackground(false);
+
     m_configCount = 0;
     ui->configStatus->clear();
     m_state = IdleState;

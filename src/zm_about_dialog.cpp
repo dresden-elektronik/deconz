@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2024 dresden elektronik ingenieurtechnik gmbh.
+ * Copyright (c) 2013-2025 dresden elektronik ingenieurtechnik gmbh.
  * All rights reserved.
  *
  * The software in this package is published under the terms of the BSD
@@ -13,6 +13,7 @@
 #include <QUrl>
 #include <QPushButton>
 #include "deconz/u_library_ex.h"
+#include "gui/theme.h"
 #include "zm_about_dialog.h"
 #include "ui_zm_about_dialog.h"
 #include "zm_master.h"
@@ -27,7 +28,9 @@ zmAboutDialog::zmAboutDialog(QWidget *parent) :
     ui->setupUi(this);
     setWindowTitle(tr("About") + " " + qApp->applicationName());
     ui->copyrightLabel->setText(tr("Copyright © %1 dresden elektronik ingenieurtechnik gmbh. All rights reserved.").arg(sourceDateTime.date().year()));
-    ui->copyrightLabel->setForegroundRole(QPalette::Shadow);
+    ui->copyrightLabel->setDisabled(true);
+
+    ui->labelLogo->hide(); // doesn't work well with theme, hide for now
 
     ui->buttonBox->button(QDialogButtonBox::Ok)->setIcon(QIcon());
     connect(ui->buttonBox, SIGNAL(accepted()),
@@ -38,6 +41,9 @@ zmAboutDialog::zmAboutDialog(QWidget *parent) :
 
     connect(ui->labelSupportMail, SIGNAL(linkActivated(QString)),
             this, SLOT(linkActivated(QString)));
+
+    setAutoFillBackground(true);
+
 }
 
 zmAboutDialog::~zmAboutDialog()
@@ -102,6 +108,24 @@ void zmAboutDialog::showEvent(QShowEvent *event)
     appVersion += "\n" + devFirmwareVersion + "\n";
 
     ui->appVersionLabel->setText(appVersion);
+    updateStyle();
 
     QDialog::showEvent(event);
+}
+
+bool zmAboutDialog::event(QEvent *event)
+{
+    if (event->type() == QEvent::PaletteChange && isVisible())
+    {
+        updateStyle();
+    }
+    return QDialog::event(event);
+}
+
+void zmAboutDialog::updateStyle()
+{
+    QColor color = palette().link().color();
+    QString sheet = QString::fromLatin1("a { text-decoration: none; color: %1; }").arg(color.name());
+    ui->labelWWW->setStyleSheet(sheet);
+    ui->labelSupportMail->setStyleSheet(sheet);
 }

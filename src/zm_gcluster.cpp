@@ -21,6 +21,7 @@
 #include <QUrlQuery>
 
 #include "deconz/types.h"
+#include "gui/theme.h"
 #include "zm_controller.h"
 #include "zm_gcluster.h"
 #include "zm_gendpointbox.h"
@@ -244,10 +245,16 @@ void zmgCluster::paint(QPainter *painter, const QStyleOptionGraphicsItem *option
     const int averageCharWidth = painter->fontMetrics().averageCharWidth();
     const int textY = static_cast<int>(m_rect.y() + averageCharWidth + painter->fontMetrics().ascent());
 
-    const QColor colorDim(102, 102, 102);
-    const QColor colorLightGray(221, 221, 221);
-    const QColor colorWhite(255, 255, 255);
-    const QColor colorServer(18, 64, 171);
+    QColor colorDim(102, 102, 102);
+    QColor colorLightGray(221, 221, 221);
+    QColor colorWhite(255, 255, 255);
+    QColor colorServer(18, 64, 171);
+
+    QPalette pal = widget->palette();
+
+    colorServer = Theme_Color(ColorServerCluster);
+    colorWhite = pal.color(QPalette::Base);
+    colorLightGray = pal.color(QPalette::AlternateBase);
 
     QColor color = option->state & QStyle::State_MouseOver ?
                 colorLightGray :
@@ -268,7 +275,7 @@ void zmgCluster::paint(QPainter *painter, const QStyleOptionGraphicsItem *option
 
 
     // cluster name
-    color = option->palette.color(QPalette::Text);
+    color = pal.color(QPalette::WindowText);
 
     painter->setPen(QPen(color));
     painter->setFont(m_font);

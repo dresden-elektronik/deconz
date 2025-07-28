@@ -60,24 +60,33 @@
             <property name="orientation">
              <enum>Qt::Horizontal</enum>
             </property>
+            <property name="sizeType">
+             <enum>QSizePolicy::MinimumExpanding</enum>
+            </property>
             <property name="sizeHint" stdset="0">
              <size>
-              <width>140</width>
+              <width>40</width>
               <height>62</height>
              </size>
             </property>
            </spacer>
           </item>
           <item>
-           <widget class="QLabel" name="label_5">
+           <widget class="QLabel" name="labelLogo">
+            <property name="maximumSize">
+             <size>
+              <width>320</width>
+              <height>16777215</height>
+             </size>
+            </property>
             <property name="text">
              <string/>
             </property>
             <property name="pixmap">
-             <pixmap resource="zm_resources.qrc">:/img/welcome.png</pixmap>
+             <pixmap resource="zm_resources.qrc">:/img/deconz_mask.png</pixmap>
             </property>
-            <property name="scaledContents">
-             <bool>false</bool>
+            <property name="alignment">
+             <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignTop</set>
             </property>
            </widget>
           </item>
@@ -86,9 +95,12 @@
             <property name="orientation">
              <enum>Qt::Horizontal</enum>
             </property>
+            <property name="sizeType">
+             <enum>QSizePolicy::Minimum</enum>
+            </property>
             <property name="sizeHint" stdset="0">
              <size>
-              <width>40</width>
+              <width>32</width>
               <height>20</height>
              </size>
             </property>
@@ -179,7 +191,7 @@ p, li { white-space: pre-wrap; }
           <item>
            <widget class="QStackedWidget" name="stateStackedWidget">
             <property name="currentIndex">
-             <number>2</number>
+             <number>0</number>
             </property>
             <widget class="QWidget" name="connectPage">
              <layout class="QHBoxLayout" name="horizontalLayout_6">
@@ -316,10 +328,6 @@ p, li { white-space: pre-wrap; }
                      </property>
                      <property name="text">
                       <string>Connect</string>
-                     </property>
-                     <property name="icon">
-                      <iconset resource="zm_resources.qrc">
-                       <normaloff>:/icons/faenza/stock_connect.png</normaloff>:/icons/faenza/stock_connect.png</iconset>
                      </property>
                      <property name="iconSize">
                       <size>

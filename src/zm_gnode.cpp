@@ -30,7 +30,7 @@
 
 #define NODE_COLOR         239, 239, 239
 #define NODE_COLOR_DARK    180, 180, 180
-#define NODE_COLOR_BRIGHT  240, 240, 240
+//#define NODE_COLOR_BRIGHT  240, 240, 240
 
 extern void NV_AddNodeIndicator(void *user, int runs); // defined in zm_graphicsview.cpp
 
@@ -55,7 +55,6 @@ struct IndicationDef
     quint8 count;
     quint8 resetColor;
     QColor colorHi;
-    QColor colorLo;
 };
 
 static int GuiNode_MessageCallback(struct am_message *msg)
@@ -127,6 +126,11 @@ void SendNotifyMessageKeyPressed(am_u64 extaddr, am_s32 key)
     }
 }
 
+static QColor indicatorBackGroundColor()
+{
+    return Theme_Color(ColorNodeIndicatorBackground);
+}
+
 zmgNode::zmgNode(deCONZ::zmNode *data, QGraphicsItem *parent) :
     QGraphicsObject(parent),
     m_data(data),
@@ -159,8 +163,7 @@ zmgNode::zmgNode(deCONZ::zmNode *data, QGraphicsItem *parent) :
     setZValue(0.1);
 
     m_indicator = new QGraphicsEllipseItem(m_indRect, this);
-    m_indicator->setPen(QColor(NODE_COLOR_BRIGHT));
-    m_indicator->setBrush(QColor(NODE_COLOR_DARK));
+    resetIndicator();
 }
 
 zmgNode::~zmgNode()
@@ -278,16 +281,17 @@ void zmgNode::indicate(deCONZ::Indication type)
     Q_ASSERT(type < 6);
 
     static const IndicationDef indicationDef[] = {
-         {0, 0, 1, QColor(NODE_COLOR_DARK), QColor(NODE_COLOR_DARK) }, // None
-         {IndGeneralInterval, IndGeneralCount, 1, QColor(Qt::green), QColor(NODE_COLOR_DARK) }, // Receive
-         {IndGeneralInterval, IndGeneralCount, 0, QColor(Qt::yellow), QColor(Qt::yellow) }, // Send
-         {IndDataUpdateInterval, IndDataUpdateCount, 1, QColor(30, 60, 200), QColor(NODE_COLOR_DARK) }, // Send Done
-         {IndDataUpdateInterval, IndDataUpdateCount, 1, QColor(30, 60, 200), QColor(NODE_COLOR_DARK) }, // Data update
-         {IndGeneralInterval, IndGeneralCount, 1, QColor(Qt::red), QColor(NODE_COLOR_DARK) }, // Error
+         {0, 0, 1, QColor(NODE_COLOR_DARK) }, // None
+         {IndGeneralInterval, IndGeneralCount, 1, QColor(Qt::green) }, // Receive
+         {IndGeneralInterval, IndGeneralCount, 0, QColor(Qt::yellow) }, // Send
+         {IndDataUpdateInterval, IndDataUpdateCount, 1, QColor(30, 60, 200) }, // Send Done
+         {IndDataUpdateInterval, IndDataUpdateCount, 1, QColor(30, 60, 200) }, // Data update
+         {IndGeneralInterval, IndGeneralCount, 1, QColor(Qt::red) }, // Error
     };
 
     m_indDef = &indicationDef[type];
     m_indCount = m_indDef->count;
+    m_indType = type;
 
     NV_AddNodeIndicator(this, m_indCount);
 }
@@ -302,21 +306,20 @@ void zmgNode::paint(QPainter *painter, const QStyleOptionGraphicsItem *option, Q
     Q_UNUSED(widget)
 
     const QColor nodeColor = Theme_Color(ColorNodeBase);
-    const QColor nodeColorSelected = nodeColor.lighter(104);
     static const QColor nodeColorNeutral(160, 160, 160);
     static const QColor colorCoordinator(0, 132, 209);
     static const QColor colorRouterDead(240, 190, 15);
     static const QColor colorRouter(255, 211, 32);
     static const QColor colorOtau(120, 250, 100);
-    QColor nodeShadowColor(165, 165, 165);
-    static const QColor colorToggleBackground(240, 240, 240);
-    static const QColor colorInset(140, 140, 140);
-    static const QColor colorInsetDark(100, 100, 100);
+    const QColor nodeShadowColor(Theme_Color(ColorNodeViewBackground).darker(125));
+    const QColor textColorDark = qApp->palette().color(QPalette::Active, QPalette::Text);
+    const QColor textColorDim = qApp->palette().color(QPalette::Disabled, QPalette::Text);
 
     QPainter &p = *painter;
 
     p.setRenderHint(QPainter::Antialiasing, true);
 
+    QColor nameColor = qApp->palette().color(QPalette::WindowText);
     const QColor *m_color = &nodeColorNeutral;
 
     const int rheight = option->rect.height();
@@ -342,9 +345,11 @@ void zmgNode::paint(QPainter *painter, const QStyleOptionGraphicsItem *option, Q
         else if (m_deviceType == deCONZ::Coordinator)
         {
             m_color = &colorCoordinator;
+            nameColor = Theme_Color(ColorNodeCoordinatorText);
         }
         else if (m_deviceType == deCONZ::Router)
         {
+            nameColor = Theme_Color(ColorNodeRouterText);
             if (m_isZombie || m_data->state() == deCONZ::FailureState || (ageSeconds >= tooOld))
             {
                 m_color = &colorRouterDead;
@@ -356,6 +361,7 @@ void zmgNode::paint(QPainter *painter, const QStyleOptionGraphicsItem *option, Q
         }
         else if (m_deviceType == deCONZ::EndDevice)
         {
+            nameColor = Theme_Color(ColorNodeEndDeviceText);
             m_color = &nodeColorNeutral;
         }
     }
@@ -364,19 +370,18 @@ void zmgNode::paint(QPainter *painter, const QStyleOptionGraphicsItem *option, Q
     qreal roundBorder = 2;
     qreal shadowY = -1;
 
-    // nodeShadowColor = *m_color;
-
-    // p.setBrush(nodeShadowColor);
-    // p.setPen(QPen(nodeShadowColor, 2));
-    // p.drawRoundedRect(QRectF(option->rect).adjusted(-1, -1, 1, 1), roundBorder, roundBorder);
+    p.setBrush(nodeShadowColor);
+    p.setPen(QPen(nodeShadowColor, 1));
+    p.drawRoundedRect(option->rect, roundBorder, roundBorder);
 
     // surface
     qreal inset = 1;
     if (option->state & QStyle::State_Selected)
     {
+        const QColor nodeColorSelected = nodeColor.lighter(104);
         p.setBrush(nodeColorSelected);
         //inset = 0;
-        p.setPen(QPen(QColor(0, 80, 250), 2));
+        p.setPen(QPen(qApp->palette().color(QPalette::Highlight), 2));
     }
     else
     {
@@ -386,32 +391,18 @@ void zmgNode::paint(QPainter *painter, const QStyleOptionGraphicsItem *option, Q
 
     p.drawRoundedRect(option->rect.adjusted(inset, inset, -inset, -inset), roundBorder, roundBorder);
 
+    // node left color bar (coordinator, router, end device colors)
     p.setClipRect(0, 0, 16, 100);
     p.setBrush(*m_color);
     p.drawRoundedRect(option->rect.adjusted(inset, inset, -inset, -inset), roundBorder, roundBorder);
     p.setClipping(false);
 
-    // if ((option->state & QStyle::State_Selected) == 0)
-    // {
-    //     QRect rect = option->rect;
-
-    //     QLinearGradient gradient(rect.topLeft(), rect.bottomLeft());
-    //     gradient.setColorAt(0, QColor(255, 255, 255, 96));
-    //     gradient.setColorAt(1, QColor(130, 130, 130, 64));
-
-    //     p.setPen(QPen(gradient, 0.75));
-    //     p.setBrush(Qt::NoBrush);
-
-    //     p.drawRoundedRect(rect.adjusted(inset + 1.0, inset, -inset, -inset), roundBorder, roundBorder);
-    // }
-
-    // endpoint checkbox subcontrol
+    // endpoint checkbox subcontrol +/-
     p.setPen(Qt::NoPen);
     if (!data()->simpleDescriptors().empty())
     {
-//        p.setPen(QPen(colorInset, 1.0));
-//        p.setBrush(colorToggleBackground);
-//        p.drawRoundedRect(m_endpointToggle, 3.0, 3.0);
+        const int bri = (textColorDark.red() + textColorDim.red()) / 2;
+        const QColor colorInsetDark(bri, bri, bri);
 
         QRectF r = m_endpointToggle;
         qreal pad = 3.0;
@@ -420,24 +411,12 @@ void zmgNode::paint(QPainter *painter, const QStyleOptionGraphicsItem *option, Q
         const qreal round = 1.0;
 
         p.setPen(Qt::NoPen);
-        // shade
         p.setBrush(colorInsetDark);
         p.drawRoundedRect(r.adjusted(pad, subt, -pad, -subt), round, round);
 
         if (!m_epDropDownVisible)
         {
             p.drawRoundedRect(r.adjusted(subt, pad, -subt, -pad), round, round);
-        }
-
-        // inner
-        pad = 4.0;
-        subt += 1.0;
-        p.setBrush(colorInset);
-        p.drawRect(r.adjusted(pad, subt, -pad, -subt));
-
-        if (!m_epDropDownVisible)
-        {
-            p.drawRect(r.adjusted(subt, pad, -subt, -pad));
         }
     }
 
@@ -456,24 +435,8 @@ void zmgNode::paint(QPainter *painter, const QStyleOptionGraphicsItem *option, Q
     QFontMetrics fm(fn);
 
     // NWK address | Userdescriptor
-    auto textColorDark = qApp->palette().color(QPalette::Active, QPalette::Text);
-    auto textColorDim = qApp->palette().color(QPalette::Disabled, QPalette::Text);
-
-    //const QColor textColorDark(textBrightness, textBrightness, textBrightness);
-    //const QColor textColorDim(80, 80, 80);
-
-    //p.setPen(QPen(textColorDark, 2));
-
     QRect rectName = option->rect.adjusted(NamePad, fm.capHeight() * 3 / 8, -2 * ToggleSize, 0);
     rectName.setHeight(fm.capHeight() * 2);
-
-    // p.fillRect(rectName, Qt::cyan);
-    // text shadow
-    // p.setPen(QPen(nodeColor.darker(200), 2));
-    // p.drawText(rectName.translated(0,2), Qt::AlignVCenter, m_name);
-    // p.setPen(QPen(nodeColor.darker(300), 2));
-    // p.drawText(rectName.translated(0,1), Qt::AlignVCenter, m_name);
-
 
     if (ageSeconds >= tooOld)
     {
@@ -481,8 +444,7 @@ void zmgNode::paint(QPainter *painter, const QStyleOptionGraphicsItem *option, Q
     }
     else
     {
-        p.setPen(QPen(textColorDark, 2));
-        p.setPen(QPen(*m_color, 2));
+        p.setPen(QPen(nameColor, 2));
     }
     p.drawText(rectName, Qt::AlignVCenter, m_name);    
 
@@ -504,12 +466,10 @@ void zmgNode::paint(QPainter *painter, const QStyleOptionGraphicsItem *option, Q
 
     // IEEE address
     fn = Theme_FontMonospace();
-    //fn.setFamily(QLatin1String("monospace"));
     fn.setBold(false);
     fn.setPointSize(MacPointSize);
     p.setFont(fn);
     fm = QFontMetrics(fn);
-    //p.setPen(QPen(QColor(50, 50, 50), 2));
     p.setPen(QPen(textColorDim));
     if (m_extAddress.isEmpty())
     {
@@ -517,7 +477,6 @@ void zmgNode::paint(QPainter *painter, const QStyleOptionGraphicsItem *option, Q
     }
 
     QRect macRect = option->rect.adjusted(m_indRect.x() + m_indRect.width() + 4, option->rect.height() / 2, 0, 0);
-    // p.fillRect(macRect, Qt::yellow);
 
     p.drawText(macRect, Qt::AlignVCenter, m_extAddress);
 
@@ -785,35 +744,47 @@ void NV_IndicatorCallback(void *user)
     }
 }
 
+void zmgNode::resetIndicator()
+{
+    const QColor bg = indicatorBackGroundColor();
+    m_indicator->setPen(bg.darker(125));
+    m_indicator->setBrush(bg);
+}
+
 void zmgNode::indicationTick()
 {
     m_indCount--;
+    bool reset = false;
     if (m_indDef)
     {
-#if 1 /* TEMP */
         if (m_indCount >= 0)
         {
             if (m_indCount & 1)
             {
-                m_indicator->setBrush(m_indDef->colorHi);
+                if (m_indType == deCONZ::IndicateDataUpdate || m_indType == deCONZ::IndicateSendDone)
+                {
+                    QColor color = Theme_Color(ColorNodeIndicatorRx);
+                    m_indicator->setBrush(color);
+                }
+                else
+                {
+                    m_indicator->setBrush(m_indDef->colorHi);
+                }
             }
             else
             {
-                m_indicator->setBrush(m_indDef->colorLo);
+                reset = true;
             }
         }
         else
         {
-            if (m_indDef->resetColor)
-            {
-                m_indicator->setBrush(QColor(NODE_COLOR_DARK));
-            }
-            else
-            {
-                m_indicator->setBrush(m_indDef->colorLo);
-            }
+            reset = true;
         }
-#endif
+
+        if (reset)
+        {
+            resetIndicator();
+        }
     }
     if (m_indCount <= 0)
     {

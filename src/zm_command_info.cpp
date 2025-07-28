@@ -36,6 +36,8 @@ zmCommandInfo::zmCommandInfo(QWidget *parent) :
 {
     ui->setupUi(this);
     m_vbox = new QVBoxLayout(this);
+    m_vbox->setContentsMargins(0,0,0,0);
+    m_vbox->setSpacing(24);
     m_execMapper = new QSignalMapper(this);
 
     m_commandTimeout = 10 * 1000;
@@ -360,7 +362,9 @@ void zmCommandInfo::createCommandWidget(CommandDescriptor &descriptor, bool resp
     if (!response)
     {
         cmd = &descriptor.command;
-        w = new QGroupBox(cmd->name());
+        auto *gb = new QGroupBox(cmd->name());
+        w = gb;
+        gb->setFlat(true);
         lay = new QVBoxLayout(w);
         descriptor.execButton = new QPushButton(tr("exec"));
         descriptor.statusLabel = new QLabel;
@@ -508,6 +512,8 @@ void zmCommandInfo::createCommandWidget(CommandDescriptor &descriptor, bool resp
             if (!response)
             {
                 QComboBox *combo = new QComboBox;
+                // adjust size policy otherwise the widget gets too large minimum size for long entries
+                combo->setSizeAdjustPolicy(QComboBox::AdjustToMinimumContentsLengthWithIcon);
                 valueWidget.reset(combo);
                 auto names = i->valuesNames();
                 auto values = i->valueNamePositions();

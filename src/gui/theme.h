@@ -17,7 +17,14 @@
 enum ThemeColor
 {
     ColorNodeBase,
-    ColorNodeViewBackground
+    ColorNodeIndicatorBackground,
+    ColorNodeIndicatorRx,
+    ColorNodeViewBackground,
+    ColorNodeCoordinatorText,
+    ColorNodeRouterText,
+    ColorNodeEndDeviceText,
+    ColorServerCluster,
+    ColorUrls
 };
 
 void Theme_Init();
@@ -47,8 +54,10 @@ public:
     void unpolish(QApplication *app) override;
     void drawPrimitive(PrimitiveElement element, const QStyleOption *option, QPainter *painter, const QWidget *widget = nullptr) const override;
     void drawControl(ControlElement element, const QStyleOption *option, QPainter *painter, const QWidget *widget = nullptr) const override;
+    void drawComplexControl(ComplexControl control, const QStyleOptionComplex *option, QPainter *painter, const QWidget *widget = nullptr) const override;
     int pixelMetric(PixelMetric metric, const QStyleOption *option = nullptr, const QWidget *widget = nullptr) const override;
     QPalette standardPalette() const override;
+    QRect subControlRect(ComplexControl control, const QStyleOptionComplex *option, SubControl subControl, const QWidget *widget) const override;
 
 protected:
 };

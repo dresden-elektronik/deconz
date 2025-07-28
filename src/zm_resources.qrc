@@ -27,5 +27,6 @@
         <file>icons/cryo/32/drive-disk@2x.png</file>
         <file>icons/cryo/32/folder.png</file>
         <file>icons/cryo/32/folder@2x.png</file>
+        <file>img/deconz_mask.png</file>
     </qresource>
 </RCC>

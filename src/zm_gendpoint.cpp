@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2024 dresden elektronik ingenieurtechnik gmbh.
+ * Copyright (c) 2013-2025 dresden elektronik ingenieurtechnik gmbh.
  * All rights reserved.
  *
  * The software in this package is published under the terms of the BSD
@@ -12,10 +12,10 @@
 #include <QGraphicsSceneMouseEvent>
 #include <QPainter>
 #include <QWidget>
-#include <QStyleOptionButton>
-#include <QStyleOptionGroupBox>
+// #include <QStyleOptionButton>
+// #include <QStyleOptionGroupBox>
 #include <QStyleOptionGraphicsItem>
-#include <QStylePainter>
+// #include <QStylePainter>
 #include <QDrag>
 #include <QMimeData>
 
@@ -95,47 +95,14 @@ void zmgEndpoint::setGeometry(const QRectF &rect)
 
 void zmgEndpoint::paint(QPainter *painter, const QStyleOptionGraphicsItem *option, QWidget *widget)
 {
-    QStylePainter p(painter->device(), widget);
-    QStyleOptionButton opt;
-    QColor nodeColorBright(220, 220, 220);
-    QColor nodeColorDark(180, 180, 180);
+    QPalette pal = widget->palette();
+    const QColor nodeColorBright(pal.window().color());
 
-    p.setRenderHint(QPainter::Antialiasing, true);
-    p.setTransform(painter->transform());
-    opt.initFrom(widget);
+    painter->setPen(Qt::NoPen);
+    painter->setBrush(nodeColorBright);
+    painter->drawRoundedRect(option->rect.adjusted(2, 1, -2, -1), 2, 2);
 
-//    opt.features |= QStyleOptionButton::DefaultButton;
-//    opt.icon = m_iconDevice;
-//    opt.iconSize = QSize(32, 32);
-//    opt.text = m_device;
-//    opt.palette = option->palette;
-    opt.rect = option->rect;
-    opt.state = option->state;
-
-    QLinearGradient grad(option->rect.topLeft(), option->rect.bottomLeft());
-    grad.setColorAt(1.0, nodeColorDark.darker(130));
-    grad.setColorAt(0.99, nodeColorDark);
-    grad.setColorAt(0.05, nodeColorBright);
-    grad.setColorAt(0.025, nodeColorBright.lighter(220));
-    grad.setColorAt(0.0, nodeColorBright.lighter(250));
-
-    // fake shadow
-    p.setBrush(Qt::NoBrush);
-    p.setPen(QPen(nodeColorDark.darker(102), 1.1));
-    p.drawRoundedRect(option->rect.adjusted(2, 2, -1, -1), 3, 3);
-    p.setPen(QPen(nodeColorDark.darker(130), 0.8));
-    p.drawRoundedRect(option->rect.adjusted(3, 3, -2, -2), 3, 3);
-
-    p.setPen(Qt::NoPen);
-    p.setBrush(grad);
-//    p.setPen(QPen(borderColor, borderWidth));
-    p.drawRoundedRect(option->rect.adjusted(2, 2, -2, -2), 3, 3);
-
-    p.setPen(QPen(Qt::black));
-
-//    p.drawPrimitive(QStyle::PE_PanelButtonTool, opt);
-//    p.drawControl(QStyle::CE_PushButtonLabel, opt);
-
+    painter->setPen(QPen(pal.windowText().color(), 1));
     painter->setFont(m_font);
 
     qreal x = m_rect.x() + painter->fontMetrics().averageCharWidth();
@@ -169,11 +136,7 @@ void zmgEndpoint::paint(QPainter *painter, const QStyleOptionGraphicsItem *optio
     }
 
     painter->drawText(x, y + painter->fontMetrics().height(), m_profile);
-
-
-//    x = m_rect.x() + painter->fontMetrics().averageCharWidth();
     y += IconSize + painter->fontMetrics().leading();
-//    painter->drawText(x, y + painter->fontMetrics().height(), m_device);
     painter->drawStaticText(x, y, m_device);
 }
 

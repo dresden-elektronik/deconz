@@ -29,9 +29,11 @@ public Q_SLOTS:
     void linkActivated(const QString &link);
 
 protected:
-    void showEvent(QShowEvent *event);
+    void showEvent(QShowEvent *event) override;
+    bool event(QEvent *event) override;
 
 private:
+    void updateStyle();
     Ui::zm_about_dialog *ui;
 };
 

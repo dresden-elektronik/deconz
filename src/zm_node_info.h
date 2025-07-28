@@ -40,7 +40,8 @@ public:
     void setNode(deCONZ::zmNode *data);
     void dataChanged(deCONZ::zmNode *data);
 
-private slots:
+protected:
+    bool event(QEvent *event) override;
 
 private:
     enum NodeInfoState
@@ -52,6 +53,7 @@ private:
     void clear();
     void stateCheck();
     void setValue(size_t idx, const QVariant &value);
+    void updateHeader1Style();
 
     Ui::zmNodeInfo *ui = nullptr;
     deCONZ::zmNode *m_data = nullptr;

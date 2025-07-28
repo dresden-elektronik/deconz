@@ -128,6 +128,7 @@ private:
         QByteArray serial;
     };
     void setState(State state, int line);
+    void updateLogo();
 
     State m_state;
 

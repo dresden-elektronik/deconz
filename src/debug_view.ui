@@ -17,6 +17,9 @@
    <iconset resource="zm_resources.qrc">
     <normaloff>:/icons/de_logo_48px.png</normaloff>:/icons/de_logo_48px.png</iconset>
   </property>
+  <property name="autoFillBackground">
+   <bool>true</bool>
+  </property>
   <layout class="QHBoxLayout" name="horizontalLayout_2">
    <item>
     <widget class="QWidget" name="dbgItems" native="true">
@@ -28,10 +31,9 @@
      </property>
      <layout class="QVBoxLayout" name="verticalLayout">
       <item>
-       <widget class="QLabel" name="label">
+       <widget class="QLabel" name="labelDebugLevels">
         <property name="font">
          <font>
-          <weight>75</weight>
           <bold>true</bold>
          </font>
         </property>
