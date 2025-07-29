@@ -21,6 +21,7 @@ class NodeSocket;
 class NodeLink;
 class QGraphicsRectItem;
 class QTimer;
+class QModelIndex;
 
 /*!
     \class Node
@@ -90,6 +91,7 @@ public:
     void setLastSeen(qint64 lastSeen);
     void setHasDDF(int hasDDF);
     void indicationTick();
+    void vfsModelUpdated(const QModelIndex &index);
 
 signals:
     void moved();
@@ -138,9 +140,12 @@ protected:
     int m_battery = -1;
     bool m_isZombie = false;
     bool m_dirty = false;
+    uint32_t m_vfsState0 = 0;
     deCONZ::DeviceType m_deviceType = deCONZ::UnknownDevice;
 };
 
 void GUI_InitNodeActor();
+
+zmgNode *GUI_GetNodeWithMac(uint64_t mac);
 
 #endif

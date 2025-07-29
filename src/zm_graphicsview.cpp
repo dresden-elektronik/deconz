@@ -14,9 +14,13 @@
 #include <QWheelEvent>
 #include <qmath.h>
 #include <vector>
+#include "deconz/atom_table.h"
 #include "deconz/dbg_trace.h"
+#include "deconz/u_sstream_ex.h"
 #include "gui/gnode_link_group.h"
 #include "zm_graphicsview.h"
+#include "zm_gnode.h"
+#include "actor_vfs_model.h"
 
 struct NodeIndicator
 {
@@ -36,6 +40,8 @@ public:
 
 static zmGraphicsView *inst;
 static GraphicsViewPrivate *inst_d;
+static AT_AtomIndex ati_state;
+static AT_AtomIndex ati_devices;
 
 // defined in zm_gnode.cpp
 extern void NV_IndicatorCallback(void *user);
@@ -86,6 +92,11 @@ zmGraphicsView::zmGraphicsView(QWidget *parent) :
     inst_d = d_ptr;
 
     d_ptr->m_indicationTimer = startTimer(500);
+
+    AT_AddAtom("state", qstrlen("state"), &ati_state);
+    AT_AddAtom("devices", qstrlen("devices"), &ati_devices);
+
+    connect(ActorVfsModel::instance(), &ActorVfsModel::dataChanged, this, &zmGraphicsView::vfsDataChanged);
 }
 
 zmGraphicsView::~zmGraphicsView()
@@ -248,6 +259,61 @@ void zmGraphicsView::processIndications()
             d_ptr->indicators[i] = d_ptr->indicators.back();
             d_ptr->indicators.pop_back();
         }
+    }
+}
+
+void zmGraphicsView::vfsDataChanged(const QModelIndex &topLeft, const QModelIndex &bottomRight, const QVector<int> &roles)
+{
+    // devices/00:0b:57:ff:fe:26:56:80/subdevices/00:0b:57:ff:fe:26:56:80-01/attr/swversion
+
+    QModelIndex parent = topLeft.parent();
+
+    // state/*
+    if (parent.data(ActorVfsModel::AtomIndexRole).toUInt() == ati_state.index)
+    {
+    }
+    else
+    {
+        return; // filter for now
+    }
+
+    parent = parent.parent(); // <sub device id>
+    parent = parent.parent(); // subdevices
+    parent = parent.parent(); // <mac>
+
+    AT_Atom aMac;
+    AT_Atom aValueName;
+
+    {
+        const auto v1 = parent.data(ActorVfsModel::AtomIndexRole);
+        const auto v2 = topLeft.data(ActorVfsModel::AtomIndexRole);
+
+        if (v1.isNull() || v2.isNull())
+            return;
+
+        AT_AtomIndex ati_mac;
+        AT_AtomIndex ati_value_name;
+        ati_mac.index = v1.toUInt();
+        ati_value_name.index = v2.toUInt();
+
+        aMac = AT_GetAtomByIndex(ati_mac);
+        aValueName = AT_GetAtomByIndex(ati_value_name);
+    }
+
+    if (aMac.data && aMac.len == 23 && aValueName.data)
+    {
+        U_SStream ss;
+        uint64_t mac = 0;
+
+        U_sstream_init(&ss, aMac.data, aMac.len);
+        mac = U_sstream_get_mac_address(&ss);
+
+
+        zmgNode *gnode = GUI_GetNodeWithMac(mac);
+        if (!gnode)
+            return;
+
+        gnode->vfsModelUpdated(topLeft);
     }
 }
 

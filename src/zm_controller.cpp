@@ -10143,3 +10143,16 @@ void zmController::addNodePlugin(NodeInterface *plugin)
         }
     }
 }
+
+/* TODO(mpi): Ths needs to be moved to GUI layer later on. */
+zmgNode *GUI_GetNodeWithMac(uint64_t mac)
+{
+    if (_apsCtrl)
+    {
+        NodeInfo ni = _apsCtrl->nodeWithMac(mac);
+        if (ni.g)
+        {
+            return ni.g;
+        }
+    }
+}

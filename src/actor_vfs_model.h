@@ -30,6 +30,12 @@ public:
         ColumnMax = 3
     };
 
+    enum ExtraRoles
+    {
+        AtomIndexRole = Qt::UserRole + 1,
+        RawValueRole = Qt::UserRole + 2
+    };
+
     explicit ActorVfsModel(QObject *parent = nullptr);
     ~ActorVfsModel();
 
@@ -50,6 +56,8 @@ public:
 
     void addActorId(unsigned actorId);
     int indexForActorId(unsigned actorId);
+
+    static ActorVfsModel *instance();
 
 private Q_SLOTS:
     void fetchTimerFired();

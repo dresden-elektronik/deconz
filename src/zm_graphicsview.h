@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2024 dresden elektronik ingenieurtechnik gmbh.
+ * Copyright (c) 2013-2025 dresden elektronik ingenieurtechnik gmbh.
  * All rights reserved.
  *
  * The software in this package is published under the terms of the BSD
@@ -44,6 +44,7 @@ protected:
 
 private:
     void processIndications();
+    void vfsDataChanged(const QModelIndex &topLeft, const QModelIndex &bottomRight, const QVector<int> &roles = QVector<int>());
 
     GraphicsViewPrivate *d_ptr = nullptr;
 };

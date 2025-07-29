@@ -233,6 +233,8 @@ MainWindow::MainWindow(QWidget *parent) :
         qApp->setPalette(pal);
     }
 
+    m_vfsModel = new ActorVfsModel(this);
+
     ui->setupUi(this);
     ui->stackedView->setCurrentWidget(ui->pageOffline);
     updateLogo();
@@ -242,8 +244,6 @@ MainWindow::MainWindow(QWidget *parent) :
     m_devUpdateCanditate = false;
     m_devEnum = new deCONZ::DeviceEnumerator(this);
     m_autoConnIdx = 0;
-
-    m_vfsModel = new ActorVfsModel(this);
 
     _nodeModel = new deCONZ::NodeModel(this);
 

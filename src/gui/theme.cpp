@@ -141,23 +141,24 @@ void Theme_Init()
             pal.setColor(QPalette::Link, 0xFF20a4f1);
             pal.setColor(QPalette::LinkVisited, 0xFF20a4f1);
 
+            pal.setColor(QPalette::Highlight, 0xFF006AD1);
+            pal.setColor(QPalette::HighlightedText, 0xFFfafafa);
+
             pal.setColor(QPalette::NoRole, Qt::cyan);
         }
 
         {
             QPalette &pal = _theme->darkPalette;
-            //pal.setColor(QPalette::ButtonText, 0xFFededed);
             pal.setColor(QPalette::ButtonText, 0xFFdfdfdf);
             pal.setColor(QPalette::Light, 0xFF606060);
             pal.setColor(QPalette::Midlight, 0xFF575757);
-            pal.setColor(QPalette::Button, 0xFF515151);
-            pal.setColor(QPalette::Mid, 0xFF383838); // between dark and button
+            pal.setColor(QPalette::Button, 0xFF434343);
+            pal.setColor(QPalette::Mid, 0xFF343434); // between dark and button
             pal.setColor(QPalette::Dark, 0xFF272727); // darker than button
             pal.setColor(QPalette::Shadow, 0xFF101010);
 
             pal.setColor(QPalette::BrightText, 0xFFfafafa);
-            //pal.setColor(QPalette::Window, 0xFF202020);
-            pal.setColor(QPalette::Window, 0xFF262626);
+            pal.setColor(QPalette::Window, 0xFF232323);
 
             pal.setColor(QPalette::WindowText, 0xFFe4e4e5);
             pal.setColor(QPalette::Disabled, QPalette::WindowText, 0xFF848485);
@@ -172,7 +173,7 @@ void Theme_Init()
             pal.setColor(QPalette::Link, 0xFF20a4f1);
             pal.setColor(QPalette::LinkVisited, 0xFF20a4f1);
 
-            pal.setColor(QPalette::Highlight, 0xFF3368a7);
+            pal.setColor(QPalette::Highlight, 0xFF3058b7);
             pal.setColor(QPalette::HighlightedText, 0xFFfafafa);
 
             pal.setColor(QPalette::Disabled, QPalette::Highlight, 0xFF646464);
@@ -218,7 +219,7 @@ void Theme_Activate(const QString &theme)
         colorNodeIndicatorBackground = 0xFF404040;
         colorNodeIndicatorRx = 0xFF20a4ff;
         colorNodeViewBackground = 0xFF383838;
-        colorNodeCoordinatorText = 0xFF20a4f1;
+        colorNodeCoordinatorText = 0xFF0084D1;
         colorNodeRouterText = 0xFFffd320;
         colorNodeEndDeviceText = _theme->palette.color(QPalette::WindowText).rgba();
         colorServerCluster = 0xFF20a4f1;
@@ -365,7 +366,14 @@ void AStyle::drawPrimitive(PrimitiveElement element, const QStyleOption *option,
 
             painter->translate(0.5, 0.5);
 
-            painter->setPen(QPen(option->palette.color(QPalette::Dark), lineWidth));
+            if (opt->state & State_On)
+            {
+                painter->setPen(QPen(option->palette.color(QPalette::Highlight), lineWidth));
+            }
+            else
+            {
+                painter->setPen(QPen(option->palette.color(QPalette::Dark), lineWidth));
+            }
             painter->drawRoundedRect(rect, _theme->roundRadius, _theme->roundRadius);
 
             painter->restore();

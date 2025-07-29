@@ -18,8 +18,10 @@
 #include <deconz/am_gui.h>
 #include <deconz/dbg_trace.h>
 #include <deconz/timeref.h>
+#include <deconz/atom_table.h>
 #include "gui/gnode_link_group.h"
 #include "gui/theme.h"
+#include "actor_vfs_model.h"
 #include "zm_app.h"
 #include "zm_node.h"
 #include "zm_gcluster.h"
@@ -28,9 +30,15 @@
 #include "zm_glink.h"
 #include "zm_gsocket.h"
 
+#define VFS_STATE_IS_ON           (1 << 0)
+#define VFS_STATE_IS_OFF          (1 << 1)
+#define VFS_STATE_IS_PRESENCE     (1 << 2)
+#define VFS_STATE_IS_NO_PRESENCE  (1 << 3)
+#define VFS_STATE_HAS_BRI         (1 << 1)
+#define VFS_STATE_HAS_TEMPERATURE (1 << 3)
+
 #define NODE_COLOR         239, 239, 239
 #define NODE_COLOR_DARK    180, 180, 180
-//#define NODE_COLOR_BRIGHT  240, 240, 240
 
 extern void NV_AddNodeIndicator(void *user, int runs); // defined in zm_graphicsview.cpp
 
@@ -46,6 +54,13 @@ static const int IndDataUpdateInterval = 400;
 static const int IndDataUpdateCount = 5;
 static am_actor am_actor_gui_node;
 static uint16_t msgNotifyTag;
+
+static AT_AtomIndex ati_state;
+static AT_AtomIndex ati_bri;
+static AT_AtomIndex ati_on;
+static AT_AtomIndex ati_presence;
+static AT_AtomIndex ati_temperature;
+
 
 extern deCONZ::SteadyTimeRef m_steadyTimeRef; // in zmController TODO proper interface
 
@@ -70,6 +85,12 @@ void GUI_InitNodeActor()
     AM_INIT_ACTOR(&am_actor_gui_node, AM_ACTOR_ID_GUI_NODE, GuiNode_MessageCallback);
 
     am->register_actor(&am_actor_gui_node);
+
+    AT_AddAtom("state", qstrlen("state"), &ati_state);
+    AT_AddAtom("bri", qstrlen("bri"), &ati_bri);
+    AT_AddAtom("on", qstrlen("on"), &ati_on);
+    AT_AddAtom("temperature", qstrlen("temperature"), &ati_temperature);
+    AT_AddAtom("presence", qstrlen("presence"), &ati_presence);
 }
 
 void SendNotifyMessage1(am_msg_id msgid, am_u64 extaddr)
@@ -311,7 +332,7 @@ void zmgNode::paint(QPainter *painter, const QStyleOptionGraphicsItem *option, Q
     static const QColor colorRouterDead(240, 190, 15);
     static const QColor colorRouter(255, 211, 32);
     static const QColor colorOtau(120, 250, 100);
-    const QColor nodeShadowColor(Theme_Color(ColorNodeViewBackground).darker(125));
+    const QColor nodeShadowColor(Theme_Color(ColorNodeViewBackground).darker(135));
     const QColor textColorDark = qApp->palette().color(QPalette::Active, QPalette::Text);
     const QColor textColorDim = qApp->palette().color(QPalette::Disabled, QPalette::Text);
 
@@ -368,22 +389,32 @@ void zmgNode::paint(QPainter *painter, const QStyleOptionGraphicsItem *option, Q
 
     // fake shadow
     qreal roundBorder = 2;
-    qreal shadowY = -1;
+    //qreal shadowY = -1;
 
-    p.setBrush(nodeShadowColor);
-    p.setPen(QPen(nodeShadowColor, 1));
+
+    if (m_vfsState0 & VFS_STATE_IS_ON)
+    {
+        p.setBrush(*m_color);
+        p.setPen(QPen(*m_color, 1));
+    }
+    else
+    {
+        p.setBrush(nodeShadowColor);
+        p.setPen(QPen(nodeShadowColor, 1));
+    }
+
     p.drawRoundedRect(option->rect, roundBorder, roundBorder);
 
     // surface
     qreal inset = 1;
-    if (option->state & QStyle::State_Selected)
-    {
-        const QColor nodeColorSelected = nodeColor.lighter(104);
-        p.setBrush(nodeColorSelected);
-        //inset = 0;
-        p.setPen(QPen(qApp->palette().color(QPalette::Highlight), 2));
-    }
-    else
+    // if (option->state & QStyle::State_Selected)
+    // {
+    //     const QColor nodeColorSelected = nodeColor.lighter(105);
+    //     p.setBrush(nodeColorSelected);
+    //     inset = 0;
+    //     p.setPen(QPen(qApp->palette().color(QPalette::Highlight), 3));
+    // }
+    // else
     {
         p.setBrush(nodeColor);
         p.setPen(Qt::NoPen);
@@ -392,9 +423,22 @@ void zmgNode::paint(QPainter *painter, const QStyleOptionGraphicsItem *option, Q
     p.drawRoundedRect(option->rect.adjusted(inset, inset, -inset, -inset), roundBorder, roundBorder);
 
     // node left color bar (coordinator, router, end device colors)
-    p.setClipRect(0, 0, 16, 100);
+    {
+        QRect r = option->rect;
+        r.setRight(r.left() + 16);
+        p.setClipRect(r);
+    }
     p.setBrush(*m_color);
-    p.drawRoundedRect(option->rect.adjusted(inset, inset, -inset, -inset), roundBorder, roundBorder);
+    if (m_vfsState0 & VFS_STATE_IS_ON)
+    {
+        p.setPen(QPen(*m_color, 1));
+        p.drawRoundedRect(option->rect.adjusted(0, 0, 0, 0), roundBorder, roundBorder);
+    }
+    else
+    {
+        p.drawRoundedRect(option->rect.adjusted(inset, inset, -inset, -inset), roundBorder, roundBorder);
+    }
+
     p.setClipping(false);
 
     // endpoint checkbox subcontrol +/-
@@ -476,7 +520,30 @@ void zmgNode::paint(QPainter *painter, const QStyleOptionGraphicsItem *option, Q
         m_extAddress = QString(QLatin1String("%1")).arg(m_extAddressCache, 16, 16, QLatin1Char('0')).toUpper();
     }
 
-    QRect macRect = option->rect.adjusted(m_indRect.x() + m_indRect.width() + 4, option->rect.height() / 2, 0, 0);
+    QRect macRect = option->rect.adjusted(m_indRect.x() + m_indRect.width() + 16, option->rect.height() / 2, 0, 0);
+
+
+    if (m_vfsState0 & (VFS_STATE_IS_PRESENCE | VFS_STATE_IS_NO_PRESENCE))
+    {
+        p.save();
+
+        QColor red(Qt::red);
+
+        if (m_vfsState0 & VFS_STATE_IS_NO_PRESENCE)
+        {
+            red.setAlpha(32);
+        }
+
+        p.setPen(Qt::NoPen);
+        p.setBrush(red);
+
+        QRect r = m_indRect.toRect();
+        r.moveCenter(macRect.center());
+        r.moveLeft(m_indRect.left());
+        p.drawEllipse(r);
+
+        p.restore();
+    }
 
     p.drawText(macRect, Qt::AlignVCenter, m_extAddress);
 
@@ -484,6 +551,14 @@ void zmgNode::paint(QPainter *painter, const QStyleOptionGraphicsItem *option, Q
     {
         qreal x = m_indRect.x() + m_indRect.width();
         p.drawPixmap(x + 4, m_indRect.y() - m_indRect.height() + 3, m_pm);
+    }
+
+    if (option->state & QStyle::State_Selected)
+    {
+        inset = 0;
+        p.setBrush(Qt::NoBrush);
+        p.setPen(QPen(qApp->palette().color(QPalette::Highlight), 2));
+        p.drawRoundedRect(option->rect.adjusted(inset, inset, -inset, -inset), roundBorder, roundBorder);
     }
 }
 
@@ -747,7 +822,7 @@ void NV_IndicatorCallback(void *user)
 void zmgNode::resetIndicator()
 {
     const QColor bg = indicatorBackGroundColor();
-    m_indicator->setPen(bg.darker(125));
+    m_indicator->setPen(bg.darker(109));
     m_indicator->setBrush(bg);
 }
 
@@ -789,6 +864,80 @@ void zmgNode::indicationTick()
     if (m_indCount <= 0)
     {
         m_indCount = -1;
+    }
+}
+
+/*! The VFS model has fresh state data likely from REST plugin.
+    Filter further to show some data in the GUI.
+ */
+void zmgNode::vfsModelUpdated(const QModelIndex &index)
+{
+    // devices/00:0b:57:ff:fe:26:56:80/subdevices/00:0b:57:ff:fe:26:56:80-01/attr/swversion
+
+    auto oldVfsState = m_vfsState0;
+    QModelIndex parent = index.parent();
+
+    AT_AtomIndex atiValue;
+    atiValue.index = index.data(ActorVfsModel::AtomIndexRole).toUInt();
+    AT_Atom atValue = AT_GetAtomByIndex(atiValue);
+
+    if (atValue.data && parent.data(ActorVfsModel::AtomIndexRole).toUInt() == ati_state.index)
+    {
+        parent = index.parent(); // <sub device id>
+
+        AT_AtomIndex atiSubdeviceId;
+        atiSubdeviceId.index = parent.data(ActorVfsModel::AtomIndexRole).toUInt();
+
+        int subDeviceRow = parent.row();
+
+
+        QVariant value = index.siblingAtColumn(ActorVfsModel::ColumnValue).data();
+
+
+        DBG_Printf(DBG_INFO, "ZMG [%d] %.*s -> %s\n", subDeviceRow, atValue.len, atValue.data, qPrintable(value.toString()));
+
+        if (atiValue.index == ati_on.index)
+        {
+            if (subDeviceRow == 0) // only use main sub device for now
+            {
+                if (value.toBool())
+                {
+                    m_vfsState0 &= ~VFS_STATE_IS_OFF;
+                    m_vfsState0 |= VFS_STATE_IS_ON;
+                }
+                else
+                {
+                    m_vfsState0 &= ~VFS_STATE_IS_ON;
+                    m_vfsState0 |= VFS_STATE_IS_OFF;
+                }
+            }
+        }
+        else if (atiValue.index == ati_bri.index)
+        {
+
+        }
+        else if (atiValue.index == ati_temperature.index)
+        {
+
+        }
+        else if (atiValue.index == ati_presence.index)
+        {
+            if (value.toBool())
+            {
+                m_vfsState0 &= ~VFS_STATE_IS_NO_PRESENCE;
+                m_vfsState0 |= VFS_STATE_IS_PRESENCE;
+            }
+            else
+            {
+                m_vfsState0 &= ~VFS_STATE_IS_PRESENCE;
+                m_vfsState0 |= VFS_STATE_IS_NO_PRESENCE;
+            }
+        }
+    }
+
+    if (oldVfsState != m_vfsState0)
+    {
+        update();
     }
 }
 

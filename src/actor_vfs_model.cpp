@@ -551,8 +551,10 @@ static int entryForUrl(int e_actor, const std::vector<Entry> &entries, am_string
     {
         am_string elem = AM_UrlElementAt(&up, k);
         if (AT_GetAtomIndex(elem.data, elem.size, &ati) == 0)
+        {
+            e = ENTRY_CHILD_UNKNOWN;
             break;
-
+        }
 
         e = findChildEntry(entries, e, ati);
         if (e < 0)
@@ -571,6 +573,42 @@ static int entryForUrl(int e_actor, const std::vector<Entry> &entries, am_string
     return ENTRY_CHILD_UNKNOWN;
 }
 
+static int lastKnownEntryForUrl(int e_actor, const std::vector<Entry> &entries, am_string url)
+{
+    U_ASSERT(e_actor >= 0);
+    U_ASSERT(e_actor < (int)entries.size());
+
+    am_url_parse up;
+    up.url = url;
+    AM_ParseUrl(&up);
+
+    int e = e_actor;
+    int known = e_actor;
+
+    AT_AtomIndex ati;
+    for (unsigned k = 0; k < up.element_count; k++)
+    {
+        am_string elem = AM_UrlElementAt(&up, k);
+        if (AT_GetAtomIndex(elem.data, elem.size, &ati) == 0)
+            break;
+
+        e = findChildEntry(entries, e, ati);
+        if (e < 0)
+            break;
+
+        known = e;
+        U_ASSERT(e < (int)entries.size());
+    }
+
+    if (known >= 0)
+    {
+        U_ASSERT(known < (int)entries.size());
+        return known;
+    }
+
+    return ENTRY_CHILD_UNKNOWN;
+}
+
 int ActorVfsModel::changedNotify(am_message *msg)
 {
     if (am->msg_peek_type(msg) == AM_DATATYPE_STRING)
@@ -583,10 +621,49 @@ int ActorVfsModel::changedNotify(am_message *msg)
 
         int e_child = entryForUrl(e_actor, priv->entries, url);
         if (e_child < 0) // don't have an entry for the url
+        {
+            DBG_Printf(DBG_VFS, "VFS change (actor index: %d) notify: %.*s (ignored)\n", e_actor, url.size, url.data);
+
+            e_child = lastKnownEntryForUrl(e_actor, priv->entries, url);
+            if (e_child > 0 && e_child < priv->entries.size())
+            {
+                Entry &entry = priv->entries[e_child];
+
+                if (entry.type == ati_type_dir)
+                {
+                    for (DirFetcher &df : priv->dirFetchers)
+                    {
+                        if (df.entryIndex == e_child)
+                            return AM_CB_STATUS_OK;
+                    }
+
+                    DBG_Printf(DBG_VFS, "VFS change (actor index: %d) notify: %.*s (fetch parent first)\n", e_actor, url.size, url.data);
+                    entry.value = DIR_VALUE_INITIAL + 1; // prevent canFetchMore
+
+                    DirFetcher df = {};
+
+                    df.entryIndex = e_child;
+                    df.index = 0;
+                    df.state = ENTRY_FETCH_STATE_WAIT_START;
+                    df.timeout = 0;
+
+                    priv->dirFetchers.push_back(df);
+                }
+            }
+
             return AM_CB_STATUS_OK;
+        }
 
         DBG_Printf(DBG_VFS, "VFS change (actor index: %d) notify: %.*s\n", e_actor, url.size, url.data);
-        addEntryToValueFetchers(e_child);
+
+        if (e_child > 0 && e_child < priv->entries.size())
+        {
+            Entry &entry = priv->entries[e_child];
+            if (entry.type != ati_type_dir)
+            {
+                addEntryToValueFetchers(e_child);
+            }
+        }
 
         return AM_CB_STATUS_OK;
     }
@@ -848,6 +925,12 @@ int ActorVfsModel::indexForActorId(unsigned actorId)
     return e;
 }
 
+ActorVfsModel *ActorVfsModel::instance()
+{
+    U_ASSERT(_instance);
+    return _instance;
+}
+
 void ActorVfsModel::fetchTimerFired()
 {
     DBG_Printf(DBG_VFS, "vfs timer fired after %d, dirf: %zu, entryFetchers.size: %zu\n", priv->fetchTimer.interval(), priv->dirFetchers.size(), priv->entryFetchers.size());
@@ -1085,6 +1168,14 @@ QVariant ActorVfsModel::data(const QModelIndex &index, int role) const
             if (entry.type == ati_type_dir)
                 return priv->iconDirectory;
         }
+    }
+    else if (role == AtomIndexRole)
+    {
+        return entry.name.index;
+    }
+    else if (role == RawValueRole)
+    {
+        return (qulonglong)entry.value;
     }
 
     return QVariant();
