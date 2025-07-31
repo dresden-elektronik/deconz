@@ -35,6 +35,7 @@ enum ThemeValue
 void Theme_Init();
 void Theme_Destroy();
 
+int Theme_TextWidth(const QFontMetrics &fm, const QString &str);
 QFont Theme_FontMonospace();
 QFont Theme_FontRegular();
 void Theme_Activate(const QString &theme);

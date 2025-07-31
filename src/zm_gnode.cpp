@@ -652,7 +652,7 @@ void zmgNode::paint(QPainter *painter, const QStyleOptionGraphicsItem *option, Q
         if (!txt.isEmpty())
         {
             // align to 8 with 16px padding
-            int l = extraRect.left() + fm.horizontalAdvance(txt) + 24;
+            int l = extraRect.left() + Theme_TextWidth(fm, txt) + 24;
             l &= ~7;
             extraRect.setLeft(l);
         }

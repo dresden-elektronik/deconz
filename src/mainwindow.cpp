@@ -1523,12 +1523,10 @@ void MainWindow::createMainToolbar()
     connect(m_openPhosconAppButton, SIGNAL(clicked(bool)), this, SLOT(openPhosconApp()));
     ui->mainToolBar->addWidget(m_openPhosconAppButton);
 
-#if (QT_VERSION >= QT_VERSION_CHECK(5, 11, 0))
     // ensure minimum horizontal padding of buttons
     int pad = 32;
-    linksButton->setMinimumWidth(fontMetrics().horizontalAdvance(linksButton->text()) + pad);
-    m_openPhosconAppButton->setMinimumWidth(fontMetrics().horizontalAdvance(m_openPhosconAppButton->text()) + pad);
-#endif
+    linksButton->setMinimumWidth(Theme_TextWidth(fontMetrics(), linksButton->text()) + pad);
+    m_openPhosconAppButton->setMinimumWidth(Theme_TextWidth(fontMetrics(), m_openPhosconAppButton->text()) + pad);
 }
 
 void MainWindow::createHelpMenu()

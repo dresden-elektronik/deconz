@@ -279,26 +279,16 @@ void zmgCluster::paint(QPainter *painter, const QStyleOptionGraphicsItem *option
 
     painter->setPen(QPen(color));
     painter->setFont(m_font);
-#if (QT_VERSION < QT_VERSION_CHECK(5, 11, 0))
-    painter->drawText(m_rect.x() + averageCharWidth + painter->fontMetrics().width("AAAA BB"),
+    painter->drawText(static_cast<int>(m_rect.x() + averageCharWidth + qreal(Theme_TextWidth(painter->fontMetrics(), "AAAA BB"))),
                       textY, m_text);
-#else
-    painter->drawText(static_cast<int>(m_rect.x() + averageCharWidth + qreal(painter->fontMetrics().horizontalAdvance("AAAA BB"))),
-                      textY, m_text);
-#endif
 
     // cluster attribute count
     color = colorDim;
 
     painter->setPen(QPen(color));
     painter->setFont(m_font);
-#if (QT_VERSION < QT_VERSION_CHECK(5, 11, 0))
-    painter->drawText(m_rect.x() + m_rect.width() - painter->fontMetrics().width(" (00) "),
+    painter->drawText(static_cast<int>(m_rect.x() + m_rect.width() - qreal(Theme_TextWidth(painter->fontMetrics(), " (00) "))),
                       textY, QString(QLatin1String("(%1)")).arg(m_attributeCount));
-#else
-    painter->drawText(static_cast<int>(m_rect.x() + m_rect.width() - qreal(painter->fontMetrics().horizontalAdvance(" (00) "))),
-                      textY, QString(QLatin1String("(%1)")).arg(m_attributeCount));
-#endif
 }
 
 QSizeF zmgCluster::sizeHint(Qt::SizeHint which, const QSizeF &) const
@@ -311,11 +301,7 @@ QSizeF zmgCluster::sizeHint(Qt::SizeHint which, const QSizeF &) const
     {
 //    case Qt::MinimumSize:
     case Qt::PreferredSize:
-#if (QT_VERSION < QT_VERSION_CHECK(5, 11, 0))
-        width += fm.width(m_text + QLatin1String("AAAA BB CC")) + 2 * fm.averageCharWidth(); // text
-#else
-        width += fm.horizontalAdvance(m_text + QLatin1String("AAAA BB CC")) + 2 * fm.averageCharWidth(); // text
-#endif
+        width += Theme_TextWidth(fm, m_text + QLatin1String("AAAA BB CC")) + 2 * fm.averageCharWidth(); // text
         size.setWidth(width);
         size.setHeight(fm.height() + 2 * fm.averageCharWidth());
         break;

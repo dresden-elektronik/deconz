@@ -783,3 +783,12 @@ QRect AStyle::subControlRect(ComplexControl control, const QStyleOptionComplex *
 
     return ASuper::subControlRect(control, option, subControl, widget);
 }
+
+int Theme_TextWidth(const QFontMetrics &fm, const QString &str)
+{
+#if (QT_VERSION < QT_VERSION_CHECK(5, 11, 0))
+    return fm.width(str);
+#else
+    return fm.horizontalAdvance(str);
+#endif
+}

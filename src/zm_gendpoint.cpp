@@ -12,14 +12,12 @@
 #include <QGraphicsSceneMouseEvent>
 #include <QPainter>
 #include <QWidget>
-// #include <QStyleOptionButton>
-// #include <QStyleOptionGroupBox>
 #include <QStyleOptionGraphicsItem>
-// #include <QStylePainter>
 #include <QDrag>
 #include <QMimeData>
 
 #include "deconz/zdp_descriptors.h"
+#include "gui/theme.h"
 #include "zcl_private.h"
 #include "zm_gendpoint.h"
 #include "zm_gendpointbox.h"
@@ -47,29 +45,19 @@ QSizeF zmgEndpoint::sizeHint(Qt::SizeHint which, const QSizeF &constraint) const
     QFontMetrics fm(m_font);
     Q_UNUSED(constraint)
 
-#if (QT_VERSION < QT_VERSION_CHECK(5, 11, 0))
-    width += fm.width(m_endpointText) + 2 * fm.averageCharWidth();
+    width += Theme_TextWidth(fm, m_endpointText) + 2 * fm.averageCharWidth();
 
-    if (m_device.textWidth() > fm.width(m_profile))
+    int deviceWidth = Theme_TextWidth(fm, m_device.text());
+    int profileWidth = Theme_TextWidth(fm, m_profile);
+
+    if (deviceWidth > profileWidth)
     {
-        width += m_device.textWidth();
+        width += deviceWidth;
     }
     else
     {
-        width += fm.width(m_profile);
+        width += profileWidth;
     }
-#else
-    width += fm.horizontalAdvance(m_endpointText) + 2 * fm.averageCharWidth();
-
-    if (m_device.textWidth() > fm.horizontalAdvance(m_profile))
-    {
-        width += m_device.textWidth();
-    }
-    else
-    {
-        width += fm.horizontalAdvance(m_profile);
-    }
-#endif
 
     switch (which)
     {
@@ -110,13 +98,8 @@ void zmgEndpoint::paint(QPainter *painter, const QStyleOptionGraphicsItem *optio
 
     painter->drawText(x, y + painter->fontMetrics().height(), m_endpointText);
 
-#if (QT_VERSION < QT_VERSION_CHECK(5, 11, 0))
-    x += painter->fontMetrics().width(m_endpointText) +
+    x += Theme_TextWidth(painter->fontMetrics(), m_endpointText) +
          painter->fontMetrics().averageCharWidth();
-#else
-    x += painter->fontMetrics().horizontalAdvance(m_endpointText) +
-         painter->fontMetrics().averageCharWidth();
-#endif
 
     if (!m_iconProfile.isNull())
     {

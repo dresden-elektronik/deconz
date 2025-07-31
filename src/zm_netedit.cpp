@@ -46,13 +46,8 @@ zmNetEdit::zmNetEdit(QWidget *parent) :
 
     QFontMetrics fm(monoFont);
 
-#if (QT_VERSION < QT_VERSION_CHECK(5, 11, 0))
-    int w64 = fm.width("=0x0011223344556677=");
-    int w128 = fm.width("=0x00112233445566770011223344556677=");
-#else
-    int w64 = fm.horizontalAdvance("=0x0011223344556677=");
-    int w128 = fm.horizontalAdvance("=0x00112233445566770011223344556677=");
-#endif
+    int w64 = Theme_TextWidth(fm, "=0x0011223344556677=");
+    int w128 = Theme_TextWidth(fm, "=0x00112233445566770011223344556677=");
 
     ui->extPanIdEdit->setMinimumWidth(w64);
     ui->apsUseExtPanIdEdit->setMinimumWidth(w64);
