@@ -588,7 +588,7 @@ void zmgNode::paint(QPainter *painter, const QStyleOptionGraphicsItem *option, Q
     macRect.moveLeft(rulerX2);
     macRect.moveTop(rectName.bottom() + fm.height() / 2 - 2);
 
-    p.drawText(macRect, Qt::AlignVCenter, m_extAddress);
+    p.drawText(macRect, Qt::AlignVCenter | Qt::TextDontClip, m_extAddress);
 
     if (m_battery >= 0 && m_battery <= 100)
     {
