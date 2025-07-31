@@ -2,9 +2,8 @@ name: Compile for arm64
 
 on:
   workflow_dispatch:
-  push:
-    tags:
-      - '*'
+  release:
+    types: [published]
 
 jobs:
   build_aarch64:
