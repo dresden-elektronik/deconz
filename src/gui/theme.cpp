@@ -60,27 +60,32 @@ static inline qreal getDpr(const QPainter *painter)
     return painter->device()->devicePixelRatio();
 }
 
-static qreal dpi(const QStyleOption *option)
-{
-#ifndef Q_OS_DARWIN
-    // Prioritize the application override, except for on macOS where
-    // we have historically not supported the AA_Use96Dpi flag.
-    if (QCoreApplication::testAttribute(Qt::AA_Use96Dpi))
-        return 96;
-#endif
+// static qreal dpi(const QStyleOption *option)
+// {
+// #ifndef Q_OS_DARWIN
+//     // Prioritize the application override, except for on macOS where
+//     // we have historically not supported the AA_Use96Dpi flag.
+//     if (QCoreApplication::testAttribute(Qt::AA_Use96Dpi))
+//         return 96;
+// #endif
 
-    // Expect that QStyleOption::QFontMetrics::QFont has the correct DPI set
-    if (option)
-        return option->fontMetrics.fontDpi();
+//     // Expect that QStyleOption::QFontMetrics::QFont has the correct DPI set
+// #if QT_VERSION > QT_VERSION_CHECK(5,14,0)
+//     if (option)
+//     {
+//         qreal dpi = option->fontMetrics.fontDpi();
+//         return dpi;
+//     }
+// #endif
 
-    // Fall back to historical Qt behavior: hardocded 72 DPI on mac,
-    // primary screen DPI on other platforms.
-#ifdef Q_OS_DARWIN
-    return qstyleBaseDpi;
-#else
-    return 96;
-#endif
-}
+//     // Fall back to historical Qt behavior: hardocded 72 DPI on mac,
+//     // primary screen DPI on other platforms.
+// #ifdef Q_OS_DARWIN
+//     return qstyleBaseDpi;
+// #else
+//     return 96;
+// #endif
+// }
 
 static qreal dpiScaled(qreal value, qreal dpi)
 {
@@ -92,10 +97,10 @@ static qreal dpiScaled(qreal value, const QPaintDevice *device)
     return dpiScaled(value, device->logicalDpiX());
 }
 
-static qreal dpiScaled(qreal value, const QStyleOption *option)
-{
-    return dpiScaled(value, dpi(option));
-}
+// static qreal dpiScaled(qreal value, const QStyleOption *option)
+// {
+//     return dpiScaled(value, dpi(option));
+// }
 
 
 void Theme_Init()
@@ -362,8 +367,8 @@ void AStyle::drawPrimitive(PrimitiveElement element, const QStyleOption *option,
                 color = option->palette.color(QPalette::Midlight);
             }
 
-            qreal lineWidth = dpiScaled(1.0, option);
-            qreal M = dpiScaled(1.0, option);
+            qreal lineWidth = dpiScaled(1.0, painter->device());
+            qreal M = dpiScaled(1.0, painter->device());
             QRect rect = option->rect.marginsRemoved(QMargins(M,M,M,M));
             painter->save();
             painter->setRenderHint(QPainter::Antialiasing, true);
