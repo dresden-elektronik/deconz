@@ -1,4 +1,6 @@
 FROM --platform=$BUILDPLATFORM ubuntu:18.04 as builder
+ARG REPO_URL
+ENV REPO_URL=${REPO_URL}
 
 # Install required packages
 RUN apt-get update \
@@ -30,7 +32,7 @@ RUN wget https://cmake.org/files/v3.19/cmake-3.19.8-Linux-x86_64.tar.gz \
     && mv cmake-3.19.8-Linux-x86_64 cmake
 
 # Download and compile deconz. Build debian package
-RUN git clone https://github.com/dresden-elektronik/deconz.git \
+RUN git clone ${REPO_URL} \
     && cd deconz \
     && git submodule update --init --recursive \
     && /cmake/bin/cmake -DBUILD_CHANNEL=${BUILD_CHANNEL} -DQT_VERSION_MAJOR=5 -DCMAKE_BUILD_TYPE=Release -B build . \

@@ -16,14 +16,16 @@ jobs:
         with:
           sparse-checkout: |
             dockerfiles
-        
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-          
+
       - name: Build Ubuntu 18.04 Image and Compile App
         run: |
-          docker buildx build -o ./release -f dockerfiles/amd64 .
-      
+          docker buildx build \
+          --build-arg REPO_URL="${{ github.server_url }}/${{ github.repository }}" \
+          -o ./release -f dockerfiles/amd64 .
+
       - name: Upload Package to Release
         run: |
           gh release upload ${GITHUB_REF#refs/*/} release/deconz_*_amd64.deb
