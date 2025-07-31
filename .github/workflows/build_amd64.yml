@@ -22,6 +22,7 @@ jobs:
 
       - name: Build Ubuntu 18.04 Image and Compile App
         run: |
+          mkdir -p release
           docker buildx build \
           --build-arg REPO_URL="${{ github.server_url }}/${{ github.repository }}" \
           -o ./release -f dockerfiles/amd64 .
