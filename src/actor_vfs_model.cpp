@@ -25,6 +25,7 @@
 #include "deconz/u_sstream.h"
 #include "deconz/u_memory.h"
 
+#define AM_ACTOR_ID_REST_PLUGIN 4001
 #define AM_ACTOR_ID_UI_VFS      4006
 #define AM_ACTOR_ID_OTA         9000
 
@@ -509,6 +510,19 @@ int ActorVfsModel::listDirectoryResponse(am_message *msg)
             for (size_t j = 0; j < entriesToAdd.size(); j++)
             {
                 addEntryToParent(_priv->entries, entryIndex, entriesToAdd[j]);
+
+                // TODO(mpi): make this configurable per actor
+                // for REST API plugin we automatically fetch everything
+                if (msg->src == AM_ACTOR_ID_REST_PLUGIN && entriesToAdd[j].type == ati_type_dir)
+                {
+                    DirFetcher df = {};
+                    df.entryIndex = _priv->entries.size() - 1;
+                    df.index = 0;
+                    df.state = ENTRY_FETCH_STATE_WAIT_START;
+                    df.timeout = 0;
+
+                    _priv->dirFetchers.push_back(df);
+                }
             }
 
             endInsertRows();
@@ -1049,7 +1063,7 @@ ActorVfsModel::ActorVfsModel(QObject *parent) :
 
     addActorId(AM_ACTOR_ID_CORE_NET);
     addActorId(AM_ACTOR_ID_CORE_APS);
-    addActorId(4001); //  plugin test
+    addActorId(AM_ACTOR_ID_REST_PLUGIN);
     am->subscribe(4001, AM_ACTOR_ID_UI_VFS);
     //addActorId(AM_ACTOR_ID_OTA);
 
