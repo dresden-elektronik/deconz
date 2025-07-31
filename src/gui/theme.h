@@ -20,11 +20,16 @@ enum ThemeColor
     ColorNodeIndicatorBackground,
     ColorNodeIndicatorRx,
     ColorNodeViewBackground,
-    ColorNodeCoordinatorText,
-    ColorNodeRouterText,
+    ColorSourceRouteStart,
+    ColorSourceRouteEnd,
     ColorNodeEndDeviceText,
     ColorServerCluster,
     ColorUrls
+};
+
+enum ThemeValue
+{
+    ThemeValueDeviceNodesV2
 };
 
 void Theme_Init();
@@ -34,6 +39,7 @@ QFont Theme_FontMonospace();
 QFont Theme_FontRegular();
 void Theme_Activate(const QString &theme);
 QColor Theme_Color(ThemeColor color);
+int Theme_Value(ThemeValue value);
 
 // https://www.olivierclero.com/code/custom-qstyle/
 // https://github.com/oclero/qlementine/blob/dev/lib/src/style/QlementineStyle.cpp

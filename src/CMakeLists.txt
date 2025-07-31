@@ -7,6 +7,9 @@ set(CMAKE_AUTORCC ON)
 
 find_package(Qt5 COMPONENTS Core Gui Widgets SerialPort Network REQUIRED)
 
+# for testing Qt5 to Qt6 port
+# add_compile_definitions(QT_DISABLE_DEPRECATED_UP_TO=0x050F00)
+
 set(PUB_INCLUDE_FILES
     3rdparty/actor_model/actor/plugin.h
     3rdparty/actor_model/actor/cxx_helper.h

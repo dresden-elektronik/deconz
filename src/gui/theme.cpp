@@ -40,11 +40,12 @@ static QRgb colorNodeBase = 0xFFefefef;
 static QRgb colorNodeIndicatorBackground = 0xFFe0e0e0;
 static QRgb colorNodeIndicatorRx = 0xFF1020FF;
 static QRgb colorNodeViewBackground = 0xFFfafafa;
-static QRgb colorNodeCoordinatorText = 0xFFefefef;
-static QRgb colorNodeRouterText = 0xFFefefef;
+static QRgb colorSourceRouteStart = 0xFFefefef;
+static QRgb colorSourceRouteEnd = 0xFFefefef;
 static QRgb colorNodeEndDeviceText = 0xFFefefef;
 static QRgb colorServerCluster = 0xFF1240ab;
 static QRgb colorUrls = 0xFF3232f7;
+static int themeValueDeviceNodesV2 = 0;
 
 
 #ifdef Q_OS_DARWIN
@@ -204,12 +205,12 @@ void Theme_Activate(const QString &theme)
         colorNodeIndicatorBackground = 0xFFe0e0e0;
         colorNodeIndicatorRx = 0xFF0000FF;
         colorNodeViewBackground = 0xFFfafafa;
-        colorNodeCoordinatorText = _theme->palette.color(QPalette::WindowText).rgba();
-        colorNodeRouterText = _theme->palette.color(QPalette::WindowText).rgba();
+        colorSourceRouteStart = 0xFF2060ba;
+        colorSourceRouteEnd = 0xFFba6020;
         colorNodeEndDeviceText = _theme->palette.color(QPalette::WindowText).rgba();
         colorServerCluster = 0xFF1240ab;
         colorUrls = 0xFF20a4f1;
-
+        themeValueDeviceNodesV2 = 0;
     }
     else if (theme == "dark")
     {
@@ -219,11 +220,12 @@ void Theme_Activate(const QString &theme)
         colorNodeIndicatorBackground = 0xFF404040;
         colorNodeIndicatorRx = 0xFF20a4ff;
         colorNodeViewBackground = 0xFF383838;
-        colorNodeCoordinatorText = 0xFF0084D1;
-        colorNodeRouterText = 0xFFffd320;
+        colorSourceRouteStart = 0xFF2060ba;
+        colorSourceRouteEnd = 0xFFba6020;
         colorNodeEndDeviceText = _theme->palette.color(QPalette::WindowText).rgba();
         colorServerCluster = 0xFF20a4f1;
         colorUrls = 0xFF20a4f1;
+        themeValueDeviceNodesV2 = 1;
     }
     else
     {
@@ -242,8 +244,8 @@ QColor Theme_Color(ThemeColor color)
     case ColorNodeIndicatorBackground: return colorNodeIndicatorBackground;
     case ColorNodeIndicatorRx: return colorNodeIndicatorRx;
     case ColorNodeViewBackground: return colorNodeViewBackground;
-    case ColorNodeCoordinatorText: return colorNodeCoordinatorText;
-    case ColorNodeRouterText: return colorNodeRouterText;
+    case ColorSourceRouteStart: return colorSourceRouteStart;
+    case ColorSourceRouteEnd: return colorSourceRouteEnd;
     case ColorNodeEndDeviceText: return colorNodeEndDeviceText;
     case ColorServerCluster: return colorServerCluster;
     case ColorUrls: return colorUrls;
@@ -252,6 +254,14 @@ QColor Theme_Color(ThemeColor color)
 
     U_ASSERT(0 && "color not in switch statement");
     return Qt::magenta; // to easily spot unhandled values
+}
+
+int Theme_Value(ThemeValue value)
+{
+    if (value == ThemeValueDeviceNodesV2)
+        return themeValueDeviceNodesV2;
+
+    return 0;
 }
 
 QFont Theme_FontMonospace()

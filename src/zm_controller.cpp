@@ -10155,4 +10155,6 @@ zmgNode *GUI_GetNodeWithMac(uint64_t mac)
             return ni.g;
         }
     }
+
+    return nullptr;
 }

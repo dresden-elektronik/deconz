@@ -32,10 +32,15 @@
 
 #define VFS_STATE_IS_ON           (1 << 0)
 #define VFS_STATE_IS_OFF          (1 << 1)
-#define VFS_STATE_IS_PRESENCE     (1 << 2)
-#define VFS_STATE_IS_NO_PRESENCE  (1 << 3)
-#define VFS_STATE_HAS_BRI         (1 << 1)
-#define VFS_STATE_HAS_TEMPERATURE (1 << 3)
+#define VFS_STATE_IS_SIGNAL       (1 << 2)
+#define VFS_STATE_IS_NO_SIGNAL    (1 << 3)
+#define VFS_STATE_HAS_BRI         (1 << 4)
+#define VFS_STATE_HAS_TEMPERATURE (1 << 5)
+#define VFS_STATE_HAS_LUX         (1 << 6)
+#define VFS_STATE_IS_REACHABLE     (1 << 7)
+#define VFS_STATE_IS_NOT_REACHABLE (1 << 8)
+
+#define VFS_STATE_EXTRA_ROW (VFS_STATE_HAS_TEMPERATURE | VFS_STATE_HAS_LUX)
 
 #define NODE_COLOR         239, 239, 239
 #define NODE_COLOR_DARK    180, 180, 180
@@ -55,11 +60,18 @@ static const int IndDataUpdateCount = 5;
 static am_actor am_actor_gui_node;
 static uint16_t msgNotifyTag;
 
+static AT_AtomIndex ati_config;
 static AT_AtomIndex ati_state;
 static AT_AtomIndex ati_bri;
+static AT_AtomIndex ati_fire;
 static AT_AtomIndex ati_on;
+static AT_AtomIndex ati_open;
 static AT_AtomIndex ati_presence;
 static AT_AtomIndex ati_temperature;
+static AT_AtomIndex ati_water;
+static AT_AtomIndex ati_lux;
+static AT_AtomIndex ati_vibration;
+static AT_AtomIndex ati_reachable;
 
 
 extern deCONZ::SteadyTimeRef m_steadyTimeRef; // in zmController TODO proper interface
@@ -86,11 +98,18 @@ void GUI_InitNodeActor()
 
     am->register_actor(&am_actor_gui_node);
 
+    AT_AddAtom("config", qstrlen("config"), &ati_state);
     AT_AddAtom("state", qstrlen("state"), &ati_state);
     AT_AddAtom("bri", qstrlen("bri"), &ati_bri);
     AT_AddAtom("on", qstrlen("on"), &ati_on);
     AT_AddAtom("temperature", qstrlen("temperature"), &ati_temperature);
     AT_AddAtom("presence", qstrlen("presence"), &ati_presence);
+    AT_AddAtom("lux", qstrlen("lux"), &ati_lux);
+    AT_AddAtom("fire", qstrlen("fire"), &ati_fire);
+    AT_AddAtom("water", qstrlen("water"), &ati_water);
+    AT_AddAtom("open", qstrlen("open"), &ati_open);
+    AT_AddAtom("vibration", qstrlen("vibration"), &ati_vibration);
+    AT_AddAtom("reachable", qstrlen("reachable"), &ati_reachable);
 }
 
 void SendNotifyMessage1(am_msg_id msgid, am_u64 extaddr)
@@ -160,6 +179,7 @@ zmgNode::zmgNode(deCONZ::zmNode *data, QGraphicsItem *parent) :
     m_needSaveToDatabase(false)
 {
     m_height = 32;
+    m_heightExta = 0;
     m_width = 160;
 
     setCursor(Qt::ArrowCursor);
@@ -178,7 +198,7 @@ zmgNode::zmgNode(deCONZ::zmNode *data, QGraphicsItem *parent) :
     m_epBox->moveBy(0, m_height + 2);
     m_epBox->setVisible(m_epDropDownVisible);
 
-    m_indRect = QRectF(20, 8, 10, 10);
+    m_indRect = QRectF(20, 8 + 2, 10, 10);
     m_indCount = -1;
 
     setZValue(0.1);
@@ -193,8 +213,8 @@ zmgNode::~zmgNode()
 
 QRectF zmgNode::boundingRect() const
 {
-    qreal ol = 1.0; // outline
-    return QRectF(-ol, -ol, m_width + ol, m_height + ol);
+    const qreal ol = 1.0; // outline
+    return QRectF(0, 0, m_width + ol * 2.0, m_height + m_heightExta + ol * 2.0);
 }
 
 void zmgNode::toggleEndpointDropdown()
@@ -203,6 +223,11 @@ void zmgNode::toggleEndpointDropdown()
     {
         m_epDropDownVisible = !m_epDropDownVisible;
         m_epBox->setVisible(m_epDropDownVisible);
+
+        if (m_epDropDownVisible)
+        {
+            m_epBox->setY(boundingRect().bottom() + 2);
+        }
 
         for (int i = 0; i < linkCount(); i++)
         {
@@ -324,73 +349,109 @@ void zmgNode::paint(QPainter *painter, const QStyleOptionGraphicsItem *option, Q
         return;
     }
 
+    if (0 == Theme_Value(ThemeValueDeviceNodesV2))
+    {
+        paintClassic(painter, option, widget);
+        return;
+    }
+
+    // quirk when switching from classic to dark theme
+    if (m_heightExta == 0 && (m_vfsState0 & VFS_STATE_EXTRA_ROW))
+    {
+        updateParameters();
+        return;
+    }
+
     Q_UNUSED(widget)
 
-    const QColor nodeColor = Theme_Color(ColorNodeBase);
+    QColor nodeColor = Theme_Color(ColorNodeBase);
     static const QColor nodeColorNeutral(160, 160, 160);
     static const QColor colorCoordinator(0, 132, 209);
     static const QColor colorRouterDead(240, 190, 15);
     static const QColor colorRouter(255, 211, 32);
     static const QColor colorOtau(120, 250, 100);
     const QColor nodeShadowColor(Theme_Color(ColorNodeViewBackground).darker(135));
-    const QColor textColorDark = qApp->palette().color(QPalette::Active, QPalette::Text);
-    const QColor textColorDim = qApp->palette().color(QPalette::Disabled, QPalette::Text);
+
+    QColor textColor = option->palette.color(QPalette::Active, QPalette::Text);
+    QColor textColorDim;
+
+    if (textColor.red() < 128)
+    {
+        textColorDim = textColor.lighter(125);
+    }
+    else
+    {
+        textColorDim = textColor.darker(125);
+    }
+
+    if (m_vfsState0 & VFS_STATE_IS_NOT_REACHABLE)
+    {
+        textColorDim.setAlpha(220);
+        textColor = textColorDim;
+
+        if (nodeColor.red() < 128)
+        {
+            nodeColor = nodeColor.lighter(115);
+        }
+        else
+        {
+            nodeColor = nodeColor.darker(115);
+        }
+    }
+
+    // align battery |
+    const int rulerX1 = m_indRect.x() + m_indRect.width() + 8;
+    const int rulerX2 = m_pm.isNull() ? rulerX1 : rulerX1 + m_pm.width() + 8;
 
     QPainter &p = *painter;
 
+    p.save();
     p.setRenderHint(QPainter::Antialiasing, true);
 
-    QColor nameColor = qApp->palette().color(QPalette::WindowText);
+    QColor nameColor = option->palette.color(QPalette::WindowText);
     const QColor *m_color = &nodeColorNeutral;
 
-    const int rheight = option->rect.height();
+    const QRect optRect = option->rect.adjusted(1, 1, -1, -1);
+
     const int tooOld = 60 * 1000 * 30; // 30 minutes
     qint64 ageSeconds = tooOld;
 
-    if (m_data)
-    {
-        ageSeconds = (m_steadyTimeRef.ref - m_lastSeen) / 1000;
+    ageSeconds = (m_steadyTimeRef.ref - m_lastSeen) / 1000;
 
-        if (isValid(m_otauActiveTime))
+    if (isValid(m_otauActiveTime))
+    {
+        const deCONZ::TimeMs dt = m_steadyTimeRef - m_otauActiveTime;
+        if (dt < deCONZ::TimeMs{5000})
         {
-            const deCONZ::TimeMs dt = m_steadyTimeRef - m_otauActiveTime;
-            if (dt < deCONZ::TimeMs{5000})
-            {
-                m_color = &colorOtau;
-            }
-            else
-            {
-                m_otauActiveTime = {};
-            }
+            m_color = &colorOtau;
         }
-        else if (m_deviceType == deCONZ::Coordinator)
+        else
         {
-            m_color = &colorCoordinator;
-            nameColor = Theme_Color(ColorNodeCoordinatorText);
+            m_otauActiveTime = {};
         }
-        else if (m_deviceType == deCONZ::Router)
+    }
+    else if (m_deviceType == deCONZ::Coordinator)
+    {
+        m_color = &colorCoordinator;
+    }
+    else if (m_deviceType == deCONZ::Router)
+    {
+        // if (m_isZombie || m_data->state() == deCONZ::FailureState || (ageSeconds >= tooOld))
+        // {
+        //     m_color = &colorRouterDead;
+        // }
+        // else
         {
-            nameColor = Theme_Color(ColorNodeRouterText);
-            if (m_isZombie || m_data->state() == deCONZ::FailureState || (ageSeconds >= tooOld))
-            {
-                m_color = &colorRouterDead;
-            }
-            else
-            {
-                m_color = &colorRouter;
-            }
+            m_color = &colorRouter;
         }
-        else if (m_deviceType == deCONZ::EndDevice)
-        {
-            nameColor = Theme_Color(ColorNodeEndDeviceText);
-            m_color = &nodeColorNeutral;
-        }
+    }
+    else if (m_deviceType == deCONZ::EndDevice)
+    {
+        m_color = &nodeColorNeutral;
     }
 
     // fake shadow
     qreal roundBorder = 2;
-    //qreal shadowY = -1;
-
 
     if (m_vfsState0 & VFS_STATE_IS_ON)
     {
@@ -403,7 +464,7 @@ void zmgNode::paint(QPainter *painter, const QStyleOptionGraphicsItem *option, Q
         p.setPen(QPen(nodeShadowColor, 1));
     }
 
-    p.drawRoundedRect(option->rect, roundBorder, roundBorder);
+    p.drawRoundedRect(optRect, roundBorder, roundBorder);
 
     // surface
     qreal inset = 1;
@@ -420,23 +481,29 @@ void zmgNode::paint(QPainter *painter, const QStyleOptionGraphicsItem *option, Q
         p.setPen(Qt::NoPen);
     }
 
-    p.drawRoundedRect(option->rect.adjusted(inset, inset, -inset, -inset), roundBorder, roundBorder);
+    p.drawRoundedRect(optRect.adjusted(inset, inset, -inset, -inset), roundBorder, roundBorder);
+
+    // draw zombie content transparent
+    if (m_vfsState0 & VFS_STATE_IS_NOT_REACHABLE)
+    {
+        p.setOpacity(0.52);
+    }
 
     // node left color bar (coordinator, router, end device colors)
     {
-        QRect r = option->rect;
-        r.setRight(r.left() + 16);
+        QRect r = optRect;
+        r.setRight(r.left() + 12);
         p.setClipRect(r);
     }
     p.setBrush(*m_color);
     if (m_vfsState0 & VFS_STATE_IS_ON)
     {
         p.setPen(QPen(*m_color, 1));
-        p.drawRoundedRect(option->rect.adjusted(0, 0, 0, 0), roundBorder, roundBorder);
+        p.drawRoundedRect(optRect, roundBorder, roundBorder);
     }
     else
     {
-        p.drawRoundedRect(option->rect.adjusted(inset, inset, -inset, -inset), roundBorder, roundBorder);
+        p.drawRoundedRect(optRect.adjusted(inset, inset, -inset, -inset), roundBorder, roundBorder);
     }
 
     p.setClipping(false);
@@ -445,7 +512,7 @@ void zmgNode::paint(QPainter *painter, const QStyleOptionGraphicsItem *option, Q
     p.setPen(Qt::NoPen);
     if (!data()->simpleDescriptors().empty())
     {
-        const int bri = (textColorDark.red() + textColorDim.red()) / 2;
+        const int bri = (textColor.red() + textColorDim.red()) / 2;
         const QColor colorInsetDark(bri, bri, bri);
 
         QRectF r = m_endpointToggle;
@@ -466,21 +533,17 @@ void zmgNode::paint(QPainter *painter, const QStyleOptionGraphicsItem *option, Q
 
     QFont fn = Theme_FontRegular();
     fn.setPointSize(NamePointSize);
-    if (nodeColor.red() > 120)
-    {
-        fn.setWeight(QFont::Bold);
-    }
-    else
-    {
-        fn.setWeight(QFont::Medium);
-    }
+    fn.setWeight(QFont::Medium);
     p.setFont(fn);
 
     QFontMetrics fm(fn);
 
     // NWK address | Userdescriptor
-    QRect rectName = option->rect.adjusted(NamePad, fm.capHeight() * 3 / 8, -2 * ToggleSize, 0);
+    QRect rectName = optRect;
+    rectName.setLeft(rulerX2);
+    rectName.setRight(rectName.right() - 2 * ToggleSize);
     rectName.setHeight(fm.capHeight() * 2);
+    rectName.moveTop(optRect.top() + 2);
 
     if (ageSeconds >= tooOld)
     {
@@ -520,30 +583,316 @@ void zmgNode::paint(QPainter *painter, const QStyleOptionGraphicsItem *option, Q
         m_extAddress = QString(QLatin1String("%1")).arg(m_extAddressCache, 16, 16, QLatin1Char('0')).toUpper();
     }
 
-    QRect macRect = option->rect.adjusted(m_indRect.x() + m_indRect.width() + 16, option->rect.height() / 2, 0, 0);
+    QRect macRect = fm.boundingRect(m_extAddress);
 
+    macRect.moveLeft(rulerX2);
+    macRect.moveTop(rectName.bottom() + fm.height() / 2 - 2);
 
-    if (m_vfsState0 & (VFS_STATE_IS_PRESENCE | VFS_STATE_IS_NO_PRESENCE))
+    p.drawText(macRect, Qt::AlignVCenter, m_extAddress);
+
+    if (m_battery >= 0 && m_battery <= 100)
+    {
+        int w = (rulerX2 - rulerX1) - 8;
+        QRect batRect(rulerX1, m_indRect.y(), w, 12);
+        QColor batColor = 0xFF00ff00;
+
+        if      (m_battery <= 20) { batColor = 0xFFef2000; w = 4;}
+        else if (m_battery <= 40) { batColor = 0xFFd2d200; w = 14; }
+        else if (m_battery <= 60) { batColor = 0xFF42f200; w = 18; }
+        else                      { batColor = 0xFF2CB600; w = w - 1; }
+
+        // background
+        p.setPen(Qt::NoPen);
+        p.setBrush(Theme_Color(ColorNodeIndicatorBackground));
+        p.drawRoundedRect(batRect, roundBorder, roundBorder);
+        // battery color
+        if (0 == (m_vfsState0 & VFS_STATE_IS_NOT_REACHABLE))
+        {
+            batRect = batRect.marginsRemoved(QMargins(1,1,1,1));
+            batRect.setRight(batRect.left() + w);
+            p.setBrush(QColor(batColor));
+            p.drawRoundedRect(batRect, roundBorder, roundBorder);
+        }
+    }
+
+    if (m_vfsState0 & (VFS_STATE_IS_SIGNAL | VFS_STATE_IS_NO_SIGNAL))
     {
         p.save();
 
-        QColor red(Qt::red);
+        QColor signalColor(0xFFDB54FF);
 
-        if (m_vfsState0 & VFS_STATE_IS_NO_PRESENCE)
-        {
-            red.setAlpha(32);
-        }
+        if ((m_vfsState0 & VFS_STATE_IS_NO_SIGNAL) || (m_vfsState0 & VFS_STATE_IS_NOT_REACHABLE))
+            signalColor.setAlpha(64);
 
         p.setPen(Qt::NoPen);
-        p.setBrush(red);
+        p.setBrush(signalColor);
 
         QRect r = m_indRect.toRect();
-        r.moveCenter(macRect.center());
-        r.moveLeft(m_indRect.left());
+        r.moveCenter(QPoint(m_indRect.left() + m_indRect.width() / 2 - 1, macRect.center().y()));
         p.drawEllipse(r);
 
         p.restore();
     }
+
+    if (0 < m_heightExta)
+    {
+        QRect extraRect = optRect;
+        extraRect.setTop(macRect.bottom());
+        extraRect.setLeft(rulerX2);
+
+        p.setPen(QPen(textColorDim));
+        QString txt;
+
+        if (m_vfsState0 & VFS_STATE_HAS_TEMPERATURE)
+        {
+            txt = QString("%1 °C").arg(m_temperature, 0, 'f', 2);
+            p.drawText(extraRect, Qt::AlignVCenter, txt);
+        }
+
+        if (!txt.isEmpty())
+        {
+            // align to 8 with 16px padding
+            int l = extraRect.left() + fm.horizontalAdvance(txt) + 24;
+            l &= ~7;
+            extraRect.setLeft(l);
+        }
+
+        if (m_vfsState0 & VFS_STATE_HAS_LUX)
+        {
+            txt = QString("%1 lx").arg(m_lux);
+            p.drawText(extraRect, Qt::AlignVCenter, txt);
+        }
+    }
+
+    p.restore();
+
+    if (option->state & QStyle::State_Selected)
+    {
+        p.setBrush(Qt::NoBrush);
+        p.setPen(QPen(qApp->palette().color(QPalette::Highlight), 2));
+        p.drawRoundedRect(optRect, roundBorder, roundBorder);
+    }
+}
+
+
+void zmgNode::paintClassic(QPainter *painter, const QStyleOptionGraphicsItem *option, QWidget *widget)
+{
+    if (gHeadlessVersion)
+    {
+        return;
+    }
+
+    // quirks when switching from dark to classic theme
+    if (m_heightExta != 0)
+    {
+        updateParameters();
+        return;
+    }
+
+    if (opacity() < 0.8) // not used by classic theme
+    {
+        setOpacity(1.0);
+    }
+    // end of quirks
+
+    Q_UNUSED(widget)
+
+    static const QColor nodeColor(NODE_COLOR);
+    static const QColor nodeColorSelected = nodeColor.lighter(104);
+    static const QColor nodeColorNeutral(160, 160, 160);
+    static const QColor colorCoordinator(0, 132, 209);
+    static const QColor colorRouterDead(240, 190, 15);
+    static const QColor colorRouter(255, 211, 32);
+    static const QColor colorOtau(120, 250, 100);
+    static const QColor nodeShadowColor(165, 165, 165);
+    static const QColor colorToggleBackground(240, 240, 240);
+    static const QColor colorInset(140, 140, 140);
+    static const QColor colorInsetDark(100, 100, 100);
+
+    QPainter &p = *painter;
+
+    p.setRenderHint(QPainter::Antialiasing, true);
+
+    const QColor *m_color = &nodeColorNeutral;
+
+    const int rheight = option->rect.height();
+    const int tooOld = 60 * 1000 * 30; // 30 minutes
+    qint64 ageSeconds = tooOld;
+
+    if (m_data)
+    {
+        ageSeconds = (m_steadyTimeRef.ref - m_lastSeen) / 1000;
+
+        if (isValid(m_otauActiveTime))
+        {
+            const deCONZ::TimeMs dt = m_steadyTimeRef - m_otauActiveTime;
+            if (dt < deCONZ::TimeMs{5000})
+            {
+                m_color = &colorOtau;
+            }
+            else
+            {
+                m_otauActiveTime = {};
+            }
+        }
+        else if (m_deviceType == deCONZ::Coordinator)
+        {
+            m_color = &colorCoordinator;
+        }
+        else if (m_deviceType == deCONZ::Router)
+        {
+            if (m_isZombie || m_data->state() == deCONZ::FailureState || (ageSeconds >= tooOld))
+            {
+                m_color = &colorRouterDead;
+            }
+            else
+            {
+                m_color = &colorRouter;
+            }
+        }
+        else if (m_deviceType == deCONZ::EndDevice)
+        {
+            m_color = &nodeColorNeutral;
+        }
+    }
+
+    // fake shadow
+    qreal roundBorder = 2;
+    qreal shadowY = -1;
+
+    p.setBrush(nodeShadowColor);
+    p.setPen(QPen(nodeShadowColor, 1.8));
+    p.drawRoundedRect(QRectF(option->rect).adjusted(1.5, 1.5, -1, -1), roundBorder, roundBorder);
+
+    // surface
+    qreal inset = 1;
+    if (option->state & QStyle::State_Selected)
+    {
+        p.setBrush(nodeColorSelected);
+        //inset = 0;
+        p.setPen(QPen(QColor(0, 80, 250), 2));
+    }
+    else
+    {
+        p.setBrush(nodeColor);
+        p.setPen(Qt::NoPen);
+    }
+
+    p.drawRoundedRect(option->rect.adjusted(inset, inset, -inset, -inset), roundBorder, roundBorder);
+
+    p.setClipRect(0, 0, 16, 100);
+    p.setBrush(*m_color);
+    p.drawRoundedRect(option->rect.adjusted(inset, inset, -inset, -inset), roundBorder, roundBorder);
+    p.setClipping(false);
+
+    if ((option->state & QStyle::State_Selected) == 0)
+    {
+        QRect rect = option->rect;
+
+        QLinearGradient gradient(rect.topLeft(), rect.bottomLeft());
+        gradient.setColorAt(0, QColor(255, 255, 255, 96));
+        gradient.setColorAt(1, QColor(130, 130, 130, 64));
+
+        p.setPen(QPen(gradient, 0.75));
+        p.setBrush(Qt::NoBrush);
+
+        p.drawRoundedRect(rect.adjusted(inset + 1.0, inset, -inset, -inset), roundBorder, roundBorder);
+    }
+
+    // endpoint checkbox subcontrol
+    p.setPen(Qt::NoPen);
+    if (!data()->simpleDescriptors().empty())
+    {
+//        p.setPen(QPen(colorInset, 1.0));
+//        p.setBrush(colorToggleBackground);
+//        p.drawRoundedRect(m_endpointToggle, 3.0, 3.0);
+
+        QRectF r = m_endpointToggle;
+        qreal pad = 3.0;
+        qreal subt = (r.height() / 2.0) - 1.4;
+
+        const qreal round = 1.0;
+
+        p.setPen(Qt::NoPen);
+        // shade
+        p.setBrush(colorInsetDark);
+        p.drawRoundedRect(r.adjusted(pad, subt, -pad, -subt), round, round);
+
+        if (!m_epDropDownVisible)
+        {
+            p.drawRoundedRect(r.adjusted(subt, pad, -subt, -pad), round, round);
+        }
+
+        // inner
+        pad = 4.0;
+        subt += 1.0;
+        p.setBrush(colorInset);
+        p.drawRect(r.adjusted(pad, subt, -pad, -subt));
+
+        if (!m_epDropDownVisible)
+        {
+            p.drawRect(r.adjusted(subt, pad, -subt, -pad));
+        }
+    }
+
+    QFont fn;
+    fn.setPointSize(NamePointSize);
+    fn.setWeight(QFont::Bold);
+    p.setFont(fn);
+
+    QFontMetrics fm(fn);
+
+    // NWK address | Userdescriptor
+    static const QColor textColorDark(20, 20, 20);
+    static const QColor textColorDim(80, 80, 80);
+
+    p.setPen(QPen(textColorDark, 2));
+
+    if (ageSeconds >= tooOld)
+    {
+        p.setPen(QPen(textColorDim, 2));
+    }
+    else
+    {
+        p.setPen(QPen(textColorDark, 2));
+    }
+
+    QRect rectName = option->rect.adjusted(NamePad, fm.capHeight() * 3 / 8, -2 * ToggleSize, 0);
+    rectName.setHeight(fm.capHeight() * 2);
+
+    // p.fillRect(rectName, Qt::cyan);
+    p.drawText(rectName, Qt::AlignVCenter, m_name);
+
+    if (m_hasDDF != 0)
+    {
+        fn.setPointSize(8);
+        fn.setBold(false);
+        p.setFont(fn);
+        p.setPen(QPen(QColor(50, 50, 50), 2));
+        if (m_hasDDF == 1)
+        {
+            p.drawText(rectName, Qt::AlignVCenter | Qt::AlignRight, QLatin1String("DDF"));
+        }
+        else if (m_hasDDF == 2)
+        {
+            p.drawText(rectName, Qt::AlignVCenter | Qt::AlignRight, QLatin1String("DDB"));
+        }
+    }
+
+    // IEEE address
+    fn.setFamily(QLatin1String("monospace"));
+    fn.setBold(false);
+    fn.setPointSize(MacPointSize);
+    p.setFont(fn);
+    fm = QFontMetrics(fn);
+    p.setPen(QPen(QColor(50, 50, 50), 2));
+    if (m_extAddress.isEmpty())
+    {
+        m_extAddress = QString(QLatin1String("%1")).arg(m_extAddressCache, 16, 16, QLatin1Char('0')).toUpper();
+    }
+
+    QRect macRect = option->rect.adjusted(m_indRect.x() + m_indRect.width() + 4, option->rect.height() / 2, 0, 0);
+    // p.fillRect(macRect, Qt::yellow);
 
     p.drawText(macRect, Qt::AlignVCenter, m_extAddress);
 
@@ -551,14 +900,6 @@ void zmgNode::paint(QPainter *painter, const QStyleOptionGraphicsItem *option, Q
     {
         qreal x = m_indRect.x() + m_indRect.width();
         p.drawPixmap(x + 4, m_indRect.y() - m_indRect.height() + 3, m_pm);
-    }
-
-    if (option->state & QStyle::State_Selected)
-    {
-        inset = 0;
-        p.setBrush(Qt::NoBrush);
-        p.setPen(QPen(qApp->palette().color(QPalette::Highlight), 2));
-        p.drawRoundedRect(option->rect.adjusted(inset, inset, -inset, -inset), roundBorder, roundBorder);
     }
 }
 
@@ -704,22 +1045,26 @@ void zmgNode::updateLink(NodeLink *link)
     }
 }
 
-// TODO wip zmgNode should not know anything about deCONZ::zmNode
+// TODO(mpi): wip zmgNode should not know anything about deCONZ::zmNode
 void zmgNode::updateParameters()
 {
-    if (m_data) // TODO set from outside
+    if (m_data) // TODO(mpi): set from outside
     {
         m_isZombie = m_data->isZombie();
     }
 
-    if (!m_name.isEmpty())
+    QString name = m_name;
+    if (name.isEmpty() || name.length() < 14)
+        name = "ACME 123nnnnnn";
+
+    if (!name.isEmpty())
     {
         QFont fn;
         fn.setPointSize(NamePointSize);
         fn.setWeight(QFont::Bold);
         QFontMetrics fm(fn);
 
-        QString placeHolder = m_name + "DDF_M";
+        QString placeHolder = name + "DDF_M";
 
         QRect bb = fm.boundingRect(placeHolder);
         int w = bb.width();
@@ -732,12 +1077,21 @@ void zmgNode::updateParameters()
         if (h < 42)
             h = 42;
 
+        m_heightExta = 0;
+        if (Theme_Value(ThemeValueDeviceNodesV2))
+        {
+            if (m_vfsState0 & VFS_STATE_EXTRA_ROW)
+            {
+                m_heightExta = fm.capHeight() + 4;
+            }
+        }
+
         if (m_width != w || m_height != h)
         {
             prepareGeometryChange();
             m_width = w;
             m_height = h;
-            m_epBox->setPos(0, m_height + 2);
+            m_epBox->setPos(0, boundingRect().bottom() + 2);
         }
     }
 
@@ -745,6 +1099,7 @@ void zmgNode::updateParameters()
 
     m_endpointToggle = QRectF(boundingRect().width() - ToggleSize - TogglePad, y,
                       ToggleSize, ToggleSize);
+    update();
 }
 
 bool zmgNode::needSaveToDatabase() const
@@ -878,22 +1233,39 @@ void zmgNode::vfsModelUpdated(const QModelIndex &index)
     QModelIndex parent = index.parent();
 
     AT_AtomIndex atiValue;
+    AT_AtomIndex atiParent;
+
+    atiParent.index = parent.data(ActorVfsModel::AtomIndexRole).toUInt();
     atiValue.index = index.data(ActorVfsModel::AtomIndexRole).toUInt();
     AT_Atom atValue = AT_GetAtomByIndex(atiValue);
 
-    if (atValue.data && parent.data(ActorVfsModel::AtomIndexRole).toUInt() == ati_state.index)
+    if (nullptr == atValue.data)
+        return;
+
+    parent = index.parent(); // <sub device id>
+    AT_AtomIndex atiSubdeviceId;
+    atiSubdeviceId.index = parent.data(ActorVfsModel::AtomIndexRole).toUInt();
+    int subDeviceRow = parent.row();
+    QVariant value = index.siblingAtColumn(ActorVfsModel::ColumnValue).data();
+
+    if (atiValue.index == ati_reachable.index) // state/reachable, config/reachable
     {
-        parent = index.parent(); // <sub device id>
-
-        AT_AtomIndex atiSubdeviceId;
-        atiSubdeviceId.index = parent.data(ActorVfsModel::AtomIndexRole).toUInt();
-
-        int subDeviceRow = parent.row();
-
-
-        QVariant value = index.siblingAtColumn(ActorVfsModel::ColumnValue).data();
-
-
+        if (subDeviceRow == 0) // only use main sub device for now
+        {
+            if (value.toBool())
+            {
+                m_vfsState0 &= ~VFS_STATE_IS_NOT_REACHABLE;
+                m_vfsState0 |= VFS_STATE_IS_REACHABLE;
+            }
+            else
+            {
+                m_vfsState0 &= ~VFS_STATE_IS_REACHABLE;
+                m_vfsState0 |= VFS_STATE_IS_NOT_REACHABLE;
+            }
+        }
+    }
+    else if (atiParent.index == ati_state.index)
+    {
         DBG_Printf(DBG_INFO, "ZMG [%d] %.*s -> %s\n", subDeviceRow, atValue.len, atValue.data, qPrintable(value.toString()));
 
         if (atiValue.index == ati_on.index)
@@ -918,25 +1290,49 @@ void zmgNode::vfsModelUpdated(const QModelIndex &index)
         }
         else if (atiValue.index == ati_temperature.index)
         {
-
+            m_temperature = (float)value.toInt() / 100.0f;
+            if (m_temperature >= -200.0f && m_temperature <= 200.0f)
+            {
+              m_vfsState0 |= VFS_STATE_HAS_TEMPERATURE;
+            }
         }
-        else if (atiValue.index == ati_presence.index)
+        else if (atiValue.index == ati_lux.index)
+        {
+            m_lux = value.toInt();
+            m_vfsState0 |= VFS_STATE_HAS_LUX;
+        }
+        // treat these as one signal (suppose no sensors have more than one of these)
+        else if (atiValue.index == ati_presence.index ||
+                 atiValue.index == ati_water.index ||
+                 atiValue.index == ati_fire.index ||
+                 atiValue.index == ati_open.index ||
+                 atiValue.index == ati_vibration.index)
         {
             if (value.toBool())
             {
-                m_vfsState0 &= ~VFS_STATE_IS_NO_PRESENCE;
-                m_vfsState0 |= VFS_STATE_IS_PRESENCE;
+                m_vfsState0 &= ~VFS_STATE_IS_NO_SIGNAL;
+                m_vfsState0 |= VFS_STATE_IS_SIGNAL;
             }
             else
             {
-                m_vfsState0 &= ~VFS_STATE_IS_PRESENCE;
-                m_vfsState0 |= VFS_STATE_IS_NO_PRESENCE;
+                m_vfsState0 &= ~VFS_STATE_IS_SIGNAL;
+                m_vfsState0 |= VFS_STATE_IS_NO_SIGNAL;
             }
         }
     }
 
     if (oldVfsState != m_vfsState0)
     {
+        if (0 == (oldVfsState & VFS_STATE_EXTRA_ROW))
+        {
+            if (m_vfsState0 & VFS_STATE_EXTRA_ROW)
+            {
+                // change node geometry to include extra row for values
+                updateParameters();
+                return;
+            }
+        }
+
         update();
     }
 }

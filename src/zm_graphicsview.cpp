@@ -41,6 +41,7 @@ public:
 static zmGraphicsView *inst;
 static GraphicsViewPrivate *inst_d;
 static AT_AtomIndex ati_state;
+static AT_AtomIndex ati_config;
 static AT_AtomIndex ati_devices;
 
 // defined in zm_gnode.cpp
@@ -93,6 +94,7 @@ zmGraphicsView::zmGraphicsView(QWidget *parent) :
 
     d_ptr->m_indicationTimer = startTimer(500);
 
+    AT_AddAtom("config", qstrlen("config"), &ati_config);
     AT_AddAtom("state", qstrlen("state"), &ati_state);
     AT_AddAtom("devices", qstrlen("devices"), &ati_devices);
 
@@ -175,9 +177,9 @@ void zmGraphicsView::wheelEvent(QWheelEvent *event)
 
     if (dy < 0.0) // zoom in
     {
-        if (scaleY > 1.0)
+        if (scaleY > 1.25)
         {
-            scaleY = 1.0;
+            scaleY = 1.25;
         }
     }
     else // zoom out
@@ -269,7 +271,10 @@ void zmGraphicsView::vfsDataChanged(const QModelIndex &topLeft, const QModelInde
     QModelIndex parent = topLeft.parent();
 
     // state/*
-    if (parent.data(ActorVfsModel::AtomIndexRole).toUInt() == ati_state.index)
+    AT_AtomIndex atiParent;
+    atiParent.index = parent.data(ActorVfsModel::AtomIndexRole).toUInt();
+
+    if (atiParent.index == ati_state.index || atiParent.index == ati_config.index)
     {
     }
     else
@@ -310,10 +315,10 @@ void zmGraphicsView::vfsDataChanged(const QModelIndex &topLeft, const QModelInde
 
 
         zmgNode *gnode = GUI_GetNodeWithMac(mac);
-        if (!gnode)
-            return;
-
-        gnode->vfsModelUpdated(topLeft);
+        if (gnode)
+        {
+            gnode->vfsModelUpdated(topLeft);
+        }
     }
 }
 

@@ -96,8 +96,8 @@ public:
 signals:
     void moved();
 
-    void socketConnectRequest(NodeSocket *src, NodeSocket *dst);
-    void linkDisconnectRequest(NodeLink *link);
+//    void socketConnectRequest(NodeSocket *src, NodeSocket *dst);
+//    void linkDisconnectRequest(NodeLink *link);
 
 protected:
     QVariant itemChange(GraphicsItemChange change, const QVariant &value) override;
@@ -109,7 +109,10 @@ protected:
     void updateParameters();
     void resetIndicator();
 
-protected:
+private:
+    void paintClassic(QPainter *painter, const QStyleOptionGraphicsItem *option, QWidget *widget);
+
+
     deCONZ::SteadyTimeRef m_otauActiveTime{};
     QGraphicsEllipseItem *m_indicator = nullptr;
     deCONZ::zmNode *m_data = nullptr;
@@ -137,7 +140,10 @@ protected:
     QPixmap m_pm;
     int m_width;
     int m_height;
+    int m_heightExta;
     int m_battery = -1;
+    float m_temperature = 0;
+    int m_lux = 0;
     bool m_isZombie = false;
     bool m_dirty = false;
     uint32_t m_vfsState0 = 0;
