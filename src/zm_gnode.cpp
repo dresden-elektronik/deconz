@@ -1246,7 +1246,11 @@ void zmgNode::vfsModelUpdated(const QModelIndex &index)
     AT_AtomIndex atiSubdeviceId;
     atiSubdeviceId.index = parent.data(ActorVfsModel::AtomIndexRole).toUInt();
     int subDeviceRow = parent.row();
-    QVariant value = index.siblingAtColumn(ActorVfsModel::ColumnValue).data();
+    QModelIndex valueIndex = index.sibling(index.row(), ActorVfsModel::ColumnValue);
+    if (!valueIndex.isValid())
+        return;
+
+    QVariant value = valueIndex.data();
 
     if (atiValue.index == ati_reachable.index) // state/reachable, config/reachable
     {
