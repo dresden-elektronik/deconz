@@ -372,7 +372,7 @@ void zmgNode::paint(QPainter *painter, const QStyleOptionGraphicsItem *option, Q
     static const QColor colorOtau(120, 250, 100);
     const QColor nodeShadowColor(Theme_Color(ColorNodeViewBackground).darker(135));
 
-    QColor textColor = option->palette.color(QPalette::Active, QPalette::Text);
+    QColor textColor = qApp->palette().color(QPalette::Active, QPalette::Text);
     QColor textColorDim;
 
     if (textColor.red() < 128)
@@ -408,7 +408,6 @@ void zmgNode::paint(QPainter *painter, const QStyleOptionGraphicsItem *option, Q
     p.save();
     p.setRenderHint(QPainter::Antialiasing, true);
 
-    QColor nameColor = option->palette.color(QPalette::WindowText);
     const QColor *m_color = &nodeColorNeutral;
 
     const QRect optRect = option->rect.adjusted(1, 1, -1, -1);
@@ -532,7 +531,7 @@ void zmgNode::paint(QPainter *painter, const QStyleOptionGraphicsItem *option, Q
     }
 
     QFont fn = Theme_FontRegular();
-    fn.setPointSize(NamePointSize);
+    //fn.setPointSize(NamePointSize);
     fn.setWeight(QFont::Medium);
     p.setFont(fn);
 
@@ -551,7 +550,7 @@ void zmgNode::paint(QPainter *painter, const QStyleOptionGraphicsItem *option, Q
     }
     else
     {
-        p.setPen(QPen(nameColor, 2));
+        p.setPen(QPen(textColor, 2));
     }
     p.drawText(rectName, Qt::AlignVCenter, m_name);    
 
@@ -574,7 +573,7 @@ void zmgNode::paint(QPainter *painter, const QStyleOptionGraphicsItem *option, Q
     // IEEE address
     fn = Theme_FontMonospace();
     fn.setBold(false);
-    fn.setPointSize(MacPointSize);
+    fn.setPointSize(fn.pointSize() - 2);
     p.setFont(fn);
     fm = QFontMetrics(fn);
     p.setPen(QPen(textColorDim));
@@ -1059,12 +1058,12 @@ void zmgNode::updateParameters()
 
     if (!name.isEmpty())
     {
-        QFont fn;
-        fn.setPointSize(NamePointSize);
+        QFont fn(Theme_FontRegular());
+        //fn.setPointSize(NamePointSize);
         fn.setWeight(QFont::Bold);
         QFontMetrics fm(fn);
 
-        QString placeHolder = name + "DDF_M";
+        QString placeHolder = name + " DDF_M";
 
         QRect bb = fm.boundingRect(placeHolder);
         int w = bb.width();
