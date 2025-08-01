@@ -1651,9 +1651,18 @@ void MainWindow::updateLogo()
     // draw logo in current theme style (blending logo mask against theme color)
     {
         QImage mask(":/img/deconz_mask.png");
-        mask = mask.scaledToWidth(320, Qt::SmoothTransformation);
+        mask = mask.scaledToWidth(220, Qt::SmoothTransformation);
         QImage img(mask.width(), mask.height(), QImage::Format_ARGB32);
-        QColor fg = palette().color(QPalette::WindowText);
+        QColor fg = palette().color(QPalette::Window);
+
+        if (fg.red() < 100)
+        {
+            fg = fg.lighter(160);
+        }
+        else
+        {
+            fg = fg.darker(160);
+        }
 
         for (int y = 0; y < img.height(); ++y) {
             for (int x = 0; x < img.width(); ++x) {
