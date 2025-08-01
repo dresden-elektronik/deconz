@@ -29,8 +29,7 @@ zmgEndpoint::zmgEndpoint(zmgEndpointBox *box, QGraphicsItem *parent) :
     m_endpoint(0),
     m_box(box)
 {
-    m_font = QApplication::font();
-    m_font.setPixelSize(IconSize * 0.6);
+    m_font = Theme_FontRegular();
 }
 
 QRectF zmgEndpoint::boundingRect() const
@@ -66,7 +65,7 @@ QSizeF zmgEndpoint::sizeHint(Qt::SizeHint which, const QSizeF &constraint) const
         width += 2 * IconSize; // icon space
         width += IconSize + fm.averageCharWidth(); // end freespace
         size.setWidth(width);
-        size.setHeight(2 * IconSize + 1.5 * fm.averageCharWidth() + m_device.size().height() + fm.leading());
+        size.setHeight(2 * IconSize + fm.capHeight());
         break;
 
     default:

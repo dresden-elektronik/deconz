@@ -1458,6 +1458,7 @@ void MainWindow::createMainToolbar()
     w->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
     ui->mainToolBar->addWidget(w);
 
+    ui->mainToolBar->setFont(Theme_FontRegular()); // without it macos has tiny font
     m_leaveAction = ui->mainToolBar->addAction(tr("Leave"), deCONZ::master(), SLOT(leaveNetwork()));
     m_leaveAction->setEnabled(false);
     m_leaveAction->setToolTip(tr("Leave the network"));

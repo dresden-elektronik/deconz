@@ -556,7 +556,7 @@ void zmgNode::paint(QPainter *painter, const QStyleOptionGraphicsItem *option, Q
 
     if (m_hasDDF != 0)
     {
-        fn.setPointSize(8);
+        fn.setPointSize(fn.pointSize() - 2);
         fn.setBold(false);
         p.setFont(fn);
         p.setPen(QPen(textColorDim, 2));
@@ -1081,7 +1081,7 @@ void zmgNode::updateParameters()
         {
             if (m_vfsState0 & VFS_STATE_EXTRA_ROW)
             {
-                m_heightExta = fm.capHeight() + 4;
+                m_heightExta = fm.capHeight() + 8;
             }
         }
 
