@@ -96,7 +96,7 @@ zmNetEdit::zmNetEdit(QWidget *parent) :
         col++;
     }
 
-    grid->setMargin(4);
+    grid->setContentsMargins(4,4,4,4);
 
     ui->endpointGroupBox->setEnabled(true);
     m_endpointLayout = new QVBoxLayout(ui->endpointGroupBox);

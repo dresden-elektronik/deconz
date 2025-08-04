@@ -243,7 +243,7 @@ void zmNode::setVersion(const QString &version)
              {
                  idx++;
              }
-             const auto v = version.midRef(idx);
+             const auto v = version.mid(idx);
              if (!v.isEmpty())
              {
                  bool ok;

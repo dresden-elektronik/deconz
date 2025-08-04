@@ -72,7 +72,10 @@ void zmAboutDialog::showEvent(QShowEvent *event)
     }
 
     QString appVersion;
-    QStringList tags = QString(GIT_TAGS).split(";");
+    QStringList tags;
+#ifdef GIT_TAGS
+    tags = QString(GIT_TAGS).split(";");
+#endif
 
     appVersion += qApp->applicationVersion();
     appVersion += tr("\n\nQt: %1").arg(QT_VERSION_STR);
