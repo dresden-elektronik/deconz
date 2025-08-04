@@ -452,7 +452,7 @@ void zmgNode::paint(QPainter *painter, const QStyleOptionGraphicsItem *option, Q
     // fake shadow
     qreal roundBorder = 2;
 
-    if (m_vfsState0 & VFS_STATE_IS_ON)
+    if ((m_vfsState0 & VFS_STATE_IS_ON) && 0 == (m_vfsState0 & VFS_STATE_IS_NOT_REACHABLE))
     {
         p.setBrush(*m_color);
         p.setPen(QPen(*m_color, 1));
@@ -495,7 +495,7 @@ void zmgNode::paint(QPainter *painter, const QStyleOptionGraphicsItem *option, Q
         p.setClipRect(r);
     }
     p.setBrush(*m_color);
-    if (m_vfsState0 & VFS_STATE_IS_ON)
+    if ((m_vfsState0 & VFS_STATE_IS_ON) && 0 == (m_vfsState0 & VFS_STATE_IS_NOT_REACHABLE))
     {
         p.setPen(QPen(*m_color, 1));
         p.drawRoundedRect(optRect, roundBorder, roundBorder);
