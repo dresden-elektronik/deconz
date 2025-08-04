@@ -222,16 +222,12 @@ void zmNodeInfo::setNode(ActorVfsModel *vfs, uint64_t mac)
 
 QString toHexString(uint16_t number)
 {
-    char buf[16];
-    int n = qsnprintf(buf, sizeof(buf), "0x%04x", number);
-    return QString::fromLatin1(buf, n);
+    return QString("0x%1").arg(number, 4, 16, QChar('0'));
 }
 
 QString toHexString(uint64_t number)
 {
-    char buf[24];
-    int n = qsnprintf(buf, sizeof(buf), "0x%016llx", number);
-    return QString::fromLatin1(buf, n);
+    return QString("0x%1").arg(number, 16, 16, QChar('0'));
 }
 
 void zmNodeInfo::setNode(deCONZ::zmNode *data)
