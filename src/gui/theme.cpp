@@ -299,6 +299,9 @@ void AStyle::polish(QApplication *app)
 
 void AStyle::polish(QWidget *widget)
 {
+    if (!_theme)
+        return;
+
     QPalette pal = _theme->palette;
 
     {
