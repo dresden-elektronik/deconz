@@ -10,6 +10,7 @@ set(CMAKE_AUTORCC ON)
 
 if(USE_QT6)
   set(QT_VERSION_MAJOR 6)
+  add_compile_definitions(QT_NO_DEPRECATED_WARNINGS=1)
 elseif(CMAKE_PREFIX_PATH MATCHES "5\.[0-9][0-9]\.[0-9]")
   set(QT_VERSION_MAJOR 5)
 elseif(CMAKE_PREFIX_PATH MATCHES "6\.[0-9][0-9]\.[0-9]")
