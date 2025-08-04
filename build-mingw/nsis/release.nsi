@@ -83,7 +83,7 @@
   ;InstallDir "$LOCALAPPDATA\${DEST_NAME}"
   
   ;Get installation folder from registry if available
-  ;InstallDirRegKey SHCTX "Software\${DEST_NAME}" ""
+  ;InstallDirRegKey HKLM "Software\${DEST_NAME}" ""
 
   ;Request application privileges for Windows Vista
   RequestExecutionLevel user
@@ -122,7 +122,7 @@
   !insertmacro MUI_PAGE_DIRECTORY
     
   ;Start Menu Folder Page Configuration
-  !define MUI_STARTMENUPAGE_REGISTRY_ROOT "SHCTX" 
+  !define MUI_STARTMENUPAGE_REGISTRY_ROOT "HKLM" 
   !define MUI_STARTMENUPAGE_REGISTRY_KEY "Software\${DISPL_NAME}" 
   !define MUI_STARTMENUPAGE_REGISTRY_VALUENAME "Start Menu Folder"
   
@@ -193,25 +193,33 @@ Section "${DISPL_NAME}" SecApp
   CopyFiles "$INSTDIR\otau\*" "$LOCALAPPDATA\dresden-elektronik\deCONZ\otau"
   
   RMDir /R "$INSTDIR\build"
-    
+
+  ;Cleanup legacy installation folder
+  DeleteRegKey HKCU "Software\${DEST_NAME}"    
+  DeleteRegKey SHCTX "Software\${DEST_NAME}"
+
   ;Store installation folder
-  WriteRegStr SHCTX "Software\${DEST_NAME}" "" $INSTDIR
+  WriteRegStr HKLM "Software\${DEST_NAME}" "" $INSTDIR
   
   ;Create uninstaller
   WriteUninstaller "$INSTDIR\Uninstall.exe"
 
+  ;Cleanup legacy uninstaller
+  DeleteRegKey HKCU  "${UNINST_KEY}"
+  DeleteRegKey SHCTX  "${UNINST_KEY}"
+
   ;Add uninstall information to Add/Remove Programs
  
-  WriteRegStr SHCTX  "${UNINST_KEY}" "DisplayName" "${DISPL_NAME}"
-  WriteRegStr SHCTX  "${UNINST_KEY}" "UninstallString" "$INSTDIR\Uninstall.exe"
-  WriteRegStr SHCTX  "${UNINST_KEY}" "Publisher" "dresden elektronik ingenieurtechnik gmbh"
-  WriteRegStr SHCTX  "${UNINST_KEY}" "URLUpdateInfo" "http://www.dresden-elektronik.de"
-  WriteRegStr SHCTX  "${UNINST_KEY}" "InstallLocation" "$INSTDIR"
-  WriteRegStr SHCTX  "${UNINST_KEY}" "DisplayIcon" "$INSTDIR\bin\deCONZ.exe"
-  WriteRegStr SHCTX  "${UNINST_KEY}" "DisplayVersion" "${APP_VERSION}"
+  WriteRegStr HKLM  "${UNINST_KEY}" "DisplayName" "${DISPL_NAME}"
+  WriteRegStr HKLM  "${UNINST_KEY}" "UninstallString" "$INSTDIR\Uninstall.exe"
+  WriteRegStr HKLM  "${UNINST_KEY}" "Publisher" "dresden elektronik ingenieurtechnik gmbh"
+  WriteRegStr HKLM  "${UNINST_KEY}" "URLUpdateInfo" "http://www.dresden-elektronik.de"
+  WriteRegStr HKLM  "${UNINST_KEY}" "InstallLocation" "$INSTDIR"
+  WriteRegStr HKLM  "${UNINST_KEY}" "DisplayIcon" "$INSTDIR\bin\deCONZ.exe"
+  WriteRegStr HKLM  "${UNINST_KEY}" "DisplayVersion" "${APP_VERSION}"
   ${GetSize} "$INSTDIR" "/S=0K" $0 $1 $2
   IntFmt $0 "0x%08X" $0
-  WriteRegDWORD SHCTX  "${UNINST_KEY}" "EstimatedSize" "$0"
+  WriteRegDWORD HKLM  "${UNINST_KEY}" "EstimatedSize" "$0"
   
   !insertmacro MUI_STARTMENU_WRITE_BEGIN Application
     
@@ -258,10 +266,14 @@ Section "Uninstall"
   Delete "$SMPROGRAMS\$StartMenuFolder\User Manual.lnk"
   Delete "$SMPROGRAMS\$StartMenuFolder\deCONZ.lnk"
   RMDir "$SMPROGRAMS\$StartMenuFolder"
-  
+
+  ; remove legacy registry keys
+  DeleteRegKey SHCTX  "${UNINST_KEY}"
+  DeleteRegKey SHCTX "Software\${DEST_NAME}"
+
   ; remove registry keys
-  DeleteRegKey /ifempty SHCTX  "${UNINST_KEY}"
-  DeleteRegKey /ifempty SHCTX "Software\${DEST_NAME}"
+  DeleteRegKey /ifempty HKLM  "${UNINST_KEY}"
+  DeleteRegKey /ifempty HKLM "Software\${DEST_NAME}"
 
 SectionEnd
 
