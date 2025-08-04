@@ -100,7 +100,8 @@ void zmgEndpoint::paint(QPainter *painter, const QStyleOptionGraphicsItem *optio
     x += Theme_TextWidth(painter->fontMetrics(), m_endpointText) +
          painter->fontMetrics().averageCharWidth();
 
-    if (!m_iconProfile.isNull())
+    // for now only draw profile and device icons with classic theme
+    if (Theme_Value(ThemeValueDeviceNodesV2) == 0 && !m_iconProfile.isNull())
     {
         qreal iconX = x;
 
