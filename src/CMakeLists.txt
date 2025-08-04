@@ -1,14 +1,31 @@
 cmake_minimum_required(VERSION 3.13)
 
+
+option(USE_QT6 "Build with Qt6" OFF)
+
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 
-find_package(Qt5 COMPONENTS Core Gui Widgets SerialPort Network REQUIRED)
+if(USE_QT6)
+  set(QT_VERSION_MAJOR 6)
+elseif(CMAKE_PREFIX_PATH MATCHES "5\.[0-9][0-9]\.[0-9]")
+  set(QT_VERSION_MAJOR 5)
+elseif(CMAKE_PREFIX_PATH MATCHES "6\.[0-9][0-9]\.[0-9]")
+  set(QT_VERSION_MAJOR 6)
+  set(USE_QT6 1)
+else()
+  set(QT_VERSION_MAJOR 5) # default to qt5
+endif()
 
-# for testing Qt5 to Qt6 port
-# add_compile_definitions(QT_DISABLE_DEPRECATED_UP_TO=0x050F00)
+if (QT_VERSION_MAJOR EQUAL 6)
+  find_package(Qt6 COMPONENTS Core Gui Widgets SerialPort Network REQUIRED)
+elseif (QT_VERSION_MAJOR EQUAL 5)
+  find_package(Qt5 COMPONENTS Core Gui Widgets SerialPort Network REQUIRED)
+else()
+    message( FATAL_ERROR "QT_VERSION_MAJOR must be defined" )
+endif()
 
 set(PUB_INCLUDE_FILES
     3rdparty/actor_model/actor/plugin.h
@@ -263,8 +280,9 @@ if (UNIX)
 endif()
 
 #--------------------------------------------------------------
-
-add_subdirectory(plugins)
+if (QT_VERSION_MAJOR EQUAL 5)
+  add_subdirectory(plugins)
+endif()
 
 #--------------------------------------------------------------
 include(GNUInstallDirs)
