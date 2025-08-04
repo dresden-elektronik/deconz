@@ -280,9 +280,7 @@ if (UNIX)
 endif()
 
 #--------------------------------------------------------------
-if (QT_VERSION_MAJOR EQUAL 5)
-  add_subdirectory(plugins)
-endif()
+add_subdirectory(plugins)
 
 #--------------------------------------------------------------
 include(GNUInstallDirs)
