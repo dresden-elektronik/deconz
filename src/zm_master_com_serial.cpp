@@ -194,7 +194,7 @@ static int PL_Connect(const char *path, int baudrate)
 {
     ComPriv->serialPort->setPortName(QLatin1String(path));
 
-    auto bd = QSerialPort::UnknownBaud;
+    auto bd = QSerialPort::Baud115200;
 
     switch (baudrate)
     {
