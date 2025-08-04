@@ -1235,7 +1235,7 @@ void zmgNode::vfsModelUpdated(const QModelIndex &index)
     if (nullptr == atValue.data)
         return;
 
-    parent = index.parent(); // <sub device id>
+    parent = parent.parent(); // <sub device id>
     AT_AtomIndex atiSubdeviceId;
     atiSubdeviceId.index = parent.data(ActorVfsModel::AtomIndexRole).toUInt();
     int subDeviceRow = parent.row();
@@ -1263,7 +1263,7 @@ void zmgNode::vfsModelUpdated(const QModelIndex &index)
     }
     else if (atiParent.index == ati_state.index)
     {
-        DBG_Printf(DBG_INFO, "ZMG [%d] %.*s -> %s\n", subDeviceRow, atValue.len, atValue.data, qPrintable(value.toString()));
+        // DBG_Printf(DBG_INFO, "ZMG [%d] %.*s -> %s\n", subDeviceRow, atValue.len, atValue.data, qPrintable(value.toString()));
 
         if (atiValue.index == ati_on.index)
         {
