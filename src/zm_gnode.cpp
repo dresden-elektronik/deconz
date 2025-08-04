@@ -704,7 +704,6 @@ void zmgNode::paintClassic(QPainter *painter, const QStyleOptionGraphicsItem *op
     static const QColor colorRouter(255, 211, 32);
     static const QColor colorOtau(120, 250, 100);
     static const QColor nodeShadowColor(165, 165, 165);
-    static const QColor colorToggleBackground(240, 240, 240);
     static const QColor colorInset(140, 140, 140);
     static const QColor colorInsetDark(100, 100, 100);
 
@@ -714,7 +713,6 @@ void zmgNode::paintClassic(QPainter *painter, const QStyleOptionGraphicsItem *op
 
     const QColor *m_color = &nodeColorNeutral;
 
-    const int rheight = option->rect.height();
     const int tooOld = 60 * 1000 * 30; // 30 minutes
     qint64 ageSeconds = tooOld;
 
@@ -802,10 +800,6 @@ void zmgNode::paintClassic(QPainter *painter, const QStyleOptionGraphicsItem *op
     p.setPen(Qt::NoPen);
     if (!data()->simpleDescriptors().empty())
     {
-//        p.setPen(QPen(colorInset, 1.0));
-//        p.setBrush(colorToggleBackground);
-//        p.drawRoundedRect(m_endpointToggle, 3.0, 3.0);
-
         QRectF r = m_endpointToggle;
         qreal pad = 3.0;
         qreal subt = (r.height() / 2.0) - 1.4;
