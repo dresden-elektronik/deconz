@@ -175,9 +175,18 @@ if (Git_FOUND)
         OUTPUT_VARIABLE GIT_COMMIT
         OUTPUT_STRIP_TRAILING_WHITESPACE
     )
+    execute_process(
+        COMMAND ${GIT_EXECUTABLE} tag --points-at HEAD
+        WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}
+        OUTPUT_VARIABLE GIT_TAGS
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
+    string (REPLACE "\n" ";" GIT_TAGS "${GIT_TAGS}")
 endif()
 
-message(STATUS "build channel: ${BUILD_CHANNEL}")
+message(STATUS "build channel: ${BUILD_CHANNEL}, tags: #${GIT_TAGS}#")
+
+configure_file(config.h.in config.h @ONLY)
 
 target_compile_definitions(${PROJECT_NAME}
     PRIVATE
@@ -188,8 +197,6 @@ target_compile_definitions(${PROJECT_NAME}
     APP_MIN_NODES=5
     APP_MAX_NODES=512
     APP_FEATURE_SOURCE_ROUTING
-    GIT_COMMIT="\"\"${GIT_COMMIT}\"\""
-    GIT_DATE=${GIT_DATE}
     COMMERCIAL_KEY=0x93UL # RaspBee, ConBee, ConBee II, RaspBee II
     USE_QEXT_SERIAL
     USE_ULIB_SHARED

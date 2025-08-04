@@ -17,6 +17,7 @@
 #include "zm_about_dialog.h"
 #include "ui_zm_about_dialog.h"
 #include "zm_master.h"
+#include "config.h"
 
 zmAboutDialog::zmAboutDialog(QWidget *parent) :
     QDialog(parent),
@@ -71,6 +72,7 @@ void zmAboutDialog::showEvent(QShowEvent *event)
     }
 
     QString appVersion;
+    QStringList tags = QString(GIT_TAGS).split(";");
 
     appVersion += qApp->applicationVersion();
     appVersion += tr("\n\nQt: %1").arg(QT_VERSION_STR);
@@ -105,6 +107,10 @@ void zmAboutDialog::showEvent(QShowEvent *event)
     }
 
     appVersion += tr("\n\nCommit: %1").arg(QString(GIT_COMMIT).left(6));
+    for (int i = 0; i < tags.size(); i++)
+    {
+        appVersion += tr("\nTag: %1").arg(tags[i]);
+    }
     appVersion += "\n" + devFirmwareVersion + "\n";
 
     ui->appVersionLabel->setText(appVersion);
