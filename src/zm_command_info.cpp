@@ -46,7 +46,11 @@ zmCommandInfo::zmCommandInfo(QWidget *parent) :
     m_timer->setSingleShot(true);
 
     connect(m_timer, &QTimer::timeout, this, &zmCommandInfo::zclCommandTimeout);
+#if QT_VERSION_MAJOR < 6
+    connect(m_execMapper, SIGNAL(mapped(int)), this, SLOT(onExec(int)));
+#else
     connect(m_execMapper, &QSignalMapper::mappedInt, this, &zmCommandInfo::onExec);
+#endif
 }
 
 zmCommandInfo::~zmCommandInfo()

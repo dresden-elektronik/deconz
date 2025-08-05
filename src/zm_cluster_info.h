@@ -92,8 +92,6 @@ private:
     quint8 m_endpoint = InvalidEndpoint;
     quint32 m_clusterId = InvalidClusterId;
     QStandardItemModel *m_attrModel = nullptr;
-    QSignalMapper *m_mapperServer = nullptr;
-    QSignalMapper *m_mapperClient = nullptr;
     zmAttributeInfo *m_attributeDialog = nullptr;
     std::vector<uint8_t> m_apsReqIds;
     uint8_t m_zclReadAttributeReqId = 0;
