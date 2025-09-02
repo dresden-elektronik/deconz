@@ -842,7 +842,7 @@ void zmClusterInfo::showAttributes()
 
                     m_attrModel->setData(m_attrModel->index(row, 1), attr.name());
                     m_attrModel->setData(m_attrModel->index(row, 2), dataType.shortname());
-                    m_attrModel->setData(m_attrModel->index(row, 3), attr.isReadonly() ? "r" : "rw");
+                    m_attrModel->setData(m_attrModel->index(row, 3), attr.isReadonly() ? "r" : (attr.isWriteonly() ? "w" : "rw"));
 
                     data = attr.toString(dataType, deCONZ::ZclAttribute::Prefix);
                     m_attrModel->setData(m_attrModel->index(row, 4), data);
@@ -892,7 +892,7 @@ void zmClusterInfo::showAttributes()
 
             m_attrModel->setData(m_attrModel->index(row, 1), attr.name());
             m_attrModel->setData(m_attrModel->index(row, 2), dataType.shortname());
-            m_attrModel->setData(m_attrModel->index(row, 3), attr.isReadonly() ? "r" : "rw");
+            m_attrModel->setData(m_attrModel->index(row, 3), attr.isReadonly() ? "r" : (attr.isWriteonly() ? "w" : "rw"));
 
             data = attr.toString(dataType, deCONZ::ZclAttribute::Prefix);
             m_attrModel->setData(m_attrModel->index(row, 4), data);
