@@ -272,6 +272,7 @@ void zmAttributeInfo::write()
     case deCONZ::Zcl128BitSecurityKey:
     case deCONZ::ZclSingleFloat:
     case deCONZ::ZclOctedString:
+    case deCONZ::ZclCharacterString:
         ok = getNumericInput();
         break;
 
@@ -571,6 +572,7 @@ void zmAttributeInfo::setAttribute(quint8 endpoint, quint16 clusterId, deCONZ::Z
     case deCONZ::Zcl128BitSecurityKey:
     case deCONZ::ZclSingleFloat:
     case deCONZ::ZclOctedString:
+    case deCONZ::ZclCharacterString:
         buildNumericInput();
         break;
 
@@ -637,6 +639,7 @@ void zmAttributeInfo::updateEdit()
     case deCONZ::Zcl128BitSecurityKey:
     case deCONZ::ZclSingleFloat:
     case deCONZ::ZclOctedString:
+    case deCONZ::ZclCharacterString:
         setNumericInput();
         break;
 
@@ -861,6 +864,13 @@ bool zmAttributeInfo::getNumericInput()
                 return true;
             }
             return false;
+        }
+        else if (m_attribute.dataType() == deCONZ::ZclCharacterString)
+        {
+            const QByteArray str = edit->text().toUtf8();
+
+            m_attribute.setValue(QVariant(str));
+            return true;
         }
 
         if (m_signed)
