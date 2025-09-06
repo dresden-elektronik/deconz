@@ -857,12 +857,7 @@ bool zmAttributeInfo::getNumericInput()
         }
         else if (m_attribute.dataType() == deCONZ::ZclCharacterString)
         {
-            const QByteArray str = edit->text().toLatin1();
-
-            if (str.isEmpty())
-            {
-                return false;
-            }
+            const QByteArray str = edit->text().toUtf8();
 
             m_attribute.setValue(QVariant(str));
             return true;
