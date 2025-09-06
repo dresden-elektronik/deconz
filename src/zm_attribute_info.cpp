@@ -173,7 +173,17 @@ void zmAttributeInfo::stateCheck()
         {
             ui->writeButton->setEnabled(true);
         }
-        ui->readButton->setEnabled(true);
+
+        if (m_attribute.isWriteonly())
+        {
+            //ui->writeButton->setEnabled(false);
+            ui->readButton->setEnabled(false);
+        }
+        else
+        {
+            ui->readButton->setEnabled(true);
+        }
+
         ui->readReportConfButton->setEnabled(true);
         ui->writeReportConfButton->setEnabled(true);
         break;
