@@ -479,7 +479,7 @@ void zmAttributeInfo::setAttribute(quint8 endpoint, quint16 clusterId, deCONZ::Z
 {
     setWindowTitle(tr("Attribute Editor"));
     ui->attributeName->setText(attr.name());
-    ui->attributeAccess->setText(attr.isReadonly() ? "read only" : "writeable");
+    ui->attributeAccess->setText(attr.isReadonly() ? "read only" : (attr.isWriteonly() ? "write only" : "read/write"));
     m_endpoint = endpoint;
     m_clusterId = clusterId;
     m_clusterSide = clusterSide;
