@@ -147,6 +147,4 @@ void zmApp::eventQueueIdle()
         tref = now;
         U_TimerTick(diff);
     }
-
-    d_ptr->httpServer->processClients();
 }

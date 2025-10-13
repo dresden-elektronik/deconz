@@ -49,10 +49,14 @@ public:
     const QString &serverRoot() const;
     void processClients();
 
+Q_SIGNALS:
+    void threadMessage();
+
 public slots:
     void clientConnected();
 
 private Q_SLOTS:
+    void clientDeleted(QObject *obj);
     void clearCache();
     void updateFileWatcher();
 
