@@ -38,7 +38,8 @@
 #define TH_MSG_CLIENT_RX   12
 #define TH_MSG_CLIENT_CLOSED   13
 
-#define TH_QUEUE_SIZE (1<<21) // 2 MB
+#define TH_QUEUE_SIZE (128)
+#define IO_BUF_SIZE (1<<20) // 1 MB
 
 
 #ifdef PL_WINDOWS
@@ -61,11 +62,8 @@ namespace deCONZ {
 struct NClient
 {
     unsigned handle = 0;
-    unsigned writePos = 0;
-    std::vector<char> writeBuf;
-    std::vector<char> readBuf;
-    N_SslSocket sock;
-    zmHttpClient *httpClient = nullptr;
+    N_SslSocket sslSock;
+    N_TcpSocket tcpSock;
 };
 
 using queue_word = uint32_t;
@@ -74,9 +72,9 @@ class HttpServerPrivate
 {
 public:
     HttpServer *q;
-    bool useHttps = false;
     QString serverRoot;
     uint16_t serverPort;
+    int httpsPort = 443;
     N_SslSocket httpsSock;
 
     std::vector<deCONZ::HttpClientHandler*> clientHandlers;
@@ -91,6 +89,7 @@ public:
     // to and from the thread.
     std::array<queue_word, TH_QUEUE_SIZE> qinout;
     std::vector<NClient> clients;
+    char ioBuf[IO_BUF_SIZE + 1];
 
     NClient *getClientForHandle(unsigned cliHandle);
 };
@@ -199,9 +198,9 @@ static void httpThreadFunc(void *arg)
                 {
                     NClient cli;
 
-                    if (N_SslAccept(&d->httpsSock, &cli.sock))
+                    if (N_SslAccept(&d->httpsSock, &cli.sslSock))
                     {
-                        DBG_Printf(DBG_INFO, "TCP accept\n");
+                        //DBG_Printf(DBG_INFO, "SSL accept\n");
 
                         if (++handleEvolution >= 0x7FFF) // 15-bit counter
                             handleEvolution = 0;
@@ -212,11 +211,15 @@ static void httpThreadFunc(void *arg)
                         cli.handle |= NCLIENT_HANDLE_IS_SSL_FLAG;
                         cli.handle += d->clients.size();
 
-                        d->clients.push_back(cli);
-
-                        queuePut(d, TH_MSG_CLIENT_NEW);
-                        queuePut(d, cli.handle);
-                        msgOut = true;
+                        // proxy to internal HTTP port
+                        if (N_TcpInit(&cli.tcpSock, N_AF_IPV4) && N_TcpConnect(&cli.tcpSock, "127.0.0.1", d->serverPort))
+                        {
+                            d->clients.push_back(cli);
+                        }
+                        else
+                        {
+                            N_SslClose(&cli.sslSock);
+                        }
                     }
                 }
 
@@ -230,65 +233,50 @@ static void httpThreadFunc(void *arg)
 
                     if (cli.handle & NCLIENT_HANDLE_IS_SSL_FLAG)
                     {
-                        if (N_SslHandshake(&cli.sock) != 0)
+                        bool needsClose = false;
+
+                        if (N_SslHandshake(&cli.sslSock) != 0)
                         {
-                            const unsigned minWordsFree = 32; // ensure important messages can be delivered
-                            if (queueSpaceForWords(d, minWordsFree) && N_SslCanRead(&cli.sock))
+                            if (N_SslCanRead(&cli.sslSock))
                             {
-                                char buf[2048];
-                                const int wordsz = sizeof(queue_word);
-                                auto nfree = queueFreeWords(d) * wordsz;
-
-                                nfree -= 3 * wordsz; // msg header
-                                if ((sizeof(buf) - 1) < nfree)
-                                    nfree = sizeof(buf) - 1;
-
-                                int n = N_SslRead(&cli.sock, buf, nfree);
+                                int n = N_SslRead(&cli.sslSock, d->ioBuf, IO_BUF_SIZE);
                                 if (n == 0)
                                 {
-                                    queuePut(d, TH_MSG_CLIENT_CLOSED);
-                                    queuePut(d, cli.handle);
-                                    msgOut = true;
+                                    needsClose = true;
                                 }
-                                else if (n > 0 && (unsigned)n <= nfree)
+                                else if (n > 0)
                                 {
-                                    buf[n] = '\0';
-                                    queuePut(d, TH_MSG_CLIENT_RX);
-                                    queuePut(d, cli.handle);
-                                    queuePut(d, (queue_word)n);
-
-                                    int nwords = (n + 3) / wordsz;
-
-                                    int i;
-
-                                    for (i = 0; i < nwords; i++)
+                                    d->ioBuf[n] = '\0';
+                                    if (N_TcpWrite(&cli.tcpSock, d->ioBuf, n) != n)
                                     {
-                                        queue_word word;
-                                        U_memcpy(&word, &buf[i * wordsz], wordsz);
-                                        queuePut(d, word);
+                                        DBG_Printf(DBG_INFO, "SSL->TCP failed to write %d bytes\n", n);
+                                        needsClose = true;
                                     }
-
-                                    msgOut = true;
                                 }
                             }
 
-                            if (cli.writePos < cli.writeBuf.size())
+                            if (N_TcpCanRead(&cli.tcpSock))
                             {
-                                unsigned len = cli.writeBuf.size() - cli.writePos;
-                                int n = N_SslWrite(&cli.sock, &cli.writeBuf[cli.writePos], len);
+                                int n  = N_TcpRead(&cli.tcpSock, d->ioBuf, IO_BUF_SIZE);
 
-                                if (n > 0)
+                                if (n == 0)
                                 {
-                                    DBG_Printf(DBG_INFO, "TCP written %d bytes, cliHandle: %u\n", n, cli.handle);
-                                    cli.writePos += n;
-
-                                    if (cli.writeBuf.size() <= cli.writePos)
-                                    {
-                                        // all done
-                                        cli.writePos = 0;
-                                        cli.writeBuf.clear();
-                                    }
+                                    needsClose = true;
                                 }
+                                else if (n > 0 && N_SslWrite(&cli.sslSock, d->ioBuf, n) != n)
+                                {
+                                    DBG_Printf(DBG_INFO, "TCP->SSL failed to write %d bytes\n", n);
+                                    needsClose = true;
+                                }
+                            }
+
+                            if (needsClose)
+                            {
+                                N_TcpClose(&cli.tcpSock);
+                                N_SslClose(&cli.sslSock);
+
+                                cli = d->clients.back();
+                                d->clients.pop_back();
                             }
                         }
                     }
@@ -296,53 +284,12 @@ static void httpThreadFunc(void *arg)
             }
 
             U_thread_mutex_unlock(&d->mutex);
-
-            if (msgOut)
-            {
-                emit d->q->threadMessage();
-            }
         }
 
         U_thread_msleep(5);
     }
 
     U_thread_exit(0);
-}
-
-int HttpSend(unsigned handle, const void *buf, unsigned len)
-{
-    U_ASSERT(buf);
-    U_ASSERT(len);
-    U_ASSERT(privHttpInstance);
-    deCONZ::HttpServerPrivate *d = privHttpInstance;
-
-    unsigned index;
-    int ret = 0;
-
-    if (!buf || len == 0)
-        return ret;
-
-    // NOTE: This is called from within rx() so the mutex is already locked.
-
-    for (index = 0; index < d->clients.size(); index++)
-    {
-        if (d->clients[index].handle == handle)
-            break;
-    }
-
-    if (index < d->clients.size())
-    {
-        NClient &cli = d->clients[index];
-        size_t beg = cli.writeBuf.size();
-
-        cli.writeBuf.resize(beg + len);
-        U_ASSERT(beg + len <= cli.writeBuf.size());
-        U_memcpy(&cli.writeBuf[beg], buf, len);
-
-        ret = len;
-    }
-
-    return ret;
 }
 
 HttpServer::HttpServer(QObject *parent) :
@@ -352,11 +299,6 @@ HttpServer::HttpServer(QObject *parent) :
     d->q = this;
     httpInstance = this;
     privHttpInstance = d;
-
-    U_thread_mutex_init(&d->mutex);
-    N_SslInit();
-
-    connect(this, &HttpServer::threadMessage, this, &HttpServer::processClients, Qt::QueuedConnection);
 
     d->serverRoot = "/";
     connect(this, SIGNAL(newConnection()),
@@ -515,13 +457,36 @@ HttpServer::HttpServer(QObject *parent) :
 #ifdef TEST_SSL_IMPL
     {
         N_Address addr{};
-        addr.af = N_AF_IPV6;
-        uint16_t port = 6655;
+        addr.af = N_AF_IPV4;
+
+        d->httpsPort = deCONZ::appArgumentNumeric("--https-port", d->httpsPort);
 
         const auto certPath = deCONZ::getStorageLocation(deCONZ::ApplicationsDataLocation).toStdString();
 
-        if (N_SslServerInit(&d->httpsSock, &addr, port, certPath.c_str()))
+        if (d->httpsPort > 0 && d->httpsPort < 0xFFFF)
         {
+            bool ok;
+            const uint32_t listenIpv4 = QHostAddress(listenAddress).toIPv4Address(&ok);
+            if (ok)
+            {
+                U_memcpy(addr.data, &listenIpv4, sizeof(listenIpv4));
+            }
+
+            ports = {(uint16_t)d->httpsPort, 8443, 9443};
+
+            N_SslInit();
+            U_thread_mutex_init(&d->mutex);
+            connect(this, &HttpServer::threadMessage, this, &HttpServer::processClients, Qt::QueuedConnection);
+
+            for (uint16_t port : ports)
+            {
+                if (N_SslServerInit(&d->httpsSock, &addr, port, certPath.c_str()))
+                {
+                    d->httpsPort = port;
+                    DBG_Printf(DBG_INFO, "HTTPS Server listen port: %d\n", d->httpsPort);
+                    break;
+                }
+            }
         }
     }
 #endif
@@ -566,20 +531,12 @@ int HttpServer::registerHttpClientHandler(HttpClientHandler *handler)
 
 void HttpServer::incomingConnection(qintptr socketDescriptor)
 {
-    if (d->useHttps)
-    {
-        //handleHttpsClient(socketDescriptor);
-    }
-    else
-    {
-        handleHttpClient(socketDescriptor);
-    }
+    handleHttpClient(socketDescriptor);
 }
 
 void HttpServer::handleHttpClient(int socketDescriptor)
 {
-    unsigned cliHandle = 0; // TODO(mpi)
-    zmHttpClient *sock = new zmHttpClient(serverRoot(), d->m_cache, cliHandle, this);
+    zmHttpClient *sock = new zmHttpClient(serverRoot(), d->m_cache, this);
     sock->setSocketDescriptor(socketDescriptor);
     addPendingConnection(sock);
     emit newConnection();
@@ -648,84 +605,6 @@ void HttpServer::processClients()
         }
     }
 #endif
-
-    if (U_thread_mutex_lock(&d->mutex))
-    {
-        for (;!queueIsEmpty(d);)
-        {
-            auto msg = queuePeek(d);
-
-            if (msg == TH_MSG_CLIENT_RX)
-            {
-                queueGet(d); // msg was for us
-                auto cliHandle = queueGet(d);
-                auto nbytes = queueGet(d);
-
-                int wordsz = sizeof(queue_word);
-                int nwords = (nbytes + 3) / wordsz;
-
-                int i;
-                uint8_t buf[2048 + 8];
-                for (i = 0; i < nwords; i++)
-                {
-                    queue_word w = queueGet(d);
-                    U_memcpy(&buf[i * wordsz], &w, wordsz);
-                }
-                buf[nbytes] = '\0';
-
-                NClient *cli = d->getClientForHandle(cliHandle);
-                if (cli && nbytes)
-                {
-                    U_ASSERT(cli->httpClient);
-                    cli->httpClient->rx(buf, nbytes);
-                }
-            }
-            else if (msg == TH_MSG_CLIENT_NEW)
-            {
-                queueGet(d); // msg was for us
-                auto cliHandle = queueGet(d);
-
-                NClient *cli = d->getClientForHandle(cliHandle);
-                if (cli)
-                {
-                    U_ASSERT(cli->httpClient == nullptr);
-
-                    cli->httpClient = new zmHttpClient(serverRoot(), d->m_cache, cliHandle, this);
-                    connect(cli->httpClient, &zmHttpClient::destroyed, d->q, &HttpServer::clientDeleted);
-
-                    for (auto *handler : d->clientHandlers)
-                    {
-                        cli->httpClient->registerClientHandler(handler);
-                    }
-                }
-
-                DBG_Printf(DBG_INFO, "new tcp/ssl client: handle: %u\n", cliHandle);
-            }
-            else if (msg == TH_MSG_CLIENT_CLOSED)
-            {
-                queueGet(d); // msg was for us
-                auto cliHandle = queueGet(d);
-
-                NClient *cli = d->getClientForHandle(cliHandle);
-                if (cli && cli->httpClient)
-                {
-                    DBG_Printf(DBG_INFO, "TCP done, cliHandle: %u\n", cli->handle);
-                    emit cli->httpClient->disconnected();
-                    cli->httpClient->deleteLater();
-                    cli->httpClient = nullptr;
-                    // remove
-                    *cli = d->clients.back();
-                    d->clients.pop_back();
-                }
-            }
-            else
-            {
-                break;
-            }
-        }
-
-        U_thread_mutex_unlock(&d->mutex);
-    }
 }
 
 void HttpServer::clientConnected()
@@ -737,24 +616,6 @@ void HttpServer::clientConnected()
         connect(sock, SIGNAL(disconnected()),
                 sock, SLOT(deleteLater()));
     }
-}
-
-void HttpServer::clientDeleted(QObject *obj)
-{
-    U_thread_mutex_lock(&d->mutex);
-
-    for (auto &cli : d->clients)
-    {
-        if (cli.httpClient == static_cast<zmHttpClient*>(obj))
-        {
-            N_SslClose(&cli.sock);
-            cli = d->clients.back();
-            d->clients.pop_back();
-            break;
-        }
-    }
-
-    U_thread_mutex_unlock(&d->mutex);
 }
 
 void HttpServer::clearCache()

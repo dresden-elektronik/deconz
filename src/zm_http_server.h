@@ -56,8 +56,7 @@ public slots:
     void clientConnected();
 
 private Q_SLOTS:
-    void clientDeleted(QObject *obj);
-    void clearCache();
+     void clearCache();
     void updateFileWatcher();
 
 private:

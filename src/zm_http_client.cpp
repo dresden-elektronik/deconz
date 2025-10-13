@@ -19,8 +19,6 @@
 #include <QStringList>
 #include "deconz/dbg_trace.h"
 #include "deconz/http_client_handler.h"
-#include "deconz/u_assert.h"
-#include "deconz/u_memory.h"
 #include "deconz/util.h"
 #include "zm_http_client.h"
 #include "deconz/u_sstream.h"
@@ -51,20 +49,13 @@ const char *HttpContentFontWoff    = "application/font-woff";
 const char *HttpContentFontWoff2   = "application/font-woff2";
 const char *HttpContentRSS         = "application/rss+xml";
 
-zmHttpClient::zmHttpClient(const QString &serverRoot, std::vector<CacheItem> &cache, unsigned cliHandle, QObject *parent) :
+zmHttpClient::zmHttpClient(const QString &serverRoot, std::vector<CacheItem> &cache, QObject *parent) :
     QTcpSocket(parent),
     m_serverRoot(serverRoot),
-    m_cache(cache),
-    m_cliHandle(cliHandle)
+    m_cache(cache)
 {
     m_clientState = ClientIdle;
     m_headerBuf.reserve(MAX_HTTP_HEADER_LENGTH);
-
-    if (cliHandle != 0)
-    {
-        setSocketState(QAbstractSocket::ConnectedState);
-        setOpenMode(QIODevice::ReadWrite);
-    }
 
     connect(this, SIGNAL(readyRead()),
             this, SLOT(handleHttpRequest()));
@@ -80,7 +71,6 @@ zmHttpClient::zmHttpClient(const QString &serverRoot, std::vector<CacheItem> &ca
 
 zmHttpClient::~zmHttpClient()
 {
-    DBG_Printf(DBG_INFO, "HttpClient dtor(), cliHandle: %u\n", m_cliHandle);
 }
 
 int zmHttpClient::registerClientHandler(deCONZ::HttpClientHandler *handler)
@@ -122,23 +112,11 @@ int zmHttpClient::registerClientHandler(deCONZ::HttpClientHandler *handler)
     return 0;
 }
 
-void zmHttpClient::rx(const uint8_t *buf, unsigned int size)
-{
-    U_ASSERT(0 < size);
-    DBG_Printf(DBG_INFO, "RX %u bytes. handle: %u\n", size, m_cliHandle);
-    DBG_Printf(DBG_INFO, "######\n%s\n#####\n", buf);
-    size_t pos = m_rxBuf.size();
-    m_rxBuf.resize(m_rxBuf.size() + size);
-    U_memcpy(m_rxBuf.data() + pos, buf, size);
-    handleHttpRequest();
-}
-
 /*!
     Informs all handlers that the socket is no longer valid.
 */
 void zmHttpClient::detachHandlers()
 {
-    DBG_Printf(DBG_INFO, "HTTP client detachHandlers(), cliHandle: %u\n", m_cliHandle);
     for (auto &handler : m_handlers)
     {
         if (handler)
@@ -250,8 +228,8 @@ void zmHttpClient::handleHttpRequest()
             {
                 DBG_Printf(DBG_HTTP, "HTTP client handle request failed, status: %d\n", ret);
             }
-            if (m_cliHandle == 0)
-                flush();
+
+            flush();
             return;
         }
     }
@@ -804,54 +782,4 @@ void zmHttpClient::handlerDeleted()
     {
         handler = nullptr;
     }
-}
-
-qint64 zmHttpClient::bytesAvailable() const
-{
-    // NOTE:
-    // 1) the rxBuf gets emptied
-    // 2) the data is copied into a qt internal buffer
-    if (!m_rxBuf.empty())
-        return m_rxBuf.size();
-
-    // 3) the following works for the internal buffer and
-    //    plain QTcpSocket for HTTP
-    return QTcpSocket::bytesAvailable();
-}
-
-void zmHttpClient::close()
-{
-    if (m_cliHandle == 0)
-        QTcpSocket::close();
-}
-
-qint64 zmHttpClient::readData(char *data, qint64 maxlen)
-{
-    qint64 r = 0;
-    if (!m_rxBuf.empty())
-    {
-        r = qMin((qint64)m_rxBuf.size(), maxlen);
-        U_memcpy(data, m_rxBuf.data(), r);
-        m_rxBuf.erase(m_rxBuf.begin(), m_rxBuf.begin() + r);
-    }
-    else if (m_cliHandle == 0)
-    {
-        r = QTcpSocket::readData(data, maxlen);
-    }
-    return r;
-}
-
-qint64 zmHttpClient::writeData(const char *data, qint64 len)
-{
-    qint64 r = 0;
-    if (m_cliHandle != 0)
-    {
-        r = deCONZ::HttpSend(m_cliHandle, data, len);
-    }
-    else
-    {
-        r = QTcpSocket::writeData(data, len);
-    }
-
-    return r;
 }

@@ -9,6 +9,7 @@
  */
 
 #include <QAbstractEventDispatcher>
+#include <QTimer>
 #include <actor/service.h>
 #include <actor/plugin_loader.h>
 
@@ -68,7 +69,7 @@ static void mqThreadFunc(void *arg)
 class AppPrivate
 {
 public:
-    deCONZ::HttpServer *httpServer;
+    deCONZ::HttpServer *httpServer = nullptr;
 };
 
 zmApp::zmApp(int &argc, char **argv) :
@@ -103,7 +104,10 @@ zmApp::zmApp(int &argc, char **argv) :
 
     U_TimerInit(AM_ApiFunctions());
 
-    d_ptr->httpServer = new deCONZ::HttpServer(this);
+    d_ptr->httpServer = nullptr;
+    QTimer::singleShot(200, [this](){
+        d_ptr->httpServer = new deCONZ::HttpServer(this);
+    });
 }
 
 zmApp::~zmApp()
