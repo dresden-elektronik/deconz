@@ -25,9 +25,6 @@
 #include "deconz/u_threads.h"
 #include "deconz/util.h"
 
-// enabled only during tests for new SSL implementation
-#define TEST_SSL_IMPL
-
 #define NCLIENT_HANDLE_INDEX_MASK 0xFFFF
 #define NCLIENT_HANDLE_EVOLUTION_SHIFT 17
 #define NCLIENT_HANDLE_IS_SSL_FLAG 0x10000 // bit 17
@@ -89,7 +86,8 @@ public:
     // to and from the thread.
     std::array<queue_word, TH_QUEUE_SIZE> qinout;
     std::vector<NClient> clients;
-    char ioBuf[IO_BUF_SIZE + 1];
+    // buffer to read and write between sockets
+    std::array<char, IO_BUF_SIZE + 1> ioBuf;
 
     NClient *getClientForHandle(unsigned cliHandle);
 };
@@ -239,15 +237,16 @@ static void httpThreadFunc(void *arg)
                         {
                             if (N_SslCanRead(&cli.sslSock))
                             {
-                                int n = N_SslRead(&cli.sslSock, d->ioBuf, IO_BUF_SIZE);
+                                int n = N_SslRead(&cli.sslSock, d->ioBuf.data(), d->ioBuf.size() - 1);
                                 if (n == 0)
                                 {
                                     needsClose = true;
                                 }
                                 else if (n > 0)
                                 {
+                                    U_ASSERT(n < d->ioBuf.size());
                                     d->ioBuf[n] = '\0';
-                                    if (N_TcpWrite(&cli.tcpSock, d->ioBuf, n) != n)
+                                    if (N_TcpWrite(&cli.tcpSock, d->ioBuf.data(), n) != n)
                                     {
                                         DBG_Printf(DBG_INFO, "SSL->TCP failed to write %d bytes\n", n);
                                         needsClose = true;
@@ -257,13 +256,14 @@ static void httpThreadFunc(void *arg)
 
                             if (N_TcpCanRead(&cli.tcpSock))
                             {
-                                int n  = N_TcpRead(&cli.tcpSock, d->ioBuf, IO_BUF_SIZE);
+                                int n  = N_TcpRead(&cli.tcpSock, d->ioBuf.data(), d->ioBuf.size() - 1);
+                                U_ASSERT(n < d->ioBuf.size());
 
                                 if (n == 0)
                                 {
                                     needsClose = true;
                                 }
-                                else if (n > 0 && N_SslWrite(&cli.sslSock, d->ioBuf, n) != n)
+                                else if (n > 0 && N_SslWrite(&cli.sslSock, d->ioBuf.data(), n) != n)
                                 {
                                     DBG_Printf(DBG_INFO, "TCP->SSL failed to write %d bytes\n", n);
                                     needsClose = true;
@@ -454,16 +454,20 @@ HttpServer::HttpServer(QObject *parent) :
     }
 #endif
 
-#ifdef TEST_SSL_IMPL
     {
         N_Address addr{};
         addr.af = N_AF_IPV4;
 
         d->httpsPort = deCONZ::appArgumentNumeric("--https-port", d->httpsPort);
 
-        const auto certPath = deCONZ::getStorageLocation(deCONZ::ApplicationsDataLocation).toStdString();
+        const QString certKeyPath = deCONZ::getStorageLocation(deCONZ::ApplicationsDataLocation);
+        QString certPath = certKeyPath + "/cert.pem";
+        QString keyPath = certKeyPath + "/key.pem";
 
-        if (d->httpsPort > 0 && d->httpsPort < 0xFFFF)
+        certPath = deCONZ::appArgumentString("--https-cert", certPath);
+        keyPath = deCONZ::appArgumentString("--https-key", keyPath);
+
+        if (d->httpsPort > 0 && d->httpsPort < 0xFFFF && !certPath.isEmpty() && !keyPath.isEmpty())
         {
             bool ok;
             const uint32_t listenIpv4 = QHostAddress(listenAddress).toIPv4Address(&ok);
@@ -472,24 +476,20 @@ HttpServer::HttpServer(QObject *parent) :
                 U_memcpy(addr.data, &listenIpv4, sizeof(listenIpv4));
             }
 
-            ports = {(uint16_t)d->httpsPort, 8443, 9443};
-
             N_SslInit();
             U_thread_mutex_init(&d->mutex);
             connect(this, &HttpServer::threadMessage, this, &HttpServer::processClients, Qt::QueuedConnection);
 
-            for (uint16_t port : ports)
+            if (N_SslServerInit(&d->httpsSock, &addr, d->httpsPort, certPath.toStdString().c_str(), keyPath.toStdString().c_str()))
             {
-                if (N_SslServerInit(&d->httpsSock, &addr, port, certPath.c_str()))
-                {
-                    d->httpsPort = port;
-                    DBG_Printf(DBG_INFO, "HTTPS Server listen port: %d\n", d->httpsPort);
-                    break;
-                }
+                DBG_Printf(DBG_INFO, "HTTPS server listening on port: %d\n", d->httpsPort);
+            }
+            else
+            {
+                DBG_Printf(DBG_INFO, "HTTPS server failed to listen on port: %d\n", d->httpsPort);
             }
         }
     }
-#endif
 }
 
 HttpServer::~HttpServer()
