@@ -146,14 +146,27 @@ void zmHttpClient::handleHttpRequest()
     // HTTPS TLS handshake: https://tls12.xargs.org/#client-hello/annotated
     while (m_clientState == ClientRecvHeader && bytesAvailable() > 0)
     {
-        char c = 0;
-        read(&c, 1);
-        hdrEnd <<= 8;
-        hdrEnd |= c;
+        uint32_t rnrn = 0;
+        std::array<char, MAX_HTTP_HEADER_LENGTH> peekBuf = {0};
+        // only peek but not read, so the WebSocket server can read the HTTP header
+        // from the socket. For other requests skipData(headerSize) will be called.
+        auto peekSize = peek(peekBuf.data(), peekBuf.size() - 1);
 
-        if (m_headerBuf.size() >= MAX_HTTP_HEADER_LENGTH)
+        for (int hi = 0; 16 < peekSize && hi < peekSize; hi++)
         {
-            m_headerBuf.clear();
+            // shift register to detect: \r\n\r\n
+            rnrn <<= 8;
+            rnrn |= (uint8_t)peekBuf[hi];
+            if ((rnrn & 0xFFFFFFFFU) == 0x0d0a0d0aU)
+            {
+                hdrEnd = hi + 1;
+                peekBuf[hi + 1] = '\0';
+                break;
+            }
+        }
+
+        if (hdrEnd >= MAX_HTTP_HEADER_LENGTH)
+        {
             m_clientState = ClientIdle;
             QTextStream stream(this);
             stream << "HTTP/1.1 431 Request Header Fields Too Large\r\n";
@@ -164,13 +177,10 @@ void zmHttpClient::handleHttpRequest()
             return;
         }
 
-        m_headerBuf.push_back(c);
-
-        if ((hdrEnd & 0xffffffffL) == 0x0d0a0d0aL) // \r\n\r\n
+        if (hdrEnd != 0)
         {
             // end of header detected
-            m_headerBuf.push_back('\0');
-            if (!m_hdr.update(&m_headerBuf.front(), m_headerBuf.size()))
+            if (!m_hdr.update(peekBuf.data(), hdrEnd))
             {
                 m_clientState = ClientIdle;
                 QTextStream stream(this);
@@ -190,7 +200,6 @@ void zmHttpClient::handleHttpRequest()
                 return;
             }
             m_clientState = ClientRecvContent;
-            m_headerBuf.clear();
             break;
         }
     }
@@ -200,17 +209,31 @@ void zmHttpClient::handleHttpRequest()
         return;
     }
 
-    if (m_hdr.contentLength() > 0)
+    // WebSocket?
+    if (m_hdr.hasKey(QLatin1String("Upgrade")) && m_hdr.value(QLatin1String("Upgrade")) == QLatin1String("websocket"))
     {
-        const uint length = static_cast<uint>(m_hdr.contentLength());
+        // keep header in socket since WebSocketServer handles handshake
+        // disconnect read so that server can handle socket
+        disconnect(this, SIGNAL(readyRead()), this, SLOT(handleHttpRequest()));
+        // websocket server takes ownership
+        setParent(nullptr);
+    }
+    else
+    {
+        skip(hdrEnd);
 
-        if (length > bytesAvailable())
+        if (m_hdr.contentLength() > 0)
         {
-//            //DBG_Printf(DBG_HTTP, "Content not completely loaded (got %d of %u), wait 20ms\n", bytesAvailable(), length);
-//            if (!waitForReadyRead(20) || length > bytesAvailable())
+            const uint length = static_cast<uint>(m_hdr.contentLength());
+
+            if (length > bytesAvailable())
             {
-                //DBG_Printf(DBG_HTTP, "Content not completely loaded (got %d of %u), fetch rest [2]\n", bytesAvailable(), length);
-                return;
+                //            //DBG_Printf(DBG_HTTP, "Content not completely loaded (got %d of %u), wait 20ms\n", bytesAvailable(), length);
+                //            if (!waitForReadyRead(20) || length > bytesAvailable())
+                {
+                    //DBG_Printf(DBG_HTTP, "Content not completely loaded (got %d of %u), fetch rest [2]\n", bytesAvailable(), length);
+                    return;
+                }
             }
         }
     }

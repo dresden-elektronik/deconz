@@ -43,11 +43,10 @@ public:
     ~HttpServer();
     int registerHttpClientHandler(deCONZ::HttpClientHandler *handler);
     void incomingConnection(qintptr socketDescriptor);
-    void handleHttpClient(int socketDescriptor);
-    //void handleHttpsClient(int socketDescriptor);
     void setServerRoot(const QString &root);
     const QString &serverRoot() const;
     void processClients();
+    uint16_t httpsPort() const;
 
 Q_SIGNALS:
     void threadMessage();

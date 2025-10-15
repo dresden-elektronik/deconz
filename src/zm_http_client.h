@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2024 dresden elektronik ingenieurtechnik gmbh.
+ * Copyright (c) 2013-2025 dresden elektronik ingenieurtechnik gmbh.
  * All rights reserved.
  *
  * The software in this package is published under the terms of the BSD
@@ -64,7 +64,6 @@ private:
     ClientState m_clientState;
     QHttpRequestHeader m_hdr;
     std::vector<char> m_headerBuf;
-    std::vector<uint8_t> m_rxBuf;
     std::array<deCONZ::HttpClientHandler*, MaxHandlers> m_handlers{};
     std::vector<CacheItem> &m_cache;
 };

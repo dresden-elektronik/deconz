@@ -71,7 +71,7 @@ public:
     HttpServer *q;
     QString serverRoot;
     uint16_t serverPort;
-    int httpsPort = 443;
+    int httpsPort = 0;
     N_SslSocket httpsSock;
 
     std::vector<deCONZ::HttpClientHandler*> clientHandlers;
@@ -458,7 +458,7 @@ HttpServer::HttpServer(QObject *parent) :
         N_Address addr{};
         addr.af = N_AF_IPV4;
 
-        d->httpsPort = deCONZ::appArgumentNumeric("--https-port", d->httpsPort);
+        d->httpsPort = deCONZ::appArgumentNumeric("--https-port", 443);
 
         const QString certKeyPath = deCONZ::getStorageLocation(deCONZ::ApplicationsDataLocation);
         QString certPath = certKeyPath + "/cert.pem";
@@ -487,6 +487,7 @@ HttpServer::HttpServer(QObject *parent) :
             else
             {
                 DBG_Printf(DBG_INFO, "HTTPS server failed to listen on port: %d\n", d->httpsPort);
+                d->httpsPort = 0;
             }
         }
     }
@@ -531,18 +532,12 @@ int HttpServer::registerHttpClientHandler(HttpClientHandler *handler)
 
 void HttpServer::incomingConnection(qintptr socketDescriptor)
 {
-    handleHttpClient(socketDescriptor);
-}
-
-void HttpServer::handleHttpClient(int socketDescriptor)
-{
     zmHttpClient *sock = new zmHttpClient(serverRoot(), d->m_cache, this);
     sock->setSocketDescriptor(socketDescriptor);
     addPendingConnection(sock);
     emit newConnection();
 
     sock->setSocketOption(QTcpSocket::LowDelayOption, 1);
-    int lowDelay = sock->socketOption(QTcpSocket::LowDelayOption).toInt();
 
     for (auto *handler : d->clientHandlers)
     {
@@ -607,6 +602,11 @@ void HttpServer::processClients()
 #endif
 }
 
+uint16_t HttpServer::httpsPort() const
+{
+    return d->httpsPort;
+}
+
 void HttpServer::clientConnected()
 {
     QTcpSocket *sock = nextPendingConnection();
@@ -658,6 +658,16 @@ uint16_t httpServerPort()
     if (httpInstance)
     {
         return httpInstance->serverPort();
+    }
+
+    return 0;
+}
+
+uint16_t httpsServerPort()
+{
+    if (httpInstance)
+    {
+        return httpInstance->httpsPort();
     }
 
     return 0;

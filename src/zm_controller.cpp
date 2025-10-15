@@ -3219,6 +3219,7 @@ namespace deCONZ
     // forward declarations
     extern QString httpServerRoot();
     extern uint16_t httpServerPort();
+    extern uint16_t httpsServerPort();
 }
 
 uint16_t zmController::getParameter(U16Parameter parameter)
@@ -3240,6 +3241,9 @@ uint16_t zmController::getParameter(U16Parameter parameter)
 
     case ParamHttpPort:
         return deCONZ::httpServerPort();
+
+    case ParamHttpsPort:
+        return deCONZ::httpsServerPort();
 
     default:
         DBG_Printf(DBG_ERROR, "Unknown 16-bit parameter %d\n", (int)parameter);
