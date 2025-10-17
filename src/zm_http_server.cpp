@@ -256,10 +256,11 @@ static void httpThreadFunc(void *arg)
 
                             if (N_TcpCanRead(&cli.tcpSock))
                             {
-                                int n  = N_TcpRead(&cli.tcpSock, d->ioBuf.data(), d->ioBuf.size() - 1);
-                                U_ASSERT(n < d->ioBuf.size());
+                                int n = N_TcpRead(&cli.tcpSock, d->ioBuf.data(), d->ioBuf.size() - 1);
 
-                                if (n == 0)
+                                U_ASSERT(n < (int)d->ioBuf.size());
+
+                                if (n <= 0)
                                 {
                                     needsClose = true;
                                 }
