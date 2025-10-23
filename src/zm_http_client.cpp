@@ -220,7 +220,18 @@ void zmHttpClient::handleHttpRequest()
     }
     else
     {
-        skip(hdrEnd);
+        // skip header in buffer, can't use skip() since this requires Qt 5.10
+        for (;0 < hdrEnd;)
+        {
+            std::array<char, MAX_HTTP_HEADER_LENGTH> skipBuf;
+            int n = skipBuf.size();
+            if (hdrEnd < n)
+            n = hdrEnd;
+            n = read(skipBuf.data(), n);
+            if (n < 0) // should not happen
+                break;
+            hdrEnd -= n;
+        }
 
         if (m_hdr.contentLength() > 0)
         {
