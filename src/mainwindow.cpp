@@ -574,10 +574,7 @@ MainWindow::MainWindow(QWidget *parent) :
     deCONZ::zclDataBase()->initDbFile(zclFile);
     deCONZ::zclDataBase()->reloadAll(zclFile);
 
-    loadPlugIns();
 
-    deCONZ::controller()->loadNodesFromDb();
-    deCONZ::controller()->restoreNodesState();
 
     m_dockNodeInfo->raise();
 
@@ -598,7 +595,13 @@ MainWindow::MainWindow(QWidget *parent) :
 
     ui->devConnectButton->setFocus();
 
-    QTimer::singleShot(10, this, &MainWindow::loadPluginsStage2);
+    QTimer::singleShot(500, this, [this](){
+        loadPlugIns();
+
+        deCONZ::controller()->loadNodesFromDb();
+        deCONZ::controller()->restoreNodesState();
+        QTimer::singleShot(10, this, &MainWindow::loadPluginsStage2);
+    });
 }
 
 MainWindow::~MainWindow()
