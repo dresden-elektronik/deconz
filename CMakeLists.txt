@@ -94,8 +94,10 @@ set(CPACK_DEBIAN_PACKAGE_MAINTAINER "Manuel Pietschmann <mpi@dresden-elektronik.
 set(CPACK_DEBIAN_PACKAGE_SECTION "non-free / misc")
 
 if (USE_QT6)
+    set(CPACK_DEBIAN_PACKAGE_NAME "deconz-qt6")
     set(CPACK_DEBIAN_PACKAGE_DEPENDS "libqt6network6, libqt6widgets6, libqt6gui6, libqt6serialport6, libqt6websockets6, libqt6sql6, libqt6qml6, libqt6core5compat6, libcap2-bin, sqlite3, lsof, curl")
 else()
+    set(CPACK_DEBIAN_PACKAGE_NAME "deconz")
     set(CPACK_DEBIAN_PACKAGE_DEPENDS "libqt5core5a, libqt5network5, libqt5widgets5, libqt5gui5, libqt5serialport5, libqt5websockets5, libqt5sql5, libqt5qml5, libcap2-bin, sqlite3, lsof, curl")
 endif()
 set(CPACK_DEBIAN_PACKAGE_SUGGESTS "udev")
