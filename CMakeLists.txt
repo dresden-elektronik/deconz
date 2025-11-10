@@ -8,7 +8,7 @@ set(CMAKE_OSX_DEPLOYMENT_TARGET "10.13" CACHE STRING "Minimum macOS deployment v
 set(PWA_URL http://deconz.dresden-elektronik.de/phoscon_app/phoscon_app_2025-08-29.zip)
 set(WEBAPP_URL http://deconz.dresden-elektronik.de/phoscon_app/webapp_2016.zip)
 
-project(deCONZ VERSION 2.32.0)
+project(deCONZ VERSION 2.32.1)
 
 if (NOT DEFINED BUILD_CHANNEL)
     set(BUILD_CHANNEL "")
@@ -129,7 +129,7 @@ set(CPACK_PACKAGE_DESCRIPTION "Zigbee monitoring and control.")
 set(CPACK_PACKAGE_VERSION ${PROJECT_VERSION}${BUILD_CHANNEL})
 if (${CMAKE_HOST_SYSTEM_NAME} MATCHES "Linux")
 if (USE_QT6)
-    set(CPACK_PACKAGE_FILE_NAME "deconz_${PROJECT_VERSION}-qt6_debian${BUILD_CHANNEL}_${PKG_ARCH}")
+    set(CPACK_PACKAGE_FILE_NAME "deconz-qt6_${PROJECT_VERSION}-debian${BUILD_CHANNEL}_${PKG_ARCH}")
 else()
     set(CPACK_PACKAGE_FILE_NAME "deconz_${PROJECT_VERSION}-debian${BUILD_CHANNEL}_${PKG_ARCH}")
 endif()
