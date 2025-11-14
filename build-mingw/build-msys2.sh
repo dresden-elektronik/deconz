@@ -27,6 +27,9 @@ rm -rf build
 
 export PATH="$CMAKE:/c/Qt/Tools/mingw810_32/bin:$PATH"
 
+# copy applink.c to make OpenSSL BIO work on windows
+cp "$OPENSSL_DIR/include/openssl/applink.c" "../src"
+
 cmake -DBUILD_CHANNEL="" \
     -GNinja \
     -DOPENSSL_ROOT_DIR=$OPENSSL_DIR \
@@ -36,6 +39,8 @@ cmake -DBUILD_CHANNEL="" \
     -DQt5_DIR=/c/Qt/5.15.2/mingw81_32/lib/cmake/Qt5 \
     -DCMAKE_BUILD_TYPE=Release -B build -S ..
 cmake --build build
+
+rm -f "../src/applink.c"
 
 
 # ------------------------------------------------

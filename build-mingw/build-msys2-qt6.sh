@@ -27,6 +27,9 @@ rm -rf build
 
 export PATH="$CMAKE:/c/Qt/Tools/mingw1310_64/bin:$PATH"
 
+# copy applink.c to make OpenSSL BIO work on windows
+cp "$OPENSSL_DIR/include/openssl/applink.c" "../src"
+
 cmake -DBUILD_CHANNEL="" \
     -GNinja \
     -DUSE_QT6=ON \
@@ -36,6 +39,8 @@ cmake -DBUILD_CHANNEL="" \
     -DCMAKE_PREFIX_PATH=/c/Qt/${QT_VERS}/mingw_64 \
     -DCMAKE_BUILD_TYPE=Release -B build -S ..
 cmake --build build
+
+rm -f "../src/applink.c"
 
 #     -DQt5_DIR=/c/Qt/${QT_VERS}/mingw_64/lib/cmake/Qt6 \
 
@@ -132,3 +137,5 @@ sed -i "s/"define\ FILE_VERSION".*/define FILE_VERSION \"${FILE_VERSION}\"/g" "n
 sed -i "s/"define\ APP_VERSION".*/define APP_VERSION \"${APP_VERSION}\"/g" "nsis/$NSI_SCRIPT" || exit 3
 
 "$NSIS" nsis/$NSI_SCRIPT || exit 9
+
+mv "nsis/deCONZ_Setup_Win32_${FILE_VERSION}.exe" "nsis/deCONZ_Setup_Win64_${FILE_VERSION}.exe" || exit 10

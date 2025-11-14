@@ -157,6 +157,7 @@ if (WIN32)
         #endif()
     endif()
     target_sources(${PROJECT_NAME} PRIVATE app.rc)
+    target_sources(${PROJECT_NAME} PRIVATE applink.c)
 endif()
 
 # deCONZ library
