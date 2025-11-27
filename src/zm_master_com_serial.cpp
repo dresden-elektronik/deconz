@@ -315,8 +315,6 @@ static void PL_Thread0()
             fds.fd = platform.fd;
             ret = poll(&fds, 1 /* nfds*/ , timeout); // ret == 0: timeout | < 0 error
 
-            std::lock_guard<std::mutex> rx_lock(plThread->mtx_rx);
-
             if (ret > 0)
             {
                 if (fds.revents & (POLLHUP | POLLERR | POLLNVAL))
@@ -328,6 +326,7 @@ static void PL_Thread0()
                     unsigned maxsize = 0;
 
                     {
+                        std::unique_lock<std::mutex> tx_lock(plThread->mtx_rx);
                         unsigned rxa = plThread->rx_a;
                         unsigned rxb = plThread->rx_b;
 
@@ -363,6 +362,7 @@ static void PL_Thread0()
 
                         if (nread > 0 && nread <= (int)maxsize)
                         {
+                            std::lock_guard<std::mutex> rx_lock(plThread->mtx_rx);
                             int mkEvent = 0;
 
                             M_ASSERT(nread <= (int)sizeof(buf));
