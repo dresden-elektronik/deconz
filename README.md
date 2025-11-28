@@ -20,6 +20,19 @@ The web based Phoscon App is not part of this repository. It is fetched external
 
 Refer to [BUILDING.md](https://github.com/dresden-elektronik/deconz/blob/main/BUILDING.md) for instructions to create packages for various operating systems. Note these instruction currently only cover producing the release builds. In general you can use any IDE which supports CMake projects like VS Code, CLion or Qt creator to compile, run and debug deCONZ.
 
+## Static analyzer
+
+Build deCONZ with clang and scan-build to receive a HTML report.
+
+```
+rm -fr staticanalyze
+scan-build --use-cc=clang --use-c++=clang++ cmake -B staticanalyze .
+scan-build --use-cc=clang --use-c++=clang++ make -C staticanalyze -j2
+```
+
+When compilation is finished a command to display the HTML report is printed.
+> scan-build: Run 'scan-view /tmp/scan-build-2025-11-28-113520-898242-1' to examine bug reports.
+
 ## Development
 
 Since a while deCONZ v2.x is under a heavier shape shift with the following goals:

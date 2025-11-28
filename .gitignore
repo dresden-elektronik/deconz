@@ -4,6 +4,7 @@ CMakeLists.txt.user
 *.sublime-*
 *.idea*
 build*
+staticanalyze
 cmake-build*
 cred-macos
 .vscode/
