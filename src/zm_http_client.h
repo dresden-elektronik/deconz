@@ -19,6 +19,8 @@ namespace deCONZ {
     class HttpClientHandler;
 }
 
+class QTimer;
+
 class zmHttpClient : public QTcpSocket
 {
     Q_OBJECT
@@ -49,6 +51,7 @@ public slots:
 
 private slots:
     void handlerDeleted();
+    void timeout();
 
 private:
     enum ClientState
@@ -66,6 +69,7 @@ private:
     std::vector<char> m_headerBuf;
     std::array<deCONZ::HttpClientHandler*, MaxHandlers> m_handlers{};
     std::vector<CacheItem> &m_cache;
+    QTimer *m_timer;
 };
 
 #endif // ZM_HTTP_CLIENT_H

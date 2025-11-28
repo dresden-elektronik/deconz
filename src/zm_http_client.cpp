@@ -17,6 +17,7 @@
 #include <QUrl>
 #include <QVariant>
 #include <QStringList>
+#include <QTimer>
 #include "deconz/dbg_trace.h"
 #include "deconz/http_client_handler.h"
 #include "deconz/util.h"
@@ -56,6 +57,7 @@ zmHttpClient::zmHttpClient(const QString &serverRoot, std::vector<CacheItem> &ca
 {
     m_clientState = ClientIdle;
     m_headerBuf.reserve(MAX_HTTP_HEADER_LENGTH);
+    m_timer = new QTimer(this);
 
     connect(this, SIGNAL(readyRead()),
             this, SLOT(handleHttpRequest()));
@@ -67,6 +69,10 @@ zmHttpClient::zmHttpClient(const QString &serverRoot, std::vector<CacheItem> &ca
     {
         m_serverRoot = QLatin1String("/");
     }
+
+    connect(m_timer, &QTimer::timeout, this, &zmHttpClient::timeout);
+    m_timer->setSingleShot(true);
+    m_timer->start(10000);
 }
 
 zmHttpClient::~zmHttpClient()
@@ -112,6 +118,12 @@ int zmHttpClient::registerClientHandler(deCONZ::HttpClientHandler *handler)
     return 0;
 }
 
+void zmHttpClient::timeout()
+{
+    m_clientState = ClientIdle;
+    close();
+}
+
 /*!
     Informs all handlers that the socket is no longer valid.
 */
@@ -142,9 +154,12 @@ void zmHttpClient::handleHttpRequest()
         m_clientState = ClientRecvHeader;
     }
 
+    m_timer->stop();
+    m_timer->start(10000);
+
     int hdrEnd = 0;
     // HTTPS TLS handshake: https://tls12.xargs.org/#client-hello/annotated
-    while (m_clientState == ClientRecvHeader && bytesAvailable() > 0)
+    if (m_clientState == ClientRecvHeader && bytesAvailable() > 0)
     {
         uint32_t rnrn = 0;
         std::array<char, MAX_HTTP_HEADER_LENGTH> peekBuf = {0};
@@ -165,6 +180,15 @@ void zmHttpClient::handleHttpRequest()
             }
         }
 
+        if (peekSize != 0 && peekBuf[0] < ' ') // header doesn't start with an ASCII value >= ' ' (0x20)
+        {
+            // this can happen when connecting via TLS on HTTP port or some evil actor
+            m_clientState = ClientIdle;
+            close();
+            m_timer->stop();
+            return;
+        }
+
         if (hdrEnd >= MAX_HTTP_HEADER_LENGTH)
         {
             m_clientState = ClientIdle;
@@ -174,6 +198,7 @@ void zmHttpClient::handleHttpRequest()
             stream << "\r\n";
             flush();
             close();
+            m_timer->stop();
             return;
         }
 
@@ -197,10 +222,10 @@ void zmHttpClient::handleHttpRequest()
                 stream << "\r\n";
                 flush();
                 close();
+                m_timer->stop();
                 return;
             }
             m_clientState = ClientRecvContent;
-            break;
         }
     }
 
@@ -217,6 +242,7 @@ void zmHttpClient::handleHttpRequest()
         disconnect(this, SIGNAL(readyRead()), this, SLOT(handleHttpRequest()));
         // websocket server takes ownership
         setParent(nullptr);
+        m_timer->stop();
     }
     else
     {
@@ -264,11 +290,14 @@ void zmHttpClient::handleHttpRequest()
             }
 
             flush();
+            m_timer->stop();
+            m_timer->start(10000);
             return;
         }
     }
 
     handleHttpFileRequest(m_hdr);
+    m_timer->stop();
     close();
 }
 
