@@ -652,7 +652,8 @@ int ActorVfsModel::changedNotify(am_message *msg)
                     }
 
                     DBG_Printf(DBG_VFS, "VFS change (actor index: %d) notify: %.*s (fetch parent first)\n", e_actor, url.size, url.data);
-                    entry.value = DIR_VALUE_INITIAL + 1; // prevent canFetchMore
+                    if (entry.parent != ENTRY_PARENT_NONE) // only for non actor entries
+                        entry.value = DIR_VALUE_INITIAL + 1; // prevent canFetchMore
 
                     DirFetcher df = {};
 
@@ -1410,6 +1411,8 @@ void ActorVfsModel::fetchMore(const QModelIndex &parent)
     if (e < 0)
         return;
 
+    U_ASSERT(e < priv->entries.size());
+
     Entry &entry = priv->entries[e];
 
     if (entry.type == ati_type_dir)
@@ -1420,7 +1423,8 @@ void ActorVfsModel::fetchMore(const QModelIndex &parent)
                 return;
         }
 
-        entry.value = DIR_VALUE_INITIAL + 1; // prevent canFetchMore
+        if (entry.parent != ENTRY_PARENT_NONE) // only for non actor entries
+            entry.value = DIR_VALUE_INITIAL + 1; // prevent canFetchMore
 
         DirFetcher df = {};
 
