@@ -258,7 +258,7 @@ MainWindow::MainWindow(QWidget *parent) :
     setCentralWidget(ui->stackedView);
 
     setWindowTitle(qApp->applicationName());
-#ifdef Q_OS_OSX
+#ifdef PL_MACOS
     setWindowIcon(QIcon(":/icons/de_logo.icns"));
 #else
     setWindowIcon(QIcon(":/icons/de_logo_48px.png"));
