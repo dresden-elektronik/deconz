@@ -899,6 +899,36 @@ static int CoreNode_MessageCallback(struct am_message *msg)
     return AM_CB_STATUS_UNSUPPORTED;
 }
 
+void CoreNode_NotifyDeviceChanged(uint64_t mac, const char *path)
+{
+    if (!am || !mac || !path)
+        return;
+
+    char url[VFS_MAX_URL_LENGTH];
+
+    U_SStream ss;
+    U_sstream_init(&ss, url, VFS_MAX_URL_LENGTH);
+
+    U_sstream_put_str(&ss, "devices/");
+    U_sstream_put_mac_address(&ss, mac);
+    U_sstream_put_str(&ss, "/");
+    U_sstream_put_str(&ss, path);
+
+    struct am_message *m = am->msg_alloc();
+    U_ASSERT(m);
+    if (!m)
+        return;
+
+    am_u32 flags = 0;
+    m->src = AM_ACTOR_ID_CORE_APS;
+    m->dst = AM_ACTOR_ID_SUBSCRIBERS;
+    m->id = VFS_M_ID_CHANGED_NTFY;
+    am->msg_put_cstring(m, url);
+    am->msg_put_u32(m, flags);
+
+    am->send_message(m);
+}
+
 
 zmController::zmController(zmMaster *master,
                            zmNetDescriptorModel *networks,
@@ -4821,6 +4851,7 @@ void zmController::onApsdeDataIndication(const deCONZ::ApsDataIndication &ind)
                         node->data->setFetched(ReqNodeDescriptor, true);
                         node->g->setDeviceType(node->data->deviceType());
                         node->g->requestUpdate(); // redraw
+                        CoreNode_NotifyDeviceChanged(node->data->address().ext(), "node_desc");
 
                         NodeEvent event(NodeEvent::UpdatedNodeDescriptor, node->data);
                         emit nodeEvent(event);

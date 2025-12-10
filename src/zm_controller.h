@@ -152,6 +152,7 @@ enum LinkViewMode
 
 QString createUuid(const QString &prefix);
 void generateUniqueId2(uint64_t extAddress, char *buf, unsigned buflen);
+void CoreNode_NotifyDeviceChanged(uint64_t mac, const char *path);
 
 class zmController : public deCONZ::ApsController
 {

@@ -255,6 +255,8 @@ static NodeInfo DB_CreateNodeInfo(const DB_Node &dbNode, int nodeId)
     }
     node.g->requestUpdate();
 
+    CoreNode_NotifyDeviceChanged(node.data->address().ext(), "");
+
     return node;
 }
 
