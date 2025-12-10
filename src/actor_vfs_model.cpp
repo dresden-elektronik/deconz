@@ -512,16 +512,19 @@ int ActorVfsModel::listDirectoryResponse(am_message *msg)
                 addEntryToParent(_priv->entries, entryIndex, entriesToAdd[j]);
 
                 // TODO(mpi): make this configurable per actor
-                // for REST API plugin we automatically fetch everything
-                if (msg->src == AM_ACTOR_ID_REST_PLUGIN && entriesToAdd[j].type == ati_type_dir)
+                // for REST API plugin and core APS we automatically fetch everything
+                if (entriesToAdd[j].type == ati_type_dir)
                 {
-                    DirFetcher df = {};
-                    df.entryIndex = _priv->entries.size() - 1;
-                    df.index = 0;
-                    df.state = ENTRY_FETCH_STATE_WAIT_START;
-                    df.timeout = 0;
+                    if (msg->src == AM_ACTOR_ID_REST_PLUGIN || msg->src == AM_ACTOR_ID_CORE_APS)
+                    {
+                        DirFetcher df = {};
+                        df.entryIndex = _priv->entries.size() - 1;
+                        df.index = 0;
+                        df.state = ENTRY_FETCH_STATE_WAIT_START;
+                        df.timeout = 0;
 
-                    _priv->dirFetchers.push_back(df);
+                        _priv->dirFetchers.push_back(df);
+                    }
                 }
             }
 
@@ -1065,7 +1068,8 @@ ActorVfsModel::ActorVfsModel(QObject *parent) :
     addActorId(AM_ACTOR_ID_CORE_NET);
     addActorId(AM_ACTOR_ID_CORE_APS);
     addActorId(AM_ACTOR_ID_REST_PLUGIN);
-    am->subscribe(4001, AM_ACTOR_ID_UI_VFS);
+    am->subscribe(AM_ACTOR_ID_CORE_APS, AM_ACTOR_ID_UI_VFS);
+    am->subscribe(AM_ACTOR_ID_REST_PLUGIN, AM_ACTOR_ID_UI_VFS);
     //addActorId(AM_ACTOR_ID_OTA);
 
     connect(&priv->fetchTimer, &QTimer::timeout, this, &ActorVfsModel::fetchTimerFired);
