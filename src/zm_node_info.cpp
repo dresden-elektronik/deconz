@@ -11,16 +11,22 @@
 #include <QStandardItemModel>
 
 #include "deconz/atom_table.h"
-#include "deconz/dbg_trace.h"
 #include "deconz/u_sstream_ex.h"
 #include "actor_vfs_model.h"
 #include "zm_node_info.h"
 #include "ui_zm_node_info.h"
-#include "zm_node.h"
-#include "zm_node_model.h"
+#include "zdp_descriptors.h"
 
 static AT_AtomIndex ati_core_aps;
+static AT_AtomIndex ati_rest_plugin;
 static AT_AtomIndex ati_devices;
+static AT_AtomIndex ati_node_desc;
+static AT_AtomIndex ati_nwk;
+static AT_AtomIndex ati_attr;
+static AT_AtomIndex ati_manufacturername;
+static AT_AtomIndex ati_modelid;
+static AT_AtomIndex ati_name;
+static AT_AtomIndex ati_subdevices;
 
 namespace {
     const char *InfoKeys[] = {
@@ -108,6 +114,16 @@ namespace {
     };
 }
 
+QString toHexString(uint16_t number)
+{
+    return QString("0x%1").arg(number, 4, 16, QChar('0'));
+}
+
+QString toHexString(uint64_t number)
+{
+    return QString("0x%1").arg(number, 16, 16, QChar('0'));
+}
+
 zmNodeInfo::zmNodeInfo(QWidget *parent) :
     QWidget(parent),
     ui(new Ui::zmNodeInfo)
@@ -115,7 +131,15 @@ zmNodeInfo::zmNodeInfo(QWidget *parent) :
     ui->setupUi(this);
 
     AT_AddAtom("core_aps", qstrlen("core_aps"), &ati_core_aps);
+    AT_AddAtom("rest_plugin", qstrlen("rest_plugin"), &ati_rest_plugin);
     AT_AddAtom("devices", qstrlen("devices"), &ati_devices);
+    AT_AddAtom("node_desc", qstrlen("node_desc"), &ati_node_desc);
+    AT_AddAtom("nwk", qstrlen("nwk"), &ati_nwk);
+    AT_AddAtom("attr", qstrlen("attr"), &ati_attr);
+    AT_AddAtom("manufacturername", qstrlen("manufacturername"), &ati_manufacturername);
+    AT_AddAtom("modelid", qstrlen("modelid"), &ati_modelid);
+    AT_AddAtom("name", qstrlen("name"), &ati_name);
+    AT_AddAtom("subdevices", qstrlen("subdevices"), &ati_subdevices);
 
     // create new model
     QStandardItemModel *model = new QStandardItemModel(this);
@@ -148,7 +172,7 @@ zmNodeInfo::zmNodeInfo(QWidget *parent) :
 
     updateHeader1Style();
 
-    setNode(nullptr);
+    ui->tableView->hide();
     ui->tableView->resizeColumnToContents(0);
     //ui->tableView->setFont(Theme_FontMonospace());
 }
@@ -172,78 +196,144 @@ QModelIndex VFS_GetActorIndex(ActorVfsModel *vfs, unsigned actorId)
     return QModelIndex();
 }
 
+static AT_AtomIndex atomIndexForMac(uint64_t mac)
+{
+    AT_AtomIndex ati_mac;
+    char buf[28];
+    U_SStream ss;
+
+    U_sstream_init(&ss, buf, sizeof(buf));
+    U_sstream_put_mac_address(&ss, mac);
+
+    if (AT_GetAtomIndex(ss.str, ss.pos, &ati_mac))
+    {
+        return ati_mac;
+    }
+
+    ati_mac.index = 0;
+    return ati_mac;
+}
+
 void zmNodeInfo::setNode(ActorVfsModel *vfs, uint64_t mac)
 {
-    Q_ASSERT(vfs);
+    if (!vfs)
+        return;
 
     if (mac == 0)
     {
+        ui->tableView->hide();
         return;
     }
 
-    AT_AtomIndex ati_mac;
-
+    if (m_mac != mac)
     {
-        char buf[28];
-        U_SStream ss;
-        U_sstream_init(&ss, buf, sizeof(buf));
-        U_sstream_put_mac_address(&ss, mac);
-
-        if (AT_GetAtomIndex(ss.str, ss.pos, &ati_mac) == 0)
-        {
-            return;
-        }
+        clear();
+        m_mac = mac;
     }
 
+    uint16_t nwkAddress = 0xfffe;
+    QString nodeName;
+    QString manufacturerName;
+    QString modelId;
+    deCONZ::NodeDescriptor nd;
+
+    AT_AtomIndex ati_mac = atomIndexForMac(mac);
+    if (ati_mac.index == 0)
+        return;
+
+    // get data from core
     QModelIndex index = vfs->indexWithName(ati_core_aps.index, QModelIndex());
 
     if (!index.isValid())
-    {
         return;
-    }
 
     index = vfs->indexWithName(ati_devices.index, index);
     if (!index.isValid())
-    {
         return;
-    }
 
     index = vfs->indexWithName(ati_mac.index, index);
 
     if (!index.isValid())
-    {
         return;
+
+    {
+        QModelIndex nwkIndex = vfs->indexWithName(ati_nwk.index, index);
+        if (nwkIndex.isValid())
+        {
+            nwkAddress = (uint16_t)nwkIndex.data(ActorVfsModel::RawValueRole).toUInt();
+        }
     }
 
-    QString name = index.data().toString();
-    DBG_Printf(DBG_INFO, "AM selected %s\n", qPrintable(name));
-}
-
-
-QString toHexString(uint16_t number)
-{
-    return QString("0x%1").arg(number, 4, 16, QChar('0'));
-}
-
-QString toHexString(uint64_t number)
-{
-    return QString("0x%1").arg(number, 16, 16, QChar('0'));
-}
-
-void zmNodeInfo::setNode(deCONZ::zmNode *data)
-{
-    if (m_data != data)
     {
-        clear();
-        m_data = data;
-        m_state = Idle;
-        stateCheck();
+        QModelIndex ndIndex = vfs->indexWithName(ati_node_desc.index, index);
+        if (ndIndex.isValid())
+        {
+            QString ndHex = ndIndex.siblingAtColumn(ActorVfsModel::ColumnValue).data().toString();
+            if (ndHex.startsWith("0x"))
+            {
+                QByteArray ndData = QByteArray::fromHex(ndHex.mid(2).toLocal8Bit());
+                QDataStream stream(ndData);
+                stream.setByteOrder(QDataStream::LittleEndian);
+                nd.readFromStream(stream);
+            }
+        }
     }
 
-    if (!data)
-    {
-        ui->tableView->hide();
+    // get data from REST plugin
+    index = vfs->indexWithName(ati_rest_plugin.index, QModelIndex());
+    if (!index.isValid())
         return;
+
+    index = vfs->indexWithName(ati_devices.index, index);
+    if (!index.isValid())
+        return;
+
+    index = vfs->indexWithName(ati_mac.index, index);
+    if (!index.isValid())
+        return;
+
+    QModelIndex subDevicesIndex = vfs->indexWithName(ati_subdevices.index, index);
+    if (subDevicesIndex.isValid() && 0 < vfs->rowCount(subDevicesIndex))
+    {
+        // get main subdevice (first)
+        QModelIndex subDeviceIndex = vfs->index(0, 0, subDevicesIndex);
+
+        if (subDeviceIndex.isValid())
+        {
+            QModelIndex attrIndex = vfs->indexWithName(ati_attr.index, subDeviceIndex);
+            if (attrIndex.isValid())
+            {
+                {
+                    QModelIndex nameIndex = vfs->indexWithName(ati_name.index, attrIndex);
+                    if (nameIndex.isValid())
+                    {
+                        QString name = nameIndex.siblingAtColumn(ActorVfsModel::ColumnValue).data().toString();
+                        if (!name.isEmpty())
+                            nodeName = name;
+                    }
+                }
+
+                {
+                    QModelIndex manufacturerIndex = vfs->indexWithName(ati_manufacturername.index, attrIndex);
+                    if (manufacturerIndex.isValid())
+                    {
+                        QString mf = manufacturerIndex.siblingAtColumn(ActorVfsModel::ColumnValue).data().toString();
+                        if (!mf.isEmpty())
+                            manufacturerName = mf;
+                    }
+                }
+
+                {
+                    QModelIndex modelidIndex = vfs->indexWithName(ati_modelid.index, attrIndex);
+                    if (modelidIndex.isValid())
+                    {
+                        QString mid = modelidIndex.siblingAtColumn(ActorVfsModel::ColumnValue).data().toString();
+                        if (!mid.isEmpty())
+                            modelId = mid;
+                    }
+                }
+            }
+        }
     }
 
     if (!ui->tableView->isVisible())
@@ -251,47 +341,50 @@ void zmNodeInfo::setNode(deCONZ::zmNode *data)
         ui->tableView->show();
     }
 
-    uint64_t extAddr = data->address().ext();
-    deCONZ::NodeModel *nModel = deCONZ::nodeModel();
+    if (nodeName.isEmpty())
+        nodeName = toHexString(m_mac);
 
-    const deCONZ::NodeDescriptor &nd = m_data->nodeDescriptor();
+    ui->deviceName->setText(nodeName);
 
     const QLatin1String unknownValue("unknown");
 
-    QString nodeName = nModel->data(extAddr, deCONZ::NodeModel::NameColumn).toString();
+    if (manufacturerName.isEmpty())
+        manufacturerName = unknownValue;
 
-    if (!nodeName.isEmpty())
-    {
-        ui->deviceName->setText(nodeName);
-    }
-    else
-    {
-        ui->deviceName->setText(toHexString(m_data->address().ext()));
-    }
-
-    QString manufacturer = nModel->data(extAddr, deCONZ::NodeModel::VendorColumn).toString();
-    if (manufacturer.isEmpty())
-    {
-        manufacturer = unknownValue;
-    }
-
-    QString modelId = nModel->data(extAddr, deCONZ::NodeModel::ModelIdColumn).toString();
     if (modelId.isEmpty())
-    {
         modelId = unknownValue;
-    }
 
     ui->deviceName->hide();
     ui->deviceNameLabel->hide();
 
-    setValue(IdxName, ui->deviceName->text());
-    setValue(IdxManufacturer, manufacturer);
-    setValue(IdxModelId, modelId);
-    setValue(IdxType, m_data->deviceTypeString());
-    setValue(IdxExt, toHexString(m_data->address().ext()));
-    setValue(IdxNwk, toHexString(m_data->address().nwk()));
+    const auto macCapabilities = nd.macCapabilities();
+    const uint16_t serverMask = static_cast<uint>(nd.serverMask()) & 0xFFFF;
+    QString deviceType;
 
-    setValue(IdxFreqBand, QString(m_data->nodeDescriptor().frequencyBandString()));
+    if (macCapabilities & deCONZ::MacDeviceIsFFD)
+    {
+        if (nwkAddress == 0x0000)
+        {
+            deviceType = "Coordinator";
+        }
+        else
+        {
+            deviceType = "Router";
+        }
+    }
+    else
+    {
+        deviceType = "End device";
+    }
+
+    setValue(IdxName, ui->deviceName->text());
+    setValue(IdxManufacturer, manufacturerName);
+    setValue(IdxModelId, modelId);
+    setValue(IdxType, deviceType);
+    setValue(IdxExt, toHexString(m_mac));
+    setValue(IdxNwk, toHexString(nwkAddress));
+
+    setValue(IdxFreqBand, QString(nd.frequencyBandString()));
     setValue(IdxUserDescrAvail, nd.hasUserDescriptor());
     setValue(IdxComplexrDescrAvail, nd.hasComplexDescriptor());
     setValue(IdxManufacturerCode, toHexString(nd.manufacturerCode()));
@@ -299,7 +392,6 @@ void zmNodeInfo::setNode(deCONZ::zmNode *data)
     setValue(IdxMaxInTransferSize, QString("%1").arg(nd.maxIncomingTransferSize(), 0, 10, QChar('0')));
     setValue(IdxMaxOutTransferSize, QString("%1").arg(nd.maxOutgoingTransferSize(), 0, 10, QChar('0')));
 
-    const uint16_t serverMask = static_cast<uint>(m_data->nodeDescriptor().serverMask()) & 0xFFFF;
 
     setValue(IdxServerMask, toHexString(serverMask));
 
@@ -311,21 +403,24 @@ void zmNodeInfo::setNode(deCONZ::zmNode *data)
     setValue(IdxBakDiscovCache, serverMask & zme::BackupDiscoveryCache ? true : false);
     setValue(IdxNetMngr,        serverMask & zme::NetworkManager ? true : false);
 
-    setValue(IdxMacCapabilities, QString("0x%1").arg(m_data->macCapabilities(), 2, 16, QChar('0')));
-    setValue(IdxDeviceType,        (m_data->macCapabilities() & deCONZ::MacDeviceIsFFD ? "FFD" : "RFD"));
-    setValue(IdxAltPanCoord,        m_data->macCapabilities() & deCONZ::MacAlternatePanCoordinator ? true : false);
-    setValue(IdxMainsPowered,      (m_data->macCapabilities() & deCONZ::MacIsMainsPowered ? "Mains" : "Battery"));
-    setValue(IdxRecvOnWhenIdle,     m_data->macCapabilities() & deCONZ::MacReceiverOnWhenIdle ? true : false);
-    setValue(IdxSecurityCapability, m_data->macCapabilities() & deCONZ::MacSecuritySupport ? true : false);
+
+    setValue(IdxMacCapabilities, QString("0x%1").arg(macCapabilities, 2, 16, QChar('0')));
+    setValue(IdxDeviceType,        (macCapabilities & deCONZ::MacDeviceIsFFD ? "FFD" : "RFD"));
+    setValue(IdxAltPanCoord,        macCapabilities & deCONZ::MacAlternatePanCoordinator ? true : false);
+    setValue(IdxMainsPowered,      (macCapabilities & deCONZ::MacIsMainsPowered ? "Mains" : "Battery"));
+    setValue(IdxRecvOnWhenIdle,     macCapabilities & deCONZ::MacReceiverOnWhenIdle ? true : false);
+    setValue(IdxSecurityCapability, macCapabilities & deCONZ::MacSecuritySupport ? true : false);
 
     setValue(IdxExtEndpointList, nd.hasEndpointList());
     setValue(IdxExtSimpleDescrList, nd.hasSimpleDescriptorList());
 
     const QLatin1String notAvailableValue("n/a");
 
-    if (m_data->powerDescriptor().isValid())
+    deCONZ::PowerDescriptor powerDescriptor;
+
+    if (powerDescriptor.isValid())
     {
-        switch (m_data->powerDescriptor().currentPowerMode())
+        switch (powerDescriptor.currentPowerMode())
         {
         case deCONZ::ModeOnWhenIdle: setValue(IdxPowerMode, "On When Idle"); break;
         case deCONZ::ModePeriodic: setValue(IdxPowerMode, "Periodic"); break;
@@ -333,7 +428,7 @@ void zmNodeInfo::setNode(deCONZ::zmNode *data)
         default: setValue(IdxPowerMode, unknownValue); break;
         }
 
-        switch (m_data->powerDescriptor().currentPowerSource())
+        switch (powerDescriptor.currentPowerSource())
         {
         case deCONZ::PowerSourceMains: setValue(IdxPowerSource, "Mains"); break;
         case deCONZ::PowerSourceDisposable: setValue(IdxPowerSource, "Disposeable"); break;
@@ -341,7 +436,7 @@ void zmNodeInfo::setNode(deCONZ::zmNode *data)
         default: setValue(IdxPowerSource, unknownValue); break;
         }
 
-        switch (m_data->powerDescriptor().currentPowerLevel())
+        switch (powerDescriptor.currentPowerLevel())
         {
         case deCONZ::PowerLevel100: setValue(IdxPowerLevel, "100%"); break;
         case deCONZ::PowerLevel66: setValue(IdxPowerLevel, "66%"); break;
@@ -362,7 +457,7 @@ void zmNodeInfo::setNode(deCONZ::zmNode *data)
 
         auto fgColor = palette().text().color();
 
-        if (!m_data->powerDescriptor().isValid())
+        if (!powerDescriptor.isValid())
         {
             fgColor = palette().color(QPalette::Disabled, QPalette::Text);
         }
@@ -378,12 +473,12 @@ void zmNodeInfo::setNode(deCONZ::zmNode *data)
     ui->tableView->resizeColumnToContents(0);
 }
 
-void zmNodeInfo::dataChanged(deCONZ::zmNode *data)
+void zmNodeInfo::dataChanged(ActorVfsModel *vfs, uint64_t mac)
 {
-    if (data == m_data)
+    if (mac == m_mac)
     {
-        // refresh view
-        setNode(data);
+        m_mac = 0; // reset
+        setNode(vfs, mac);
     }
 }
 
@@ -474,20 +569,5 @@ void zmNodeInfo::updateHeader1Style()
         m_info[row].key->setBackground(bg);
         m_info[row].key->setForeground(palette().highlightedText());
         m_info[row].value->setBackground(bg);
-    }
-}
-
-void zmNodeInfo::stateCheck()
-{
-    switch (m_state)
-    {
-    case Idle:
-        break;
-
-    case Timeout:
-        break;
-
-    default:
-        break;
     }
 }

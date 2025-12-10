@@ -625,7 +625,7 @@ void MainWindow::onControllerEvent(const zmNetEvent &event)
     switch (event.type())
     {
     case deCONZ::NodeDataChanged:
-        m_nodeInfo->dataChanged(event.node());
+        m_nodeInfo->dataChanged(m_vfsModel, event.node()->address().ext());
         setNodesOnline();
         m_connTimeout = MaxConnectionTimeout;
         break;
@@ -828,12 +828,11 @@ void MainWindow::onSelectionChanged()
 
     if (nodes.isEmpty() || (nodes.size() > 1)) // only display one
     {
-        m_nodeInfo->setNode(nullptr);
+        m_nodeInfo->setNode(m_vfsModel, 0);
     }
     else
     {
         m_nodeInfo->setNode(m_vfsModel, nodes.first()->data()->address().ext());
-        m_nodeInfo->setNode(nodes.first()->data());
     }
 }
 

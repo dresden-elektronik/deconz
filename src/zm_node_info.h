@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2024 dresden elektronik ingenieurtechnik gmbh.
+ * Copyright (c) 2013-2025 dresden elektronik ingenieurtechnik gmbh.
  * All rights reserved.
  *
  * The software in this package is published under the terms of the BSD
@@ -25,7 +25,6 @@ class QModelIndex;
 class ActorVfsModel;
 
 namespace deCONZ {
-    class zmNode;
     zmNodeInfo *nodeInfo();
 }
 
@@ -37,26 +36,18 @@ public:
     explicit zmNodeInfo(QWidget *parent = nullptr);
     ~zmNodeInfo();
     void setNode(ActorVfsModel *vfs, uint64_t mac);
-    void setNode(deCONZ::zmNode *data);
-    void dataChanged(deCONZ::zmNode *data);
+    void dataChanged(ActorVfsModel *vfs, uint64_t mac);
 
 protected:
     bool event(QEvent *event) override;
 
 private:
-    enum NodeInfoState
-    {
-        Idle,
-        Timeout
-    };
-
     void clear();
-    void stateCheck();
     void setValue(size_t idx, const QVariant &value);
     void updateHeader1Style();
 
     Ui::zmNodeInfo *ui = nullptr;
-    deCONZ::zmNode *m_data = nullptr;
+    uint64_t m_mac = 0;
 
     struct InfoKeyValue
     {
@@ -64,7 +55,6 @@ private:
         QStandardItem *value = nullptr;
     };
 
-    NodeInfoState m_state = Idle;
     std::array<InfoKeyValue, 36> m_info{};
 };
 
