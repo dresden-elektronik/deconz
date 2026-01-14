@@ -404,7 +404,7 @@ void zmNodeInfo::setNode(ActorVfsModel *vfs, uint64_t mac)
     setValue(IdxNetMngr,        serverMask & zme::NetworkManager ? true : false);
 
 
-    setValue(IdxMacCapabilities, QString("0x%1").arg(macCapabilities, 2, 16, QChar('0')));
+    setValue(IdxMacCapabilities, QString("0x%1").arg((uint32_t)macCapabilities, 2, 16, QChar('0')));
     setValue(IdxDeviceType,        (macCapabilities & deCONZ::MacDeviceIsFFD ? "FFD" : "RFD"));
     setValue(IdxAltPanCoord,        macCapabilities & deCONZ::MacAlternatePanCoordinator ? true : false);
     setValue(IdxMainsPowered,      (macCapabilities & deCONZ::MacIsMainsPowered ? "Mains" : "Battery"));
