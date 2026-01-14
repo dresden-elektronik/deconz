@@ -268,7 +268,7 @@ void zmNodeInfo::setNode(ActorVfsModel *vfs, uint64_t mac)
         QModelIndex ndIndex = vfs->indexWithName(ati_node_desc.index, index);
         if (ndIndex.isValid())
         {
-            QString ndHex = ndIndex.siblingAtColumn(ActorVfsModel::ColumnValue).data().toString();
+            QString ndHex = ndIndex.sibling(ndIndex.row(), ActorVfsModel::ColumnValue).data().toString();
             if (ndHex.startsWith("0x"))
             {
                 QByteArray ndData = QByteArray::fromHex(ndHex.mid(2).toLocal8Bit());
@@ -307,7 +307,7 @@ void zmNodeInfo::setNode(ActorVfsModel *vfs, uint64_t mac)
                     QModelIndex nameIndex = vfs->indexWithName(ati_name.index, attrIndex);
                     if (nameIndex.isValid())
                     {
-                        QString name = nameIndex.siblingAtColumn(ActorVfsModel::ColumnValue).data().toString();
+                        QString name = nameIndex.sibling(nameIndex.row(), ActorVfsModel::ColumnValue).data().toString();
                         if (!name.isEmpty())
                             nodeName = name;
                     }
@@ -317,7 +317,7 @@ void zmNodeInfo::setNode(ActorVfsModel *vfs, uint64_t mac)
                     QModelIndex manufacturerIndex = vfs->indexWithName(ati_manufacturername.index, attrIndex);
                     if (manufacturerIndex.isValid())
                     {
-                        QString mf = manufacturerIndex.siblingAtColumn(ActorVfsModel::ColumnValue).data().toString();
+                        QString mf = manufacturerIndex.sibling(manufacturerIndex.row(), ActorVfsModel::ColumnValue).data().toString();
                         if (!mf.isEmpty())
                             manufacturerName = mf;
                     }
@@ -327,7 +327,7 @@ void zmNodeInfo::setNode(ActorVfsModel *vfs, uint64_t mac)
                     QModelIndex modelidIndex = vfs->indexWithName(ati_modelid.index, attrIndex);
                     if (modelidIndex.isValid())
                     {
-                        QString mid = modelidIndex.siblingAtColumn(ActorVfsModel::ColumnValue).data().toString();
+                        QString mid = modelidIndex.sibling(modelidIndex.row(), ActorVfsModel::ColumnValue).data().toString();
                         if (!mid.isEmpty())
                             modelId = mid;
                     }
