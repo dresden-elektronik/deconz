@@ -98,7 +98,7 @@ void GUI_InitNodeActor()
 
     am->register_actor(&am_actor_gui_node);
 
-    AT_AddAtom("config", qstrlen("config"), &ati_state);
+    AT_AddAtom("config", qstrlen("config"), &ati_config);
     AT_AddAtom("state", qstrlen("state"), &ati_state);
     AT_AddAtom("bri", qstrlen("bri"), &ati_bri);
     AT_AddAtom("on", qstrlen("on"), &ati_on);
