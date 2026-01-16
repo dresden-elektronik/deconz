@@ -292,7 +292,7 @@ void zmHttpClient::handleHttpRequest()
             flush();
             m_timer->stop();
 
-            if (m_hdr.hasKey(QLatin1String("Upgrade"))) // for non Websockets keep the timer going
+            if (!m_hdr.hasKey(QLatin1String("Upgrade"))) // for non Websockets keep the timer going
             {
                 m_timer->start(10000);
             }
