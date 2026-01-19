@@ -237,17 +237,7 @@ if (${SYS_ARCH} MATCHES "x86_64")
     target_compile_definitions(${PROJECT_NAME} PRIVATE   ARCH_AMD64)
 endif()
 
-
-if (APPLE)
-    target_compile_definitions(${PROJECT_NAME} PRIVATE PL_MACOS PL_UNIX)
-endif()
-
-if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    target_compile_definitions(${PROJECT_NAME} PRIVATE PL_LINUX PL_UNIX)
-endif()
-
 if (WIN32)
-    target_compile_definitions(${PROJECT_NAME} PRIVATE PL_WINDOWS)
     target_compile_definitions(${PROJECT_NAME} PRIVATE USE_QSERIAL_PORT)
     set_target_properties(${PROJECT_NAME} PROPERTIES WIN32_EXECUTABLE $<CONFIG:Release>)
 endif()

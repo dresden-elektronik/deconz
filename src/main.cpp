@@ -16,6 +16,7 @@
 #include <QFile>
 #include <QDir>
 
+#include "deconz/u_platform.h"
 #include "deconz/dbg_trace.h"
 #include "deconz/util.h"
 #include "deconz/zcl.h"
@@ -50,7 +51,7 @@ int main(int argc, char *argv[])
         DBG_Printf(DBG_ERROR, "failed to register SIGTERM handler\n");
     }
 
-#ifdef Q_OS_UNIX
+#ifdef PL_UNIX
     if (signal(SIGKILL, signal_cleanup_handler) == SIG_ERR)
     {
         DBG_Printf(DBG_ERROR, "failed to register SIGKILL handler\n");

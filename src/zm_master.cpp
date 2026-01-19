@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2025 dresden elektronik ingenieurtechnik gmbh.
+ * Copyright (c) 2013-2026 dresden elektronik ingenieurtechnik gmbh.
  * All rights reserved.
  *
  * The software in this package is published under the terms of the BSD
@@ -20,7 +20,8 @@
 #include <QtEndian>
 #include <stdio.h>
 #include <sys/time.h>
-#if defined(Q_OS_LINUX) && defined(USE_LIBCAP)
+#include "deconz/u_platform.h"
+#if defined(PL_LINUX) && defined(USE_LIBCAP)
   #include <sys/capability.h>
 #endif
 #include "deconz/dbg_trace.h"
@@ -73,11 +74,11 @@ static int needStatus = 1;
 static uint32_t fwDebugLevel = FW_DEBUG_LEVEL_DISABLED;
 static int64_t tSend;
 static int64_t tStatus;
-#ifdef Q_OS_LINUX
+#ifdef PL_LINUX
 // a file in which the firmware version will be written
 // the info will be used by the update script
 static const char *firmwareVersionFile = "/var/tmp/deconz-firmware-version";
-#endif // Q_OS_LINUX
+#endif // PL_LINUX
 
 enum QueueItemState
 {
@@ -1170,7 +1171,7 @@ void zmMaster::processPacked(const zm_command *cmd)
 
         DBG_Printf(DBG_INFO, "Device firmware version 0x%08X %s\n", m_devFirmwareVersion, qPrintable(m_devName));
 
-#ifdef Q_OS_LINUX
+#ifdef PL_LINUX
         if (!QFile::exists(firmwareVersionFile))
         {
             QFile f(firmwareVersionFile);
@@ -1187,7 +1188,7 @@ void zmMaster::processPacked(const zm_command *cmd)
                 DBG_Printf(DBG_ERROR, "could not open %s : %s\n", firmwareVersionFile, qPrintable(f.errorString()));
             }
         }
-#endif // Q_OS_LINUX
+#endif // PL_LINUX
     }
         break;
 
@@ -1868,7 +1869,7 @@ int zmMaster::firmwareVersionRequest()
         if (!item)
             return -1;
 
-#ifdef Q_OS_LINUX
+#ifdef PL_LINUX
         // delete firmware version file (will be rewritten once connected)
         if (QFile::exists(firmwareVersionFile))
         {
@@ -1877,7 +1878,7 @@ int zmMaster::firmwareVersionRequest()
                 DBG_Printf(DBG_ERROR, "could not delete %s\n", firmwareVersionFile);
             }
         }
-#endif // Q_OS_LINUX
+#endif // PL_LINUX
 
         cmd = &item->cmd;
         cmd->cmd = ZM_CMD_VERSION;

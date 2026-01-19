@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2024 dresden elektronik ingenieurtechnik gmbh.
+ * Copyright (c) 2013-2026 dresden elektronik ingenieurtechnik gmbh.
  * All rights reserved.
  *
  * The software in this package is published under the terms of the BSD
@@ -20,8 +20,8 @@
 #include <string.h>
 #include <errno.h>
 #include <stdint.h>
-
-#ifdef Q_OS_UNIX
+#include "deconz/u_platform.h"
+#ifdef PL_UNIX
 // native calls
 #include <poll.h>
 #include <fcntl.h> /* open() */
@@ -247,7 +247,7 @@ static void PL_Poll()
 
 #endif
 
-#if defined(Q_OS_UNIX) && !defined(USE_QSERIAL_PORT)
+#if defined(PL_UNIX) && !defined(USE_QSERIAL_PORT)
 
 struct PL_Thread
 {

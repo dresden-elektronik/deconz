@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2025 dresden elektronik ingenieurtechnik gmbh.
+ * Copyright (c) 2013-2026 dresden elektronik ingenieurtechnik gmbh.
  * All rights reserved.
  *
  * The software in this package is published under the terms of the BSD
@@ -18,6 +18,7 @@
 #include <QVariant>
 #include <QStringList>
 #include <QTimer>
+#include "u_platform.h"
 #include "deconz/dbg_trace.h"
 #include "deconz/http_client_handler.h"
 #include "deconz/util.h"
@@ -807,7 +808,7 @@ int zmHttpClient::handleHttpFileRequest(const QHttpRequestHeader &hdr)
         flush();
 
         write(data);
-#ifdef Q_OS_WIN
+#ifdef PL_WINDOWS
         m_cache.clear();
 #endif
     }
@@ -836,7 +837,7 @@ int zmHttpClient::handleHttpFileRequest(const QHttpRequestHeader &hdr)
     }
     else
     {
-#ifndef QT_DEBUG // in debug mode SIGPIPE will be thrown too often
+#ifndef DECONZ_DEBUG_BUILD // in debug mode SIGPIPE will be thrown too often
         flush();
 #endif
     }

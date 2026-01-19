@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2024 dresden elektronik ingenieurtechnik gmbh.
+ * Copyright (c) 2013-2026 dresden elektronik ingenieurtechnik gmbh.
  * All rights reserved.
  *
  * The software in this package is published under the terms of the BSD
@@ -13,6 +13,7 @@
 #include <QGraphicsScene>
 #include <QTimer>
 #include <sqlite3.h>
+#include "deconz/u_platform.h"
 #include <deconz/dbg_trace.h>
 #include <deconz/types.h>
 #include <deconz/zdp_descriptors.h>
@@ -606,7 +607,7 @@ void zmController::saveNodesState()
 
     DBG_Printf(DBG_INFO_L2, "CTRL saved node state in %d ms\n", int(t.elapsed()));
 
-#ifdef Q_OS_LINUX
+#ifdef PL_LINUX
     t.restart();
     //sync();
     DBG_Printf(DBG_INFO_L2, "CTRL sync() in %d ms\n", int(t.elapsed()));

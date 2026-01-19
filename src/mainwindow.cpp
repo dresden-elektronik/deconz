@@ -34,10 +34,9 @@
 #include <QSortFilterProxyModel>
 #include <QWindow>
 #include <cerrno>
-#ifdef USE_ACTOR_MODEL
 #include <actor/plugin_loader.h>
 #include "actor/service.h"
-#endif
+#include "deconz/u_platform.h"
 #include "gui/actor_vfs_view.h"
 #include "gui/theme.h"
 #include "actor_vfs_model.h"
@@ -1790,7 +1789,7 @@ void MainWindow::showUserManual()
 {
     QString path;
     path.append(deCONZ::getStorageLocation(deCONZ::ApplicationsLocation));
-#ifdef Q_OS_WIN
+#ifdef PL_WINDOWS
     path.append("\\doc\\");
 #else
     if (path.startsWith("/usr"))
