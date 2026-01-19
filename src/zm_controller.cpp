@@ -1280,7 +1280,7 @@ void zmController::setNetworkConfig(const zmNet &net, const uint8_t *items)
             }
             else
             {
-                DBG_Printf(DBG_ERROR, "CTRL can't set network key with invalid size %d\n", key.size());
+                DBG_Printf(DBG_ERROR, "CTRL can't set network key with invalid size %d\n", (int)key.size());
             }
         }
             break;
@@ -1300,7 +1300,7 @@ void zmController::setNetworkConfig(const zmNet &net, const uint8_t *items)
             }
             else
             {
-                DBG_Printf(DBG_ERROR, "CTRL can't set ZLL key with invalid size %d\n", key.size());
+                DBG_Printf(DBG_ERROR, "CTRL can't set ZLL key with invalid size %d\n", (int)key.size());
             }
         }
             break;
@@ -1329,7 +1329,7 @@ void zmController::setNetworkConfig(const zmNet &net, const uint8_t *items)
             }
             else
             {
-                DBG_Printf(DBG_ERROR, "CTRL can't set link key with invalid size %d\n", key.size());
+                DBG_Printf(DBG_ERROR, "CTRL can't set link key with invalid size %d\n", (int)key.size());
             }
         }
             break;
@@ -3750,7 +3750,7 @@ int zmController::apsdeDataRequest(const deCONZ::ApsDataRequest &req)
             snprintf(addr, sizeof(addr), FMT_MAC, FMT_MAC_CAST(req.dstAddress().ext()));
         addr[18] = '\0';
 
-        DBG_Printf(DBG_APS, "APS-DATA.request id: %u, addrmode: 0x%02X, addr: %s, profile: 0x%04X, cluster: 0x%04X, ep: 0x%02X -> 0x%02X queue: %d len: %d tx.options 0x%02X\n", req.id(), (uint8_t)req.dstAddressMode(), addr, req.profileId(), req.clusterId(), req.srcEndpoint(), req.dstEndpoint(), (int)m_apsRequestQueue.size(), req.asdu().size(), (uint8_t)req.txOptions());
+        DBG_Printf(DBG_APS, "APS-DATA.request id: %u, addrmode: 0x%02X, addr: %s, profile: 0x%04X, cluster: 0x%04X, ep: 0x%02X -> 0x%02X queue: %d len: %d tx.options 0x%02X\n", req.id(), (uint8_t)req.dstAddressMode(), addr, req.profileId(), req.clusterId(), req.srcEndpoint(), req.dstEndpoint(), (int)m_apsRequestQueue.size(), (int)req.asdu().size(), (uint8_t)req.txOptions());
 
         if (DBG_IsEnabled(DBG_APS_L2))
         {
@@ -7494,7 +7494,7 @@ bool zmController::sendNextApsdeDataRequest(NodeInfo *dst)
             {
                 if (dst && DBG_IsEnabled(DBG_APS))
                 {
-                    DBG_Printf(DBG_APS, "APS-DATA.request id: %u, addr: " FMT_MAC " profile: 0x%04X, cluster: 0x%04X, ep: 0x%02X/0x%02X queue: %d len: %d (send, fast lane)\n", apsReq.id(), FMT_MAC_CAST(apsReq.dstAddress().ext()), apsReq.profileId(), apsReq.clusterId(), apsReq.srcEndpoint(), apsReq.dstEndpoint(), (int)m_apsRequestQueue.size(), apsReq.asdu().size());
+                    DBG_Printf(DBG_APS, "APS-DATA.request id: %u, addr: " FMT_MAC " profile: 0x%04X, cluster: 0x%04X, ep: 0x%02X/0x%02X queue: %d len: %d (send, fast lane)\n", apsReq.id(), FMT_MAC_CAST(apsReq.dstAddress().ext()), apsReq.profileId(), apsReq.clusterId(), apsReq.srcEndpoint(), apsReq.dstEndpoint(), (int)m_apsRequestQueue.size(), (int)apsReq.asdu().size());
                 }
 
                 // note time of last send
