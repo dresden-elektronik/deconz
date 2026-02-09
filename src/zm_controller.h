@@ -236,6 +236,7 @@ public:
     uint8_t nextRequestId();
 
 private slots:
+    void onMasterStateChanged();
     void onRestNodeUpdated(quint64 extAddress, const QString &item, const QString &value);
     void apsdeDataRequestDone(uint8_t id, uint8_t status);
     bool apsdeDataRequestQueueSetStatus(int id, deCONZ::CommonState state);

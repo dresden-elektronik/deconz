@@ -598,6 +598,31 @@ static void CoreAps_ListDevicesDirectoryRequest(struct am_message *m, am_ls_dir_
     }
 }
 
+static void CoreAps_ListComDirectoryRequest(struct am_message *m, am_ls_dir_req *req)
+{
+    if (req->url_parse.element_count == 1) // com
+    {
+        am->msg_put_u8(m, AM_RESPONSE_STATUS_OK);
+        am->msg_put_u32(m, req->req_index);
+
+        am_u32 next_index = req->req_index;
+        am_u32 count = 0;
+        unsigned hdr_pos = m->pos;
+
+        am->msg_put_u32(m, 0); /* dummy next index */
+        am->msg_put_u32(m, 1); /* dummy count */
+
+        /*******************************************/
+
+        am->msg_put_cstring(m, "state");
+        am->msg_put_u16(m, 0); /* flags */
+        am->msg_put_u16(m, 1); /* icon */
+    }
+    else
+    {
+        am->msg_put_u8(m, AM_RESPONSE_STATUS_NOT_FOUND);
+    }
+}
 
 static int CoreAps_ListDirectoryRequest(struct am_message *msg)
 {
@@ -630,9 +655,13 @@ static int CoreAps_ListDirectoryRequest(struct am_message *msg)
         am->msg_put_u32(m, req.req_index);
         am->msg_put_u32(m, 0); /* no next index */
 
-        am->msg_put_u32(m, 4); /* count */
+        am->msg_put_u32(m, 5); /* count */
         /*************************************/
         am->msg_put_cstring(m, ".actor");
+        am->msg_put_u16(m, VFS_LS_DIR_ENTRY_FLAGS_IS_DIR); /* flags */
+        am->msg_put_u16(m, 0); /* icon */
+
+        am->msg_put_cstring(m, "com"); // serial port / tcp
         am->msg_put_u16(m, VFS_LS_DIR_ENTRY_FLAGS_IS_DIR); /* flags */
         am->msg_put_u16(m, 0); /* icon */
 
@@ -654,6 +683,10 @@ static int CoreAps_ListDirectoryRequest(struct am_message *msg)
         if (elem1 == "devices")
         {
             CoreAps_ListDevicesDirectoryRequest(m, &req);
+        }
+        else if (elem1 == "com")
+        {
+            CoreAps_ListComDirectoryRequest(m, &req);
         }
         else if (req.url_parse.url == ".actor" && req.req_index == 0 && req.url_parse.element_count == 1)
         {
@@ -780,6 +813,35 @@ static int CoreAps_ReadEntryRequest(struct am_message *msg)
         {
             Core_ReadEntryDevicesReq(m, &req);
         }
+        else if (elem0 == "com")
+        {
+            if (AM_UrlElementAt(&req.url_parse, 1) == "state")
+            {
+                am->msg_put_cstring(m, "str");
+                am->msg_put_u32(m, VFS_ENTRY_MODE_READONLY);
+                am->msg_put_u64(m, mtime);
+                auto netState = deCONZ::master()->netState();
+                if (deCONZ::master()->isOpen())
+                {
+                    if (netState == deCONZ::InNetwork)
+                        am->msg_put_cstring(m, "in_network");
+                    else if (netState == deCONZ::NotInNetwork)
+                        am->msg_put_cstring(m, "not_in_network");
+                    else if (netState == deCONZ::Connecting)
+                        am->msg_put_cstring(m, "joining");
+                    else if (netState == deCONZ::Leaving)
+                        am->msg_put_cstring(m, "leaving");
+                    else if (netState == deCONZ::Touchlink)
+                        am->msg_put_cstring(m, "touchlink");
+                    else
+                        am->msg_put_cstring(m, "unknown");
+                }
+                else
+                {
+                    am->msg_put_cstring(m, "disconnected");
+                }
+            }
+        }
         else if (elem0 == ".actor")
         {
             if (AM_UrlElementAt(&req.url_parse, 1) == "name")
@@ -894,9 +956,9 @@ static int CoreNode_MessageCallback(struct am_message *msg)
     return AM_CB_STATUS_UNSUPPORTED;
 }
 
-void CoreNode_NotifyDeviceChanged(uint64_t mac, const char *path)
+void CoreAps_NotifyPathChanged(const char *path)
 {
-    if (!am || !mac || !path)
+    if (!am || !path)
         return;
 
     char url[VFS_MAX_URL_LENGTH];
@@ -904,9 +966,6 @@ void CoreNode_NotifyDeviceChanged(uint64_t mac, const char *path)
     U_SStream ss;
     U_sstream_init(&ss, url, VFS_MAX_URL_LENGTH);
 
-    U_sstream_put_str(&ss, "devices/");
-    U_sstream_put_mac_address(&ss, mac);
-    U_sstream_put_str(&ss, "/");
     U_sstream_put_str(&ss, path);
 
     struct am_message *m = am->msg_alloc();
@@ -922,6 +981,24 @@ void CoreNode_NotifyDeviceChanged(uint64_t mac, const char *path)
     am->msg_put_u32(m, flags);
 
     am->send_message(m);
+}
+
+void CoreNode_NotifyDeviceChanged(uint64_t mac, const char *path)
+{
+    if (!am || !mac || !path)
+        return;
+
+    char url[VFS_MAX_URL_LENGTH];
+
+    U_SStream ss;
+    U_sstream_init(&ss, url, VFS_MAX_URL_LENGTH);
+
+    U_sstream_put_str(&ss, "devices/");
+    U_sstream_put_mac_address(&ss, mac);
+    U_sstream_put_str(&ss, "/");
+    U_sstream_put_str(&ss, path);
+
+    CoreAps_NotifyPathChanged(url);
 }
 
 
@@ -1070,6 +1147,8 @@ zmController::zmController(zmMaster *master,
     connect(m_master, &zmMaster::macPoll, this, &zmController::onMacPoll);
 
     connect(m_master, &zmMaster::beacon, this, &zmController::onBeacon);
+
+    connect(m_master, &zmMaster::netStateChanged, this, &zmController::onMasterStateChanged);
 
     // setup queue process
     connect(m_master, SIGNAL(commandQueueEmpty()),
@@ -3551,15 +3630,12 @@ bool zmController::updateNode(const Node &node)
 
 void zmController::deviceConnected()
 {
-    if (m_nodes.empty())
-    {
-        return;
-    }
+    CoreAps_NotifyPathChanged("com/state");
 }
 
 void zmController::deviceDisconnected(int)
 {
-
+    CoreAps_NotifyPathChanged("com/state");
 }
 
 int zmController::apsQueueSize()
@@ -3596,6 +3672,11 @@ uint8_t zmController::nextRequestId()
     }
 
     return apsDataRequestId;
+}
+
+void zmController::onMasterStateChanged()
+{
+    CoreAps_NotifyPathChanged("com/state");
 }
 
 /*!
