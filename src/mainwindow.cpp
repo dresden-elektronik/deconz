@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2025 dresden elektronik ingenieurtechnik gmbh.
+ * Copyright (c) 2013-2026 dresden elektronik ingenieurtechnik gmbh.
  * All rights reserved.
  *
  * The software in this package is published under the terms of the BSD
@@ -60,6 +60,7 @@
 #include "zm_netdescriptor_model.h"
 #include "zm_settings_dialog.h"
 #include "debug_view.h"
+#include "deconz/am_gui.h"
 #include "deconz/dbg_trace.h"
 #include "deconz/http_client_handler.h"
 #include "deconz/util.h"
@@ -85,6 +86,7 @@ namespace
     };
 }
 
+static am_actor am_actor_gui_mainwindow;
 
 QAction *readBindingTableAction = nullptr;
 QAction *readNodeDescriptorAction = nullptr;
@@ -194,6 +196,77 @@ am_api_functions *GUI_GetActorModelApi(void)
     return AM_ApiFunctions();
 }
 
+/*! Message from GUI zmgNode.
+ */
+static int GuiMainWindow_GuiNodeMessageCallback(struct am_message *msg)
+{
+    uint16_t tag;
+    uint64_t extaddr;
+
+    am_api_functions *am = GUI_GetActorModelApi();
+
+    tag =  am->msg_get_u16(msg);
+    Q_UNUSED(tag);
+    extaddr = am->msg_get_u64(msg);
+
+    if (msg->status != AM_MSG_STATUS_OK)
+        return AM_CB_STATUS_UNSUPPORTED;
+
+    if (!_mainWindow)
+        return AM_CB_STATUS_UNSUPPORTED;
+
+    if (msg->id == M_ID_GUI_NODE_SELECTED)
+    {
+        _mainWindow->onNodeSelected();
+        return AM_CB_STATUS_OK;
+    }
+    else if (msg->id == M_ID_GUI_NODE_DESELECTED)
+    {
+        _mainWindow->onNodeDeselected();
+        return AM_CB_STATUS_OK;
+    }
+    else if (msg->id == M_ID_GUI_NODE_CONTEXT_MENU)
+    {
+        _mainWindow->openNodeContextMenu(extaddr);
+        return AM_CB_STATUS_OK;
+    }
+    else if (msg->id == M_ID_GUI_NODE_MOVED)
+    {
+        // double x = am->msg_get_s32(msg);
+        // double y = am->msg_get_s32(msg);
+        return AM_CB_STATUS_OK;
+    }
+    else if (msg->id == M_ID_GUI_NODE_KEY_PRESSED)
+    {
+        // int key = am->msg_get_s32(msg);
+    }
+    else
+    {
+        DBG_Printf(DBG_INFO, "gui/mainwindow: unknown msg (%u) from gui node " FMT_MAC "\n", msg->id, FMT_MAC_CAST(extaddr));
+    }
+
+    return AM_CB_STATUS_UNSUPPORTED;
+}
+
+static int GuiMainWindow_MessageCallback(struct am_message *msg)
+{
+    if (msg->src == AM_ACTOR_ID_GUI_NODE)
+        return GuiMainWindow_GuiNodeMessageCallback(msg);
+
+    DBG_Printf(DBG_INFO, "gui/mainwindow: msg from: %u\n", msg->src);
+    return AM_CB_STATUS_UNSUPPORTED;
+}
+
+static void GUI_InitMainWindowActor()
+{
+    am_api_functions *am = GUI_GetActorModelApi();
+
+    AM_INIT_ACTOR(&am_actor_gui_mainwindow, AM_ACTOR_ID_GUI_MAINWINDOW, GuiMainWindow_MessageCallback);
+
+    am->register_actor(&am_actor_gui_mainwindow);
+    am->subscribe(AM_ACTOR_ID_GUI_NODE, AM_ACTOR_ID_GUI_MAINWINDOW);
+}
+
 MainWindow::MainWindow(QWidget *parent) :
     QMainWindow(parent),
     ui(new Ui::MainWindow)
@@ -252,6 +325,7 @@ MainWindow::MainWindow(QWidget *parent) :
         m_debugView->hide();
     }
 
+    GUI_InitMainWindowActor();
     GUI_InitNodeActor();
 
     setCentralWidget(ui->stackedView);
@@ -585,9 +659,6 @@ MainWindow::MainWindow(QWidget *parent) :
 
     deCONZ::utilSetNotifyHandler(deCONZ::notifyHandler);
 
-    // TODO(mpi): Remove when events come from AM_ACTOR_ID_GUI_NODE
-    connect(deCONZ::controller(), &zmController::nodeEvent, this, &MainWindow::onNodeEvent);
-
     setState(StateIdle, __LINE__);
 
     QTimer::singleShot(1000, this, SLOT(initAutoConnectManager()));
@@ -831,63 +902,7 @@ void MainWindow::onSelectionChanged()
     }
     else
     {
-        m_nodeInfo->setNode(m_vfsModel, nodes.first()->data()->address().ext());
-    }
-}
-
-void MainWindow::onNodeEvent(const deCONZ::NodeEvent &event)
-{
-    // TODO(mpi): Currently these events come from the controller. However the mainwindow
-    // shall subscribe to AM_ACTOR_ID_GUI_NODE to receive these events within the GUI.
-
-    if (event.node() && event.event() == deCONZ::NodeEvent::NodeContextMenu)
-    {
-        QMenu menu;
-        menu.addAction(readNodeDescriptorAction);
-        menu.addAction(readActiveEndpointsAction);
-        menu.addAction(readSimpleDescriptorsAction);
-        if (readBindingTableAction)
-        {
-            menu.addAction(readBindingTableAction);
-        }
-        if (ui->graphicsView->scene()->selectedItems().size() > 2)
-        {
-            menu.addAction(addSourceRouteAction);
-        }
-        if (ui->graphicsView->scene()->selectedItems().size() == 1)
-        {
-            zmgNode *g = qgraphicsitem_cast<zmgNode*>(ui->graphicsView->scene()->selectedItems().front());
-            if (g && g->data() && !g->data()->sourceRoutes().empty())
-            {
-                menu.addAction(removeSourceRouteAction);
-            }
-        }
-
-        if (ui->graphicsView->scene()->selectedItems().size() == 1 &&
-                event.node()->address().nwk() != 0x0000)
-        {
-            menu.addAction(editDDFAction);
-            menu.addSeparator();
-            menu.addAction(deleteNodeAction);
-        }
-
-        menu.exec(QCursor::pos());
-    }
-    else if (event.node() && event.event() == deCONZ::NodeEvent::NodeSelected)
-    {
-        readNodeDescriptorAction->setEnabled(true);
-        readActiveEndpointsAction->setEnabled(true);
-        readSimpleDescriptorsAction->setEnabled(true);
-        resetNodeAction->setEnabled(true);
-        deleteNodeAction->setEnabled(true);
-    }
-    else if (event.event() == deCONZ::NodeEvent::NodeDeselected)
-    {
-        readNodeDescriptorAction->setEnabled(false);
-        readActiveEndpointsAction->setEnabled(false);
-        readSimpleDescriptorsAction->setEnabled(false);
-        resetNodeAction->setEnabled(false);
-        deleteNodeAction->setEnabled(false);
+        m_nodeInfo->setNode(m_vfsModel, nodes.first()->address().ext());
     }
 }
 
@@ -1200,6 +1215,65 @@ void MainWindow::loadPlugIns()
         deCONZ::controller()->addNodePlugin(ifaceNode);
         m_plugins.push_back(ifaceNode);
     }
+}
+
+void MainWindow::openNodeContextMenu(uint64_t mac)
+{
+    QMenu menu;
+    zmgNode *g = nullptr;
+
+    menu.addAction(readNodeDescriptorAction);
+    menu.addAction(readActiveEndpointsAction);
+    menu.addAction(readSimpleDescriptorsAction);
+    if (readBindingTableAction)
+    {
+        menu.addAction(readBindingTableAction);
+    }
+    if (ui->graphicsView->scene()->selectedItems().size() > 2)
+    {
+        menu.addAction(addSourceRouteAction);
+    }
+
+    if (ui->graphicsView->scene()->selectedItems().size() == 1)
+    {
+        g = qgraphicsitem_cast<zmgNode*>(ui->graphicsView->scene()->selectedItems().front());
+    }
+
+    if (g && g->hasSourceRoutes())
+    {
+        menu.addAction(removeSourceRouteAction);
+    }
+
+    if (g && ui->graphicsView->scene()->selectedItems().size() == 1)
+    {
+        // TODO(mpi): A better check would be != ownNode()
+        if (g->address().nwk() != 0x0000)
+        {
+            menu.addAction(editDDFAction);
+            menu.addSeparator();
+            menu.addAction(deleteNodeAction);
+        }
+    }
+
+    menu.exec(QCursor::pos());
+}
+
+void MainWindow::onNodeSelected()
+{
+    readNodeDescriptorAction->setEnabled(true);
+    readActiveEndpointsAction->setEnabled(true);
+    readSimpleDescriptorsAction->setEnabled(true);
+    resetNodeAction->setEnabled(true);
+    deleteNodeAction->setEnabled(true);
+}
+
+void MainWindow::onNodeDeselected()
+{
+    readNodeDescriptorAction->setEnabled(false);
+    readActiveEndpointsAction->setEnabled(false);
+    readSimpleDescriptorsAction->setEnabled(false);
+    resetNodeAction->setEnabled(false);
+    deleteNodeAction->setEnabled(false);
 }
 
 void MainWindow::loadPluginsStage2()

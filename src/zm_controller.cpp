@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2025 dresden elektronik ingenieurtechnik gmbh.
+ * Copyright (c) 2013-2026 dresden elektronik ingenieurtechnik gmbh.
  * All rights reserved.
  *
  * The software in this package is published under the terms of the BSD
@@ -863,11 +863,6 @@ static int CoreNode_GuiNodeMessageCallback(struct am_message *msg)
     else if (msg->id == M_ID_GUI_NODE_DESELECTED)
     {
         deCONZ::controller()->onNodeDeselected(extaddr);
-        return AM_CB_STATUS_OK;
-    }
-    else if (msg->id == M_ID_GUI_NODE_CONTEXT_MENU)
-    {
-        deCONZ::controller()->onNodeContextMenuRequest(extaddr);
         return AM_CB_STATUS_OK;
     }
     else if (msg->id == M_ID_GUI_NODE_MOVED)
@@ -7625,20 +7620,6 @@ void zmController::onNodeDeselected(uint64_t mac)
     if (node && node->data)
     {
         deCONZ::NodeEvent event(deCONZ::NodeEvent::NodeDeselected, node->data);
-        emit nodeEvent(event);
-    }
-}
-
-void zmController::onNodeContextMenuRequest(uint64_t mac)
-{
-    deCONZ::Address addr;
-    addr.setExt(mac);
-    NodeInfo *node = getNode(addr, deCONZ::ExtAddress);
-    U_ASSERT(node);
-    U_ASSERT(node->data);
-    if (node && node->data)
-    {
-        NodeEvent event(NodeEvent::NodeContextMenu, node->data);
         emit nodeEvent(event);
     }
 }

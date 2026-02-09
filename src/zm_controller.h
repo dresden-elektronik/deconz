@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2025 dresden elektronik ingenieurtechnik gmbh.
+ * Copyright (c) 2013-2026 dresden elektronik ingenieurtechnik gmbh.
  * All rights reserved.
  *
  * The software in this package is published under the terms of the BSD
@@ -231,7 +231,6 @@ public:
     const deCONZ::ApsDataRequest *getApsRequest(uint id) const;
     void onApsdeDataConfirm(const deCONZ::ApsDataConfirm &confirm);
 
-    void onNodeContextMenuRequest(uint64_t mac);
     void onNodeSelected(uint64_t mac);
     void onNodeDeselected(uint64_t mac);
     uint8_t nextRequestId();

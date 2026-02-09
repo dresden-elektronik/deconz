@@ -673,6 +673,14 @@ void zmgNode::paint(QPainter *painter, const QStyleOptionGraphicsItem *option, Q
     }
 }
 
+deCONZ::Address zmgNode::address() const
+{
+    deCONZ::Address addr;
+    addr.setExt(m_extAddressCache);
+    addr.setNwk(m_nwkAddressCache);
+    return addr;
+}
+
 
 void zmgNode::paintClassic(QPainter *painter, const QStyleOptionGraphicsItem *option, QWidget *widget)
 {
@@ -1138,6 +1146,11 @@ void zmgNode::setBattery(int battery)
 void zmgNode::setNeedSaveToDatabase(bool needSave)
 {
     m_needSaveToDatabase = needSave;
+}
+
+bool zmgNode::hasSourceRoutes() const
+{
+    return m_data && !m_data->sourceRoutes().empty();
 }
 
 void zmgNode::addLink(NodeLink *link)

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2025 dresden elektronik ingenieurtechnik gmbh.
+ * Copyright (c) 2013-2026 dresden elektronik ingenieurtechnik gmbh.
  * All rights reserved.
  *
  * The software in this package is published under the terms of the BSD
@@ -57,6 +57,9 @@ public:
     void notifyUser(const QString &text);
     void setDeviceState(deCONZ::State state);
     void loadPlugIns();
+    void openNodeContextMenu(uint64_t mac);
+    void onNodeSelected();
+    void onNodeDeselected();
 
 public Q_SLOTS:
     void setAutoFetching();
@@ -72,7 +75,6 @@ private Q_SLOTS:
     void onDeviceActivity();
     void onDeviceStateTimeout();
     void onSelectionChanged();
-    void onNodeEvent(const deCONZ::NodeEvent&event);
     void getComPorts();
     void devConnectClicked();
     void devDisconnectClicked();

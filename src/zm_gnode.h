@@ -14,6 +14,7 @@
 #include <array>
 #include <QGraphicsObject>
 
+#include "deconz/aps.h"
 #include "deconz/zcl.h"
 #include "deconz/timeref.h"
 
@@ -59,6 +60,7 @@ public:
         }
         m_otauActiveTime = ref;
     }
+    deCONZ::Address address() const;
     deCONZ::zmNode *data() const { return m_data; }
     NodeSocket *socket(Socket sock) const { return m_sockets[sock]; }
     NodeSocket *socket(quint8 endpoint, quint16 cluster, deCONZ::ZclClusterSide side);
@@ -70,6 +72,7 @@ public:
     bool needSaveToDatabase() const;
     void setBattery(int battery);
     void setNeedSaveToDatabase(bool needSave);
+    bool hasSourceRoutes() const;
 
     bool ownsSocket(NodeSocket *socket) const;
 
