@@ -233,8 +233,13 @@ static void httpThreadFunc(void *arg)
                     if (cli.handle & NCLIENT_HANDLE_IS_SSL_FLAG)
                     {
                         bool needsClose = false;
+                        int handShake = N_SslHandshake(&cli.sslSock);
 
-                        if (N_SslHandshake(&cli.sslSock) != 0)
+                        if (handShake < 0) // error
+                        {
+                            needsClose = true;
+                        }
+                        else if (handShake > 0)
                         {
                             if (N_SslCanRead(&cli.sslSock))
                             {
@@ -272,14 +277,15 @@ static void httpThreadFunc(void *arg)
                                 }
                             }
 
-                            if (needsClose)
-                            {
-                                N_TcpClose(&cli.tcpSock);
-                                N_SslClose(&cli.sslSock);
+                        }
 
-                                cli = d->clients.back();
-                                d->clients.pop_back();
-                            }
+                        if (needsClose)
+                        {
+                            N_TcpClose(&cli.tcpSock);
+                            N_SslClose(&cli.sslSock);
+
+                            cli = d->clients.back();
+                            d->clients.pop_back();
                         }
                     }
                 }
