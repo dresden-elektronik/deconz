@@ -51,6 +51,9 @@ const char *HttpContentFontWoff    = "application/font-woff";
 const char *HttpContentFontWoff2   = "application/font-woff2";
 const char *HttpContentRSS         = "application/rss+xml";
 
+// check socket state
+// netstat -anp --inet | grep deCONZ
+
 zmHttpClient::zmHttpClient(const QString &serverRoot, std::vector<CacheItem> &cache, QObject *parent) :
     QTcpSocket(parent),
     m_serverRoot(serverRoot),
