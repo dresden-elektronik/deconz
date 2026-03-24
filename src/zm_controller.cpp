@@ -4503,7 +4503,7 @@ void zmController::onApsdeDataIndication(const deCONZ::ApsDataIndication &ind)
                             onSourceRouteChanged(*sourceRoute);
                         }
 
-                        if (sourceRoute->needSave() && !m_otauActive)
+                        if (sourceRoute->needSave() && m_otauActivity == 0)
                         {
                             emit sourceRouteCreated(*sourceRoute);
                             sourceRoute->saved();
