@@ -21,6 +21,8 @@ class QModelIndex;
 class QAbstractButton;
 class QPushButton;
 class zmSettingsZcldb;
+class SettingsProxy;
+class zmSettingsDiscovery;
 
 class zmSettingsDialog : public QDialog
 {
@@ -40,8 +42,9 @@ Q_SIGNALS:
 
 private:
     Ui::zmSettingsDialog *ui;
-    QPushButton *m_okButton;
+    zmSettingsDiscovery *m_discovery;
     zmSettingsZcldb *m_zcldb;
+    SettingsProxy *m_proxy;
 };
 
 #endif // ZM_SETTINGS_DIALOG_H

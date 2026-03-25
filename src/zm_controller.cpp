@@ -1144,6 +1144,20 @@ zmController::zmController(zmMaster *master,
     m_timer = startTimer(TickMs);
     m_timeoutTimer = startTimer(TickMs);
 
+    {
+        QVariant value;
+        if (DB_LoadConfigValue("proxyaddress", &value))
+        {
+            m_httpProxy = value.toString();
+        }
+        if (DB_LoadConfigValue("proxyport", &value))
+        {
+            int port = value.toInt();
+            if (port >= 0 && port <= 0xFFFF)
+                m_httpProxyPort = (uint16_t)port;
+        }
+    }
+
     connect(m_master, &zmMaster::macPoll, this, &zmController::onMacPoll);
 
     connect(m_master, &zmMaster::beacon, this, &zmController::onBeacon);
@@ -2937,6 +2951,16 @@ bool zmController::setParameter(U16Parameter parameter, uint16_t value)
         }
         break;
 
+    case ParamHttpProxyPort:
+        {
+            if (m_httpProxyPort != value)
+            {
+                m_httpProxyPort = value;
+                DB_StoreConfigValue("proxyport", value);
+            }
+        }
+        break;
+
     default:
         break;
     }
@@ -3136,6 +3160,16 @@ bool zmController::setParameter(StringParameter parameter, const QString &value)
         case ParamDeviceName:
         {
             m_devName = value;
+        }
+        break;
+
+        case ParamHttpProxy:
+        {
+            if (m_httpProxy != value)
+            {
+                m_httpProxy = value;
+                DB_StoreConfigValue("proxyaddress", value);
+            }
         }
         break;
 
@@ -3349,6 +3383,9 @@ uint16_t zmController::getParameter(U16Parameter parameter)
     case ParamHttpsPort:
         return deCONZ::httpsServerPort();
 
+    case ParamHttpProxyPort:
+        return m_httpProxyPort;
+
     default:
         DBG_Printf(DBG_ERROR, "Unknown 16-bit parameter %d\n", (int)parameter);
         break;
@@ -3443,6 +3480,9 @@ QString zmController::getParameter(StringParameter parameter)
 
     case deCONZ::ParamDevicePath:
         return deCONZ::master()->devicePath();
+
+    case deCONZ::ParamHttpProxy:
+        return m_httpProxy;
 
     default:
         DBG_Printf(DBG_ERROR, "Unknown string parameter %d\n", (int)parameter);

@@ -19,6 +19,7 @@
 #include <deconz/zdp_descriptors.h>
 #include <deconz/zdp_profile.h>
 #include <deconz/util.h>
+#include <deconz/u_sstream.h>
 #include <deconz/node_event.h>
 
 #include "zm_node_model.h"
@@ -612,4 +613,117 @@ void zmController::saveNodesState()
     //sync();
     DBG_Printf(DBG_INFO_L2, "CTRL sync() in %d ms\n", int(t.elapsed()));
 #endif
+}
+
+static int sqliteLoadConfig2Callback(void *user, int ncols, char **colval , char **colname)
+{
+    (void)colname;
+    DBG_Assert(user != 0);
+
+    if (!user || (ncols != 2) || !colval)
+    {
+        return 0;
+    }
+
+    QVariant *value = static_cast<QVariant*>(user);
+    *value = QString::fromUtf8(colval[1]);
+    return 0;
+}
+
+bool DB_LoadConfigValue(const char *key, QVariant *value)
+{
+    int rc;
+    char sql[256];
+    U_SStream ss;
+    char *errmsg = nullptr;
+    bool result = false;
+
+    bool dbWasOpen = db != nullptr;
+    if (!dbWasOpen && !openDb())
+    {
+        return result;
+    }
+
+    U_sstream_init(&ss, sql, sizeof(sql));
+    U_sstream_put_str(&ss, "SELECT key,value FROM config2 WHERE key = '");
+    U_sstream_put_str(&ss, key);
+    U_sstream_put_str(&ss, "'");
+
+    rc = sqlite3_exec(db, sql, sqliteLoadConfig2Callback, value, &errmsg);
+
+    if (rc != SQLITE_OK)
+    {
+        if (errmsg)
+        {
+            DBG_Printf(DBG_ERROR, "sqlite3_exec %s, error: %s\n", sql, errmsg);
+            sqlite3_free(errmsg);
+        }
+    }
+    else
+    {
+        result = true;
+    }
+
+    if (!dbWasOpen)
+    {
+        closeDb();
+    }
+
+    return result;
+}
+
+bool DB_StoreConfigValue(const char *key, const QVariant &value)
+{
+    int rc = -1;
+    char sql[1024];
+    U_SStream ss;
+    char *errmsg = nullptr;
+    bool result = false;
+
+    const auto strValue = value.toString();
+    if (strValue.size() == 0)
+        return result;
+
+    bool dbWasOpen = db != nullptr;
+    if (!dbWasOpen && !openDb())
+    {
+        return result;
+    }
+
+    U_sstream_init(&ss, sql, sizeof(sql));
+    U_sstream_put_str(&ss, "UPDATE config2 SET value = '");
+    U_sstream_put_str(&ss, qPrintable(strValue));
+    U_sstream_put_str(&ss, "'");
+    U_sstream_put_str(&ss, "WHERE key = '");
+    U_sstream_put_str(&ss, key);
+    U_sstream_put_str(&ss, "';");
+
+    U_sstream_put_str(&ss, "INSERT INTO config2 (key, value) SELECT '");
+    U_sstream_put_str(&ss, key);
+    U_sstream_put_str(&ss, "', '");
+    U_sstream_put_str(&ss, qPrintable(strValue));
+    U_sstream_put_str(&ss, "' ");
+    U_sstream_put_str(&ss, "WHERE (SELECT changes() = 0);");
+
+    rc = sqlite3_exec(db, sql, nullptr, nullptr, &errmsg);
+
+    if (rc != SQLITE_OK)
+    {
+        if (errmsg)
+        {
+            DBG_Printf(DBG_ERROR, "sqlite3_exec %s, error: %s\n", sql, errmsg);
+            sqlite3_free(errmsg);
+        }
+    }
+    else
+    {
+        result = true;
+    }
+
+    if (!dbWasOpen)
+    {
+        closeDb();
+    }
+
+    return result;
 }

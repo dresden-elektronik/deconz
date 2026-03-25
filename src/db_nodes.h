@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2024 dresden elektronik ingenieurtechnik gmbh.
+ * Copyright (c) 2013-2026 dresden elektronik ingenieurtechnik gmbh.
  * All rights reserved.
  *
  * The software in this package is published under the terms of the BSD
@@ -32,5 +32,7 @@ bool openDb();
 bool closeDb();
 bool DB_ExistsRestDevice(quint64 extAddr);
 bool DB_ParseDescriptors(DB_Node *node);
+bool DB_LoadConfigValue(const char *key, QVariant *value);
+bool DB_StoreConfigValue(const char *key, const QVariant &value);
 
 #endif // DB_NODES_H

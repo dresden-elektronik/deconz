@@ -85,8 +85,6 @@ zmSettingsZcldb::zmSettingsZcldb(QWidget *parent) :
 
     m_selectedRow = -1;
     m_dataChanged = false;
-
-    load();
 }
 
 zmSettingsZcldb::~zmSettingsZcldb()

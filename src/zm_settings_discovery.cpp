@@ -17,7 +17,6 @@ zmSettingsDiscovery::zmSettingsDiscovery(QWidget *parent) :
     ui(new Ui::zmSettingsDiscovery)
 {
     ui->setupUi(this);
-    load();
 }
 
 zmSettingsDiscovery::~zmSettingsDiscovery()

@@ -387,6 +387,8 @@ private:
     zmMaster *m_master;
     QGraphicsScene *m_scene;
 
+    QString m_httpProxy;
+    uint16_t m_httpProxyPort = 0;
     QString m_devName;
     QByteArray m_securityMaterial0;
     std::vector<FastDiscover> m_fastDiscover;

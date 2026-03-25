@@ -28,5 +28,6 @@
         <file>icons/cryo/32/folder.png</file>
         <file>icons/cryo/32/folder@2x.png</file>
         <file>img/deconz_mask.png</file>
+        <file>icons/icons8-server-64.png</file>
     </qresource>
 </RCC>

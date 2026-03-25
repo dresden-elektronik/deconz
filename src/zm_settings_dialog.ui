@@ -60,6 +60,15 @@
           <normaloff>:/icons/discovery.png</normaloff>:/icons/discovery.png</iconset>
         </property>
        </item>
+       <item>
+        <property name="text">
+         <string>Proxy</string>
+        </property>
+        <property name="icon">
+         <iconset resource="zm_resources.qrc">
+          <normaloff>:/icons/icons8-server-64.png</normaloff>:/icons/icons8-server-64.png</iconset>
+        </property>
+       </item>
       </widget>
      </item>
      <item>
@@ -77,10 +86,10 @@
    <item>
     <widget class="QDialogButtonBox" name="buttonBox">
      <property name="orientation">
-      <enum>Qt::Horizontal</enum>
+      <enum>Qt::Orientation::Horizontal</enum>
      </property>
      <property name="standardButtons">
-      <set>QDialogButtonBox::Cancel|QDialogButtonBox::Ok</set>
+      <set>QDialogButtonBox::StandardButton::Cancel|QDialogButtonBox::StandardButton::Ok</set>
      </property>
     </widget>
    </item>
