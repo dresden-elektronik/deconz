@@ -63,6 +63,11 @@ void SettingsProxy::save()
             apsCtrl->setParameter(deCONZ::ParamHttpProxy, ls[0]);
             apsCtrl->setParameter(deCONZ::ParamHttpProxyPort, (uint16_t)port);
         }
+        else
+        {
+            apsCtrl->setParameter(deCONZ::ParamHttpProxy, "none");
+            apsCtrl->setParameter(deCONZ::ParamHttpProxyPort, 0);
+        }
     }
 }
 
@@ -79,7 +84,7 @@ void SettingsProxy::load()
     if (httpProxy.isEmpty() || httpProxy == "none" || httpProxyPort == 0)
     {
         ui->lineEditHttpProxy->clear();
-        m_httpProxyEnabled = true;
+        m_httpProxyEnabled = false;
         m_httpProxy.clear();
     }
     else
