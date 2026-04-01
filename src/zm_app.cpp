@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2025 dresden elektronik ingenieurtechnik gmbh.
+ * Copyright (c) 2013-2026 dresden elektronik ingenieurtechnik gmbh.
  * All rights reserved.
  *
  * The software in this package is published under the terms of the BSD
@@ -19,6 +19,7 @@
 #include <deconz/u_timer.h>
 #include <deconz/u_threads.h>
 #include <deconz/u_memory.h>
+#include <deconz/n_downloader.h>
 #include "zm_app.h"
 #include "zm_http_server.h"
 
@@ -108,10 +109,13 @@ zmApp::zmApp(int &argc, char **argv) :
     QTimer::singleShot(200, [this](){
         d_ptr->httpServer = new deCONZ::HttpServer(this);
     });
+
+    N_DownloadInit();
 }
 
 zmApp::~zmApp()
 {
+    N_DownloadShutDown();
     AM_UnloadPlugins();
     AM_Shutdown();
     mqRunning = false;
@@ -150,5 +154,6 @@ void zmApp::eventQueueIdle()
     {
         tref = now;
         U_TimerTick(diff);
+        N_DownloadStep();
     }
 }
