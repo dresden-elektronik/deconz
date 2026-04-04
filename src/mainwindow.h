@@ -87,6 +87,7 @@ private Q_SLOTS:
     void showNetworkSettings();
     void showSendToDialog();
     void showNodeViewPage();
+    void showOtaPanel();
     void setNodesOnline();
     void resetNodesActionTriggered();
     void readNodeDescriptorActionTriggered();
@@ -164,6 +165,7 @@ private:
     ActorVfsModel *m_vfsModel;
     zmController *m_controller;
     Ui::MainWindow *ui;
+    QDockWidget *m_dockOta = nullptr;
     QDockWidget *m_dockNodeInfo;
     zmNodeInfo *m_nodeInfo;
     QTableView *m_nodeTableView;

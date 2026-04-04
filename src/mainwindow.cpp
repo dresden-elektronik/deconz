@@ -1338,6 +1338,7 @@ void MainWindow::loadPluginsStage2()
                 if (strstr(ifaceNode->name(), "OTA"))
                 {
                     m_menuPlugins->addAction(dock->toggleViewAction());
+                    m_dockOta = dock;
                 }
 
                 m_menuPanels->addAction(dock->toggleViewAction());
@@ -1593,6 +1594,11 @@ void MainWindow::createMainToolbar()
     m_nodesOnlineLabel = new QLabel;
     m_nodesOnlineLabel->setContentsMargins(12, 0, 12, 0);
     ui->mainToolBar->addWidget(m_nodesOnlineLabel);
+
+    auto *otaButton = new QPushButton(tr("OTA Update"));
+    otaButton->setToolTip(tr("Open OTA update panel"));
+    connect(otaButton, &QPushButton::clicked, this, &MainWindow::showOtaPanel);
+    ui->mainToolBar->addWidget(otaButton);
 
     m_openPhosconAppButton = new QPushButton(tr("Phoscon App"));
     m_openPhosconAppButton->setToolTip(tr("Opens the Phoscon App in your browser."));
@@ -1968,6 +1974,16 @@ void MainWindow::showNodeViewPage()
     else
     {
         showDevicePage();
+    }
+}
+
+void MainWindow::showOtaPanel()
+{
+    if (m_dockOta)
+    {
+        m_dockOta->toggleViewAction()->setChecked(true);
+        m_dockOta->show();
+        m_dockOta->raise();
     }
 }
 
