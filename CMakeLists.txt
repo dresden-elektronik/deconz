@@ -36,6 +36,17 @@ endif()
 
 set(ENV{SOURCE_DATE_EPOCH} ${GIT_SRC_DATE})
 
+# cross compile for Apple Intel
+# -DCMAKE_OSX_ARCHITECTURES=x86_64
+
+# --- 32/64-bit -------------------------------------------------------
+if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+    set(DECONZ_ARCH_64BIT ON)
+else()
+    set(DECONZ_ARCH_32BIT ON)
+endif()
+
+
 # --- build SQLite -----------------------------------------
 set(DECONZ_FULL_BUILD ON)
 add_subdirectory(lib/sqlite3)
