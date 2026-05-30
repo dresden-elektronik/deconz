@@ -243,7 +243,7 @@ static void httpThreadFunc(void *arg)
                             if (N_SslCanRead(&cli.sslSock))
                             {
                                 int n = N_SslRead(&cli.sslSock, d->ioBuf.data(), d->ioBuf.size() - 1);
-                                if (n == 0)
+                                if (n <= 0)
                                 {
                                     needsClose = true;
                                 }
