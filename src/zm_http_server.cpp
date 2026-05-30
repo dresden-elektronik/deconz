@@ -16,7 +16,6 @@
 #include "deconz/u_platform.h"
 #include "zm_http_server.h"
 #include "zm_http_client.h"
-#include "zm_https_client.h"
 #include "deconz/dbg_trace.h"
 #include "deconz/http_client_handler.h"
 #include "deconz/n_ssl.h"
