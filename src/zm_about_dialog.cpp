@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2025 dresden elektronik ingenieurtechnik gmbh.
+ * Copyright (c) 2013-2026 dresden elektronik ingenieurtechnik gmbh.
  * All rights reserved.
  *
  * The software in this package is published under the terms of the BSD
@@ -16,12 +16,13 @@
 #include "gui/theme.h"
 #include "zm_about_dialog.h"
 #include "ui_zm_about_dialog.h"
-#include "zm_master.h"
 #include "config.h"
 
 zmAboutDialog::zmAboutDialog(QWidget *parent) :
     QDialog(parent),
-    ui(new Ui::zm_about_dialog)
+    ui(new Ui::zm_about_dialog),
+    m_deviceConnected(false),
+    m_deviceFirmwareVersion(0)
 {
     qint64 msec = qint64(GIT_DATE) * 1000;
     auto sourceDateTime = QDateTime::fromMSecsSinceEpoch(msec);
@@ -47,6 +48,12 @@ zmAboutDialog::zmAboutDialog(QWidget *parent) :
 
 }
 
+void zmAboutDialog::setDeviceInfo(bool connected, uint32_t firmwareVersion)
+{
+    m_deviceConnected = connected;
+    m_deviceFirmwareVersion = firmwareVersion;
+}
+
 zmAboutDialog::~zmAboutDialog()
 {
     delete ui;
@@ -61,9 +68,9 @@ void zmAboutDialog::showEvent(QShowEvent *event)
 {
     QString devFirmwareVersion;
 
-    if (deCONZ::master()->connected())
+    if (m_deviceConnected)
     {
-        const QString fwVersion = QString("%1").arg(deCONZ::master()->deviceFirmwareVersion(), 8, 16, QLatin1Char('0'));
+        const QString fwVersion = QString("%1").arg(m_deviceFirmwareVersion, 8, 16, QLatin1Char('0'));
         devFirmwareVersion = QString("Firmware: 0x%1").arg(fwVersion);
     }
     else

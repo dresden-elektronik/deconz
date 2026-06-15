@@ -75,6 +75,9 @@
 #define APP_USER_MANUAL_PDF "deCONZ-BHB-en.pdf"
 #define FW_UPDATE_TIME_MS 75000
 #define FW_UPDATE_TIME_BACKOFF_MS 2000
+#define DEVICE_POLL_INTERVAL_TICKS_INITIAL 2
+#define DEVICE_POLL_INTERVAL_TICKS (10 + DEVICE_POLL_INTERVAL_TICKS_INITIAL)
+#define DEVICE_STATE_TIMEOUT_MS 30000   // 30 seconds
 
 namespace
 {
@@ -301,6 +304,11 @@ static int GuiMainWindow_CoreDevMessageCallback(struct am_message *msg)
             deCONZ::State netState = static_cast<deCONZ::State>((packed >> 8) & 0xFF);
             _mainWindow->handleDeviceStateNotification(open, connected, netState, 0);
         }
+        else if (tag == 4)  // device/info/firmware
+        {
+            uint32_t fw = am->msg_get_u32(msg);
+            _mainWindow->setDeviceFirmwareVersion(fw);
+        }
 
         return AM_CB_STATUS_OK;
     }
@@ -348,6 +356,22 @@ static void PollDeviceStateVFS()
         m->dst = AM_ACTOR_ID_CORE_DEV;
         am->msg_put_u16(m, 1);  // tag for device/state
         am->msg_put_cstring(m, VFS_DEV_STATE);
+        am->send_message(m);
+    }
+}
+
+static void PollDeviceFirmwareVFS()
+{
+    am_api_functions *am = GUI_GetActorModelApi();
+
+    struct am_message *m = am->msg_alloc();
+    if (m)
+    {
+        m->id = VFS_M_ID_READ_ENTRY_REQ;
+        m->src = AM_ACTOR_ID_GUI_MAINWINDOW;
+        m->dst = AM_ACTOR_ID_CORE_DEV;
+        am->msg_put_u16(m, 4);  // tag for device/info/firmware
+        am->msg_put_cstring(m, VFS_DEV_INFO_FIRMWARE);
         am->send_message(m);
     }
 }
@@ -902,7 +926,7 @@ void MainWindow::onDeviceStateTimeout()
 {
     m_connTimeout++;
 
-    if (deCONZ::master()->deviceFirmwareVersion() == FW_ONLY_AVR_BOOTLOADER)
+    if (m_deviceFirmwareVersion == FW_ONLY_AVR_BOOTLOADER)
     {
         if (m_connTimeout < MaxConnectionTimeoutBootloaderOnly)
         {
@@ -967,8 +991,8 @@ void MainWindow::timerEvent(QTimerEvent *event)
         // Device state polling
         m_devicePollTickCounter++;
 
-        // Initial poll after 1 second (12 ticks at 80ms)
-        if (m_devicePollTickCounter == 12)
+        // Initial poll after 1 second
+        if (m_devicePollTickCounter == DEVICE_POLL_INTERVAL_TICKS_INITIAL)
         {
             PollDeviceStateVFS();
         }
@@ -976,7 +1000,10 @@ void MainWindow::timerEvent(QTimerEvent *event)
         else if (m_devicePollTickCounter >= DEVICE_POLL_INTERVAL_TICKS)
         {
             PollDeviceStateVFS();
-            m_devicePollTickCounter = 0;
+            if (0 == m_deviceFirmwareVersion)
+                PollDeviceFirmwareVFS();
+
+            m_devicePollTickCounter = DEVICE_POLL_INTERVAL_TICKS_INITIAL + 1;
         }
 
         // Check if cached state has timed out
@@ -1999,6 +2026,7 @@ void MainWindow::createViewMenu()
 void MainWindow::showAboutDialog()
 {
     zmAboutDialog *dlg = new zmAboutDialog(this);
+    dlg->setDeviceInfo(m_deviceConnected, m_deviceFirmwareVersion);
     dlg->show();
 }
 

@@ -55,6 +55,7 @@ public:
     ~MainWindow();
     void notifyUser(const QString &text);
     void setDeviceState(deCONZ::State state);
+    void setDeviceFirmwareVersion(uint32_t fw) { m_deviceFirmwareVersion = fw; }
     void handleDeviceStateNotification(bool open, bool connected, deCONZ::State netState, int reason);
     void loadPlugIns();
     void openNodeContextMenu(uint64_t mac);
@@ -168,12 +169,10 @@ private:
     bool m_deviceOpen = false;
     bool m_deviceConnected = false;
     deCONZ::State m_deviceNetState = deCONZ::UnknownState;
+    uint32_t m_deviceFirmwareVersion = 0;
     QElapsedTimer m_deviceStateTimer;
     int m_devicePollTickCounter = 0;
-    static constexpr int DEVICE_POLL_INTERVAL_TICKS = 100;  // 100 * 80ms = 8 seconds
-    static constexpr int DEVICE_STATE_TIMEOUT_MS = 30000;   // 30 seconds
 
-public:
     QString m_remoteIP;
     int m_remotePort;
     ActorVfsModel *m_vfsModel;

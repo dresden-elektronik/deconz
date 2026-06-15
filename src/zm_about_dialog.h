@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2024 dresden elektronik ingenieurtechnik gmbh.
+ * Copyright (c) 2013-2026 dresden elektronik ingenieurtechnik gmbh.
  * All rights reserved.
  *
  * The software in this package is published under the terms of the BSD
@@ -25,6 +25,8 @@ public:
     explicit zmAboutDialog(QWidget *parent = 0);
     ~zmAboutDialog();
 
+    void setDeviceInfo(bool connected, uint32_t firmwareVersion);
+
 public Q_SLOTS:
     void linkActivated(const QString &link);
 
@@ -35,6 +37,8 @@ protected:
 private:
     void updateStyle();
     Ui::zm_about_dialog *ui;
+    bool m_deviceConnected = false;
+    uint32_t m_deviceFirmwareVersion = 0;
 };
 
 #endif // ZM_ABOUT_DIALOG_H
