@@ -21,6 +21,7 @@
 #include <deconz/u_memory.h>
 #include <deconz/n_downloader.h>
 #include "zm_app.h"
+#include "zm_master.h"
 #include "zm_http_server.h"
 
 bool gHeadlessVersion = false;
@@ -70,6 +71,7 @@ static void mqThreadFunc(void *arg)
 class AppPrivate
 {
 public:
+    zmMaster *devCom;
     deCONZ::HttpServer *httpServer = nullptr;
 };
 
@@ -104,6 +106,8 @@ zmApp::zmApp(int &argc, char **argv) :
     U_thread_create(&mqThread, mqThreadFunc, &main_mq);
 
     U_TimerInit(AM_ApiFunctions());
+
+    d_ptr->devCom = new zmMaster(this);
 
     d_ptr->httpServer = nullptr;
     QTimer::singleShot(200, [this](){

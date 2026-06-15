@@ -242,6 +242,9 @@ private slots:
     bool apsdeDataRequestQueueSetStatus(int id, deCONZ::CommonState state);
     void deviceConnected();
     void deviceDisconnected(int);
+    void deviceStateChanged();
+    void deviceActivity();
+    void deviceStateTimeout();
     void emitApsDataConfirm(uint8_t id, uint8_t status);
     void onMacPoll(const deCONZ::Address &address, uint32_t lifeTime);
     void onBeacon(const deCONZ::Beacon &beacon);
@@ -263,6 +266,7 @@ private slots:
     void deviceDiscoverTick();
     void readParamTimerFired();
     bool sendNextApsdeDataRequest(NodeInfo *dst = nullptr);
+    void deviceMonitorTick();
 
 Q_SIGNALS:
     void notify(const zmNetEvent&);
@@ -353,6 +357,7 @@ private:
     QTimer *m_saveSourceRouteConfigTimer;
     QTimer *m_sendNextTimer;
     QTimer *m_readParamTimer;
+    QTimer *m_deviceMonitorTimer;
     uint8_t m_genSequenceNumber;
     bool m_showLqi = false;
     bool m_showNeighborLinks = true;

@@ -28,6 +28,7 @@
 
 #include "aps_private.h"
 #include "deconz/am_core.h"
+#include "deconz/am_dev.h"
 #include "deconz/am_gui.h"
 #include "deconz/am_vfs.h"
 #include "deconz/buffer_helper.h"
@@ -94,6 +95,7 @@ static size_t tickCounter = 0;
 #ifdef USE_ACTOR_MODEL
 static struct am_api_functions *am = nullptr;
 static struct am_actor am_actor_core_net;
+static struct am_actor am_actor_core_dev;
 static struct am_actor am_actor_core_aps;
 static struct am_actor am_actor_core_node;
 
@@ -869,6 +871,45 @@ static int CoreAps_ReadEntryRequest(struct am_message *msg)
     return AM_CB_STATUS_OK;
 }
 
+// Device notification helpers
+static void Dev_SendNotification(am_msg_id id)
+{
+    if (!am) return;
+    struct am_message *m = am->msg_alloc();
+    if (!m) return;
+    m->id = id;
+    m->src = AM_ACTOR_ID_CORE_DEV;
+    m->dst = AM_ACTOR_ID_SUBSCRIBERS;
+    am->send_message(m);
+}
+
+static void Dev_SendNotificationWithU64(am_msg_id id, am_u64 data)
+{
+    if (!am) return;
+    struct am_message *m = am->msg_alloc();
+    if (!m) return;
+    m->id = id;
+    m->src = AM_ACTOR_ID_CORE_DEV;
+    m->dst = AM_ACTOR_ID_SUBSCRIBERS;
+    am->msg_put_u64(m, data);
+    am->send_message(m);
+}
+
+static void Dev_SendDeviceStateNotification(int reason = 0)
+{
+    if (!am) return;
+    struct am_message *m = am->msg_alloc();
+    if (!m) return;
+    m->id = M_ID_DEV_STATE;
+    m->src = AM_ACTOR_ID_CORE_DEV;
+    m->dst = AM_ACTOR_ID_SUBSCRIBERS;
+
+    uint8_t flags = (deCONZ::master()->isOpen() ? 1 : 0) | ((deCONZ::master()->connected() ? 1 : 0) << 1);
+    uint32_t packed = flags | (static_cast<uint8_t>(deCONZ::master()->netState()) << 8) | (static_cast<uint8_t>(reason) << 16);
+    am->msg_put_u32(m, packed);
+    am->send_message(m);
+}
+
 // TODO(mpi): put in own module
 static int CoreNet_MessageCallback(struct am_message *msg)
 {
@@ -956,6 +997,147 @@ static int CoreNode_MessageCallback(struct am_message *msg)
     return AM_CB_STATUS_UNSUPPORTED;
 }
 
+static int CoreDev_ReadEntryRequest(struct am_message *msg)
+{
+    struct am_message *m;
+    U_SStream ss;
+    uint16_t tag;
+    am_string url;
+    uint32_t mode = VFS_ENTRY_MODE_READONLY;
+    uint64_t mtime = 0;
+    size_t empty_pos;
+
+    tag = am->msg_get_u16(msg);
+    url = am->msg_get_string(msg);
+
+    if (msg->status != AM_MSG_STATUS_OK)
+        return AM_CB_STATUS_INVALID;
+
+    m = am->msg_alloc();
+    if (!m)
+        return AM_CB_STATUS_MESSAGE_ALLOC_FAILED;
+
+    am->msg_put_u16(m, tag);
+    empty_pos = m->pos;
+
+    U_sstream_init(&ss, url.data, url.size);
+
+    am->msg_put_u8(m, AM_RESPONSE_STATUS_OK);
+
+    if (U_sstream_starts_with(&ss, "device/info/firmware"))
+    {
+        am->msg_put_cstring(m, "u32");
+        am->msg_put_u32(m, mode | VFS_ENTRY_MODE_DISPLAY_HEX);
+        am->msg_put_u64(m, mtime);
+        am->msg_put_u32(m, deCONZ::master()->deviceFirmwareVersion());
+    }
+    else if (U_sstream_starts_with(&ss, "device/info/protocol"))
+    {
+        am->msg_put_cstring(m, "u16");
+        am->msg_put_u32(m, mode | VFS_ENTRY_MODE_DISPLAY_HEX);
+        am->msg_put_u64(m, mtime);
+        am->msg_put_u16(m, deCONZ::master()->deviceProtocolVersion());
+    }
+    else if (U_sstream_starts_with(&ss, "device/info/name"))
+    {
+        am->msg_put_cstring(m, "str");
+        am->msg_put_u32(m, mode);
+        am->msg_put_u64(m, mtime);
+        am->msg_put_cstring(m, deCONZ::master()->deviceName().toLatin1().constData());
+    }
+    else if (U_sstream_starts_with(&ss, "device/info/path"))
+    {
+        am->msg_put_cstring(m, "str");
+        am->msg_put_u32(m, mode);
+        am->msg_put_u64(m, mtime);
+        am->msg_put_cstring(m, deCONZ::master()->devicePath().toLatin1().constData());
+    }
+    else if (U_sstream_starts_with(&ss, "device/state"))
+    {
+        am->msg_put_cstring(m, "u32");
+        am->msg_put_u32(m, mode | VFS_ENTRY_MODE_DISPLAY_HEX);
+        am->msg_put_u64(m, mtime);
+        uint8_t flags = (deCONZ::master()->isOpen() ? 1 : 0) | ((deCONZ::master()->connected() ? 1 : 0) << 1);
+        uint32_t packed = flags | (static_cast<uint8_t>(deCONZ::master()->netState()) << 8);
+        am->msg_put_u32(m, packed);
+    }
+
+    if (m->pos == empty_pos)
+    {
+        m->pos = 0;
+        am->msg_put_u16(m, tag);
+        am->msg_put_u8(m, AM_RESPONSE_STATUS_NOT_FOUND);
+    }
+
+    m->src = msg->dst;
+    m->dst = msg->src;
+    m->id = VFS_M_ID_READ_ENTRY_RSP;
+    am->send_message(m);
+
+    return AM_CB_STATUS_OK;
+}
+
+static int CoreDev_MessageCallback(struct am_message *msg)
+{
+    if (msg->id == VFS_M_ID_READ_ENTRY_REQ)
+        return CoreDev_ReadEntryRequest(msg);
+
+    if (msg->id == VFS_M_ID_LIST_DIR_REQ)
+    {
+        return AM_CB_STATUS_UNSUPPORTED;
+    }
+
+    switch (msg->id)
+    {
+    case M_ID_DEV_CONNECT_REQ:
+    {
+        am_string port = am->msg_get_string(msg);
+        am_u32 baudrate = am->msg_get_u32(msg);
+        if (msg->status != AM_MSG_STATUS_OK)
+            return AM_CB_STATUS_INVALID;
+
+        int result = deCONZ::master()->openSerial(QString::fromLatin1(reinterpret_cast<const char*>(port.data)), baudrate);
+
+        struct am_message *rsp = am->msg_alloc();
+        if (rsp)
+        {
+            rsp->id = AM_MESSAGE_ID_MAKE_RESPONSE(M_ID_DEV_CONNECT_REQ);
+            rsp->src = AM_ACTOR_ID_CORE_DEV;
+            rsp->dst = msg->src;
+            am->msg_put_u8(rsp, result == 0 ? AM_RESPONSE_STATUS_OK : AM_RESPONSE_STATUS_FAIL);
+            am->send_message(rsp);
+        }
+        return AM_CB_STATUS_OK;
+    }
+
+    case M_ID_DEV_DISCONNECT_REQ:
+        deCONZ::master()->comExit();
+        return AM_CB_STATUS_OK;
+
+    case M_ID_DEV_REBOOT_REQ:
+        deCONZ::master()->rebootDevice();
+        return AM_CB_STATUS_OK;
+
+    case M_ID_DEV_LEAVE_REQ:
+        deCONZ::master()->leaveNetwork();
+        return AM_CB_STATUS_OK;
+
+    case M_ID_DEV_JOIN_REQ:
+        deCONZ::master()->joinNetwork();
+        return AM_CB_STATUS_OK;
+
+#ifdef QT_DEBUG
+    case M_ID_DEV_FACTORY_RESET_REQ:
+        deCONZ::master()->factoryReset();
+        return AM_CB_STATUS_OK;
+#endif
+
+    default:
+        DBG_Printf(DBG_INFO, "core/dev: unsupported msg %u from %u\n", msg->id, msg->src);
+        return AM_CB_STATUS_UNSUPPORTED;
+    }
+}
+
 void CoreAps_NotifyPathChanged(const char *path)
 {
     if (!am || !path)
@@ -1016,12 +1198,15 @@ zmController::zmController(zmMaster *master,
     AM_INIT_ACTOR(&am_actor_core_net, AM_ACTOR_ID_CORE_NET, CoreNet_MessageCallback);
     AM_INIT_ACTOR(&am_actor_core_aps, AM_ACTOR_ID_CORE_APS, CoreAps_MessageCallback);
     AM_INIT_ACTOR(&am_actor_core_node, AM_ACTOR_ID_CORE_NODE, CoreNode_MessageCallback);
+    AM_INIT_ACTOR(&am_actor_core_dev, AM_ACTOR_ID_CORE_DEV, CoreDev_MessageCallback);
 
     am->register_actor(&am_actor_core_net);
     am->register_actor(&am_actor_core_aps);
     am->register_actor(&am_actor_core_node);
+    am->register_actor(&am_actor_core_dev);
 
     am->subscribe(AM_ACTOR_ID_GUI_NODE, AM_ACTOR_ID_CORE_NODE);
+    am->subscribe(AM_ACTOR_ID_CORE_DEV, AM_ACTOR_ID_GUI_MAINWINDOW);
 
 #if 0
     U_TimerStart(AM_ACTOR_ID_CORE_NET, 11, 10009, 0);
@@ -1144,6 +1329,11 @@ zmController::zmController(zmMaster *master,
     m_timer = startTimer(TickMs);
     m_timeoutTimer = startTimer(TickMs);
 
+    m_deviceMonitorTimer = new QTimer(this);
+    m_deviceMonitorTimer->setInterval(80); // MainTickMs
+    connect(m_deviceMonitorTimer, SIGNAL(timeout()), this, SLOT(deviceMonitorTick()));
+    m_deviceMonitorTimer->start();
+
     {
         QVariant value;
         if (DB_LoadConfigValue("proxyaddress", &value))
@@ -1173,6 +1363,15 @@ zmController::zmController(zmMaster *master,
 
     connect(m_master, SIGNAL(deviceDisconnected(int)),
             this, SLOT(deviceDisconnected(int)));
+
+    connect(m_master, SIGNAL(deviceState()),
+            this, SLOT(deviceStateChanged()));
+
+    connect(m_master, SIGNAL(deviceActivity()),
+            this, SLOT(deviceActivity()));
+
+    connect(m_master, SIGNAL(deviceStateTimeOut()),
+            this, SLOT(deviceStateTimeout()));
 
     connect(m_master, SIGNAL(apsdeDataRequestDone(uint8_t,uint8_t)),
             this, SLOT(apsdeDataRequestDone(uint8_t,uint8_t)));
@@ -3671,11 +3870,28 @@ bool zmController::updateNode(const Node &node)
 void zmController::deviceConnected()
 {
     CoreAps_NotifyPathChanged("com/state");
+    Dev_SendDeviceStateNotification();
 }
 
-void zmController::deviceDisconnected(int)
+void zmController::deviceDisconnected(int reason)
 {
     CoreAps_NotifyPathChanged("com/state");
+    Dev_SendDeviceStateNotification(reason);
+}
+
+void zmController::deviceStateChanged()
+{
+    Dev_SendDeviceStateNotification();
+}
+
+void zmController::deviceActivity()
+{
+    Dev_SendNotification(M_ID_DEV_ACTIVITY);
+}
+
+void zmController::deviceStateTimeout()
+{
+    Dev_SendNotification(M_ID_DEV_TIMEOUT);
 }
 
 int zmController::apsQueueSize()
@@ -3717,6 +3933,7 @@ uint8_t zmController::nextRequestId()
 void zmController::onMasterStateChanged()
 {
     CoreAps_NotifyPathChanged("com/state");
+    Dev_SendDeviceStateNotification();
 }
 
 /*!
@@ -7228,6 +7445,13 @@ NodeInfo *zmController::getNode(deCONZ::zmNode *dnode)
 void zmController::bindReq(deCONZ::BindReq *req)
 {
     m_bindQueue.append(*req);
+}
+
+void zmController::deviceMonitorTick()
+{
+    // Device monitoring - tracks connection state changes, timeout countdown,
+    // and auto-reconnect logic. Emits notifications on state changes.
+    // TODO: implement full monitoring logic
 }
 
 void zmController::tick()

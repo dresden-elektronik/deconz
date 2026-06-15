@@ -33,7 +33,6 @@ class ActorVfsModel;
 class DebugView;
 class zmBindDropbox;
 class zmController;
-class zmMaster;
 class zmNetEvent;
 class zmNetSetup;
 class zmNode;
@@ -56,6 +55,7 @@ public:
     ~MainWindow();
     void notifyUser(const QString &text);
     void setDeviceState(deCONZ::State state);
+    void handleDeviceStateNotification(bool open, bool connected, deCONZ::State netState, int reason);
     void loadPlugIns();
     void openNodeContextMenu(uint64_t mac);
     void onNodeSelected();
@@ -64,21 +64,25 @@ public:
 public Q_SLOTS:
     void setAutoFetching();
     void initAutoConnectManager();
-
-private Q_SLOTS:
-    void loadPluginsStage2();
-    void onNetStartFailed(uint8_t zdoStatus);
-    void onControllerEvent(const zmNetEvent &event);
     void onDeviceConnected();
     void onDeviceDisconnected(int reason);
     void onDeviceState();
     void onDeviceActivity();
     void onDeviceStateTimeout();
+
+private Q_SLOTS:
+    void loadPluginsStage2();
+    void onNetStartFailed(uint8_t zdoStatus);
+    void onControllerEvent(const zmNetEvent &event);
     void onSelectionChanged();
     void getComPorts();
     void devConnectClicked();
     void devDisconnectClicked();
     void devUpdateClicked();
+    void sendJoinNetworkRequest();
+    void sendLeaveNetworkRequest();
+    void sendRebootRequest();
+    void sendFactoryResetRequest();
     void showUserManual();
     void showAboutDialog();
     void showActorView();
@@ -159,7 +163,17 @@ private:
     QString m_reconnectDevPath;
     bool m_reconnectAfterFirmwareUpdate;
     deCONZ::ZclDataBase *m_zclDataBase;
-    zmMaster *m_master;
+
+    // Cached device state from CORE_DEV via VFS
+    bool m_deviceOpen = false;
+    bool m_deviceConnected = false;
+    deCONZ::State m_deviceNetState = deCONZ::UnknownState;
+    QElapsedTimer m_deviceStateTimer;
+    int m_devicePollTickCounter = 0;
+    static constexpr int DEVICE_POLL_INTERVAL_TICKS = 100;  // 100 * 80ms = 8 seconds
+    static constexpr int DEVICE_STATE_TIMEOUT_MS = 30000;   // 30 seconds
+
+public:
     QString m_remoteIP;
     int m_remotePort;
     ActorVfsModel *m_vfsModel;

@@ -37,6 +37,8 @@
 #include <actor/plugin_loader.h>
 #include "actor/service.h"
 #include "deconz/u_platform.h"
+#include "deconz/am_dev.h"
+#include "deconz/am_vfs.h"
 #include "gui/actor_vfs_view.h"
 #include "gui/theme.h"
 #include "actor_vfs_model.h"
@@ -248,13 +250,128 @@ static int GuiMainWindow_GuiNodeMessageCallback(struct am_message *msg)
     return AM_CB_STATUS_UNSUPPORTED;
 }
 
+static int GuiMainWindow_CoreDevMessageCallback(struct am_message *msg)
+{
+    if (!_mainWindow)
+        return AM_CB_STATUS_UNSUPPORTED;
+
+    am_api_functions *am = GUI_GetActorModelApi();
+
+    switch (msg->id)
+    {
+    case M_ID_DEV_STATE:
+    {
+        uint32_t packed = am->msg_get_u32(msg);
+        uint8_t flags = packed & 0xFF;
+        bool open = (flags & 0x01) != 0;
+        bool connected = (flags & 0x02) != 0;
+        deCONZ::State netState = static_cast<deCONZ::State>((packed >> 8) & 0xFF);
+        int reason = (packed >> 16) & 0xFF;
+
+        _mainWindow->handleDeviceStateNotification(open, connected, netState, reason);
+
+        return AM_CB_STATUS_OK;
+    }
+
+    case M_ID_DEV_ACTIVITY:
+        _mainWindow->onDeviceActivity();
+        return AM_CB_STATUS_OK;
+
+    case M_ID_DEV_TIMEOUT:
+        _mainWindow->onDeviceStateTimeout();
+        return AM_CB_STATUS_OK;
+
+    case VFS_M_ID_READ_ENTRY_RSP:
+    {
+        uint16_t tag = am->msg_get_u16(msg);
+        uint8_t status = am->msg_get_u8(msg);
+        if (status != AM_RESPONSE_STATUS_OK)
+            return AM_CB_STATUS_OK;
+
+        am->msg_get_string(msg);  // type
+        am->msg_get_u32(msg);     // mode
+        am->msg_get_u64(msg);     // mtime
+
+        if (tag == 1)  // device/state
+        {
+            uint32_t packed = am->msg_get_u32(msg);
+            uint8_t flags = packed & 0xFF;
+            bool open = (flags & 0x01) != 0;
+            bool connected = (flags & 0x02) != 0;
+            deCONZ::State netState = static_cast<deCONZ::State>((packed >> 8) & 0xFF);
+            _mainWindow->handleDeviceStateNotification(open, connected, netState, 0);
+        }
+
+        return AM_CB_STATUS_OK;
+    }
+
+    default:
+        DBG_Printf(DBG_INFO, "gui/mainwindow/core_dev: unsupported msg %u\n", msg->id);
+        return AM_CB_STATUS_UNSUPPORTED;
+    }
+}
+
 static int GuiMainWindow_MessageCallback(struct am_message *msg)
 {
     if (msg->src == AM_ACTOR_ID_GUI_NODE)
         return GuiMainWindow_GuiNodeMessageCallback(msg);
 
+    if (msg->src == AM_ACTOR_ID_CORE_DEV)
+        return GuiMainWindow_CoreDevMessageCallback(msg);
+
     DBG_Printf(DBG_INFO, "gui/mainwindow: msg from: %u\n", msg->src);
     return AM_CB_STATUS_UNSUPPORTED;
+}
+
+static void SendDeviceMessage(am_msg_id msgId)
+{
+    am_api_functions *am = GUI_GetActorModelApi();
+    struct am_message *m = am->msg_alloc();
+    if (m)
+    {
+        m->id = msgId;
+        m->src = AM_ACTOR_ID_GUI_MAINWINDOW;
+        m->dst = AM_ACTOR_ID_CORE_DEV;
+        am->send_message(m);
+    }
+}
+
+static void PollDeviceStateVFS()
+{
+    am_api_functions *am = GUI_GetActorModelApi();
+
+    struct am_message *m = am->msg_alloc();
+    if (m)
+    {
+        m->id = VFS_M_ID_READ_ENTRY_REQ;
+        m->src = AM_ACTOR_ID_GUI_MAINWINDOW;
+        m->dst = AM_ACTOR_ID_CORE_DEV;
+        am->msg_put_u16(m, 1);  // tag for device/state
+        am->msg_put_cstring(m, VFS_DEV_STATE);
+        am->send_message(m);
+    }
+}
+
+void MainWindow::sendJoinNetworkRequest()
+{
+    SendDeviceMessage(M_ID_DEV_JOIN_REQ);
+}
+
+void MainWindow::sendLeaveNetworkRequest()
+{
+    SendDeviceMessage(M_ID_DEV_LEAVE_REQ);
+}
+
+void MainWindow::sendRebootRequest()
+{
+    SendDeviceMessage(M_ID_DEV_REBOOT_REQ);
+}
+
+void MainWindow::sendFactoryResetRequest()
+{
+#ifdef QT_DEBUG
+    SendDeviceMessage(M_ID_DEV_FACTORY_RESET_REQ);
+#endif
 }
 
 static void GUI_InitMainWindowActor()
@@ -359,11 +476,10 @@ MainWindow::MainWindow(QWidget *parent) :
 
     zmNetDescriptorModel *networkModel = new zmNetDescriptorModel(this);
 
-    m_master = new zmMaster(this);
-    m_controller = new zmController(m_master, networkModel, scene, ui->graphicsView, this);
+    m_controller = new zmController(deCONZ::master(), networkModel, scene, ui->graphicsView, this);
 
-    connect(m_master, SIGNAL(netStateChanged()),
-            this, SLOT(updateNetworkControls()));
+    // Network state changes are now handled via M_ID_DEV_STATE notification
+    // in GuiMainWindow_CoreDevMessageCallback, which calls setDeviceState()
 
     m_connTimeout = -1;
     m_waitReconnectCount = 0;
@@ -619,21 +735,7 @@ MainWindow::MainWindow(QWidget *parent) :
     connect(ui->refreshComButton, SIGNAL(clicked()),
             this, SLOT(getComPorts()));
 
-    // device monitor
-    connect(deCONZ::master(), SIGNAL(deviceConnected()),
-            this, SLOT(onDeviceConnected()));
-
-    connect(deCONZ::master(), SIGNAL(deviceDisconnected(int)),
-            this, SLOT(onDeviceDisconnected(int)));
-
-    connect(deCONZ::master(), SIGNAL(deviceState()),
-            this, SLOT(onDeviceState()));
-
-    connect(deCONZ::master(), SIGNAL(deviceActivity()),
-            this, SLOT(onDeviceActivity()));
-
-    connect(deCONZ::master(), SIGNAL(deviceStateTimeOut()),
-            this, SLOT(onDeviceStateTimeout()));
+    // device events are now handled via actor model messages in GuiMainWindow_GuiNodeMessageCallback
 
     getComPorts();
 
@@ -676,7 +778,6 @@ MainWindow::MainWindow(QWidget *parent) :
 
 MainWindow::~MainWindow()
 {
-    m_master = nullptr;
     protocol_exit();
 
     _clusterInfo = nullptr;
@@ -726,9 +827,6 @@ void MainWindow::onDeviceConnected()
 void MainWindow::onDeviceDisconnected(int reason)
 {
     m_waitReconnectCount = WaitReconnectDuration;
-    m_master->comExit();
-    // mimic user disconnect
-    devDisconnectClicked();
 
     DBG_Printf(DBG_INFO_L2, "device disconnected reason: %d, device index: %u\n", reason, (unsigned)m_autoConnIdx);
     if (m_reconnectDevPath.isEmpty())
@@ -742,7 +840,7 @@ void MainWindow::onDeviceState()
     // reset timeout
     m_connTimeout = 0;
 
-    if (deCONZ::master()->connected())
+    if (m_deviceConnected)
     {
         if (ui->stackedView->currentWidget() == ui->pageOffline)
         {
@@ -753,6 +851,45 @@ void MainWindow::onDeviceState()
 
             statusBar()->showMessage(tr("Connected successful to device"), 10000);
         }
+    }
+}
+
+void MainWindow::handleDeviceStateNotification(bool open, bool connected, deCONZ::State netState, int reason)
+{
+    bool openChanged = (open != m_deviceOpen);
+    bool connectedChanged = (connected != m_deviceConnected);
+    bool netStateChanged = (netState != m_deviceNetState);
+
+    m_deviceOpen = open;
+    m_deviceConnected = connected;
+    m_deviceNetState = netState;
+    m_deviceStateTimer.restart();
+
+    m_connState = netState;
+
+    if (reason != 0)
+    {
+        onDeviceDisconnected(reason);
+        if (m_state != StateIdle && m_state != StateFirmwareUpdateRunning)
+            setState(StateIdle, __LINE__);
+        showDevicePage();
+    }
+    else if (openChanged && !open)
+    {
+        onDeviceDisconnected(0);
+        if (m_state != StateIdle && m_state != StateFirmwareUpdateRunning)
+            setState(StateIdle, __LINE__);
+        showDevicePage();
+    }
+    else if (connectedChanged && connected)
+    {
+        onDeviceConnected();
+        onDeviceState();
+    }
+
+    if (netStateChanged)
+    {
+        updateNetworkControls();
     }
 }
 
@@ -824,8 +961,31 @@ void MainWindow::timerEvent(QTimerEvent *event)
 {
     if (event->timerId() == m_fetchTimer)
     {
-        if (!m_master || !m_controller)
+        if (!m_controller)
             return;
+
+        // Device state polling
+        m_devicePollTickCounter++;
+
+        // Initial poll after 1 second (12 ticks at 80ms)
+        if (m_devicePollTickCounter == 12)
+        {
+            PollDeviceStateVFS();
+        }
+        // Subsequent polls every N ticks
+        else if (m_devicePollTickCounter >= DEVICE_POLL_INTERVAL_TICKS)
+        {
+            PollDeviceStateVFS();
+            m_devicePollTickCounter = 0;
+        }
+
+        // Check if cached state has timed out
+        if (m_deviceStateTimer.isValid() && m_deviceStateTimer.elapsed() > DEVICE_STATE_TIMEOUT_MS)
+        {
+            m_deviceOpen = false;
+            m_deviceConnected = false;
+            m_deviceNetState = deCONZ::UnknownState;
+        }
 
         if (m_waitReconnectCount > 0)
         {
@@ -835,7 +995,7 @@ void MainWindow::timerEvent(QTimerEvent *event)
 
         // TODO if controller in fw update state, disconnect
         // and only reconnect when no more in fw update state
-        if (!m_master->isOpen())
+        if (!m_deviceOpen)
         {
             if (m_connState != deCONZ::NotInNetwork)
             {
@@ -994,7 +1154,7 @@ void MainWindow::getComPorts()
 
 void MainWindow::devConnectClicked()
 {
-    if (deCONZ::master()->isOpen())
+    if (m_deviceOpen)
     {
         DBG_Printf(DBG_INFO, "%s connect clicked while connected\n", Q_FUNC_INFO);
         return;
@@ -1042,14 +1202,12 @@ void MainWindow::devConnectClicked()
 
 void MainWindow::devDisconnectClicked()
 {
-    if (m_master->isOpen())
-    {
-        m_master->comExit();
-        m_connState = deCONZ::UnknownState;
-        deCONZ::setDeviceState(deCONZ::NotInNetwork);
-    }
+    SendDeviceMessage(M_ID_DEV_DISCONNECT_REQ);
 
-    if (!deCONZ::master()->connected())
+    m_connState = deCONZ::UnknownState;
+    deCONZ::setDeviceState(deCONZ::NotInNetwork);
+
+    if (!m_deviceConnected)
     {
         showDevicePage();
     }
@@ -1095,11 +1253,7 @@ void MainWindow::onNetStartFailed(uint8_t zdoStatus)
 
 void MainWindow::setDeviceState(deCONZ::State state)
 {
-    if (m_connState != state)
-    {
-        m_connState = state;
-        updateNetworkControls();
-    }
+    Q_UNUSED(state);
 }
 
 void ListPluginFilesRecursive(const QString &path, QStringList *out, int depth)
@@ -1449,12 +1603,12 @@ void MainWindow::initAutoConnectManager()
         }
     }
 
-    if (!m_master || !m_controller)
+    if (!m_controller)
     {
         return;
     }
 
-    if (deCONZ::master()->isOpen())
+    if (m_deviceOpen)
     {
         return;
     }
@@ -1535,19 +1689,15 @@ void MainWindow::createMainToolbar()
     ui->mainToolBar->addWidget(w);
 
     ui->mainToolBar->setFont(Theme_FontRegular()); // without it macos has tiny font
-    m_leaveAction = ui->mainToolBar->addAction(tr("Leave"), deCONZ::master(), SLOT(leaveNetwork()));
+    m_leaveAction = ui->mainToolBar->addAction(tr("Leave"));
     m_leaveAction->setEnabled(false);
     m_leaveAction->setToolTip(tr("Leave the network"));
-    connect(m_leaveAction, &QAction::triggered, [](){
-        emit deCONZ::controller()->networkStateChangeRequest(false);
-    });
+    connect(m_leaveAction, &QAction::triggered, this, &MainWindow::sendLeaveNetworkRequest);
 
-    m_joinAction = ui->mainToolBar->addAction(tr("Join"), deCONZ::master(), SLOT(joinNetwork()));
+    m_joinAction = ui->mainToolBar->addAction(tr("Join"));
     m_joinAction->setEnabled(false);
     m_joinAction->setToolTip(tr("Joins or starts a network"));
-    connect(m_joinAction, &QAction::triggered, [](){
-        emit deCONZ::controller()->networkStateChangeRequest(true);
-    });
+    connect(m_joinAction, &QAction::triggered, this, &MainWindow::sendJoinNetworkRequest);
 
     m_netStateLabel = new QLabel;
 
@@ -1816,12 +1966,11 @@ void MainWindow::createEditMenu()
             this, SLOT(showNetworkSettings()));
 
     QAction *reboot = m_editMenu->addAction(tr("Reboot Device"));
-    connect(reboot, SIGNAL(triggered()),
-            m_master, SLOT(rebootDevice()));
+    connect(reboot, SIGNAL(triggered()), this, SLOT(sendRebootRequest()));
 
 #ifdef QT_DEBUG
     QAction *factoryReset = m_editMenu->addAction(tr("Factory Reset Device"));
-    connect(factoryReset, SIGNAL(triggered()), m_master, SLOT(factoryReset()));
+    connect(factoryReset, SIGNAL(triggered()), this, SLOT(sendFactoryResetRequest()));
 #endif
 
     m_sendToAction = m_editMenu->addAction(tr("Destination Settings"),
@@ -1927,7 +2076,7 @@ void MainWindow::showDevicePage()
 
 void MainWindow::showNetworkSettings()
 {
-    if (DBG_Assert(deCONZ::master()->connected()) == false)
+    if (DBG_Assert(m_deviceConnected) == false)
     {
         return;
     }
@@ -1956,7 +2105,7 @@ void MainWindow::showSendToDialog()
 void MainWindow::showNodeViewPage()
 {
     updateNetworkControls();
-    if (deCONZ::master()->connected())
+    if (m_deviceConnected)
     {
         ui->stackedView->setCurrentWidget(ui->pageNodeView);
 
@@ -1991,10 +2140,10 @@ void MainWindow::setNodesOnline()
 {
     int count;
 
-    if (m_master->connected())
+    if (m_deviceConnected)
     {
 
-        if (deCONZ::master()->netState() != deCONZ::InNetwork)
+        if (m_deviceNetState != deCONZ::InNetwork)
         {
             count = 0;
         }
@@ -2199,12 +2348,12 @@ void MainWindow::editDDFActionTriggered()
 
 void MainWindow::updateNetworkControls()
 {
-    if (deCONZ::master()->connected())
+    if (m_deviceConnected)
     {
         m_netConfigAction->setEnabled(true);
         QColor netStateColor = m_netStateLabel->palette().color(QPalette::WindowText);
 
-        switch (deCONZ::master()->netState())
+        switch (m_deviceNetState)
         {
         case deCONZ::NotInNetwork:
             m_netStateLabel->setText(tr("Not In Network"));
