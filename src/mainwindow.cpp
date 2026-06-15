@@ -284,6 +284,13 @@ static int GuiMainWindow_CoreDevMessageCallback(struct am_message *msg)
         _mainWindow->onDeviceStateTimeout();
         return AM_CB_STATUS_OK;
 
+    case AM_MESSAGE_ID_MAKE_RESPONSE(M_ID_DEV_CONNECT_REQ):
+    {
+        uint8_t status = am->msg_get_u8(msg);
+        _mainWindow->handleConnectResponse(status == AM_RESPONSE_STATUS_OK);
+        return AM_CB_STATUS_OK;
+    }
+
     case VFS_M_ID_READ_ENTRY_RSP:
     {
         uint16_t tag = am->msg_get_u16(msg);
@@ -340,6 +347,21 @@ static void SendDeviceMessage(am_msg_id msgId)
         m->id = msgId;
         m->src = AM_ACTOR_ID_GUI_MAINWINDOW;
         m->dst = AM_ACTOR_ID_CORE_DEV;
+        am->send_message(m);
+    }
+}
+
+static void SendDeviceConnectMessage(const QString &port, int baudrate)
+{
+    am_api_functions *am = GUI_GetActorModelApi();
+    struct am_message *m = am->msg_alloc();
+    if (m)
+    {
+        m->id = M_ID_DEV_CONNECT_REQ;
+        m->src = AM_ACTOR_ID_GUI_MAINWINDOW;
+        m->dst = AM_ACTOR_ID_CORE_DEV;
+        am->msg_put_cstring(m, port.toLatin1());
+        am->msg_put_u32(m, baudrate);
         am->send_message(m);
     }
 }
@@ -509,6 +531,8 @@ MainWindow::MainWindow(QWidget *parent) :
     m_waitReconnectCount = 0;
     m_connState = deCONZ::UnknownState;
     m_reconnectAfterFirmwareUpdate = false;
+    m_pendingConnectIdx = -1;
+    m_pendingConnectAuto = false;
 
     createMainToolbar();
 
@@ -917,6 +941,38 @@ void MainWindow::handleDeviceStateNotification(bool open, bool connected, deCONZ
     }
 }
 
+void MainWindow::handleConnectResponse(bool ok)
+{
+    if (ok)
+    {
+        if ((m_pendingConnectIdx >= 0) && (m_pendingConnectIdx < static_cast<int>(m_devs.size())))
+        {
+            m_devEntry = m_devs[m_pendingConnectIdx];
+        }
+
+        if (m_pendingConnectAuto)
+        {
+            ui->devConnectButton->setEnabled(false);
+            m_actionDeviceDisconnect->setEnabled(false);
+        }
+    }
+    else
+    {
+        DBG_Printf(DBG_INFO, "gui/mainwindow: connect failed for idx %d\n", m_pendingConnectIdx);
+        setState(StateIdle, __LINE__);
+        if (m_pendingConnectAuto)
+        {
+            m_waitReconnectCount = WaitReconnectDuration2;
+            if (m_reconnectDevPath.isEmpty())
+            {
+                m_autoConnIdx++;
+            }
+        }
+    }
+    m_pendingConnectIdx = -1;
+    m_pendingConnectAuto = false;
+}
+
 void MainWindow::onDeviceActivity()
 {
     m_connTimeout = 0; // reset
@@ -1202,17 +1258,11 @@ void MainWindow::devConnectClicked()
             {
                 devPath = dev.path;
             }
-            if (deCONZ::master()->openSerial(devPath, dev.baudrate) == 0)
-            {
-                DBG_Printf(DBG_INFO, "%s choose com %s\n", Q_FUNC_INFO, qPrintable(dev.path));
-                m_devEntry = dev;
-
-                setState(StateConnecting, __LINE__);
-            }
-            else
-            {
-                DBG_Printf(DBG_INFO, "%s master open serial error: %s\n", Q_FUNC_INFO, qPrintable(dev.path));
-            }
+            m_pendingConnectIdx = port;
+            m_pendingConnectAuto = false;
+            setState(StateConnecting, __LINE__);
+            DBG_Printf(DBG_INFO, "%s choose com %s\n", Q_FUNC_INFO, qPrintable(dev.path));
+            SendDeviceConnectMessage(devPath, dev.baudrate);
         }
         else
         {
@@ -1676,7 +1726,6 @@ void MainWindow::initAutoConnectManager()
         const deCONZ::DeviceEntry &dev = m_devs[m_autoConnIdx];
 
         m_connTimeout = 0;
-        setState(StateConnecting, __LINE__);
 
         QString devPath = deCONZ::DEV_ResolvedDevicePath(dev.path);
         if (devPath.isEmpty())
@@ -1684,24 +1733,11 @@ void MainWindow::initAutoConnectManager()
             devPath = dev.path;
         }
 
-        int ret = deCONZ::master()->openSerial(devPath, dev.baudrate);
-        if (ret == 0)
-        {
-            DBG_Printf(DBG_INFO_L2, "auto connect com %s\n", qPrintable(devPath));
-            m_devEntry = dev;
-
-            ui->devConnectButton->setEnabled(false);
-            m_actionDeviceDisconnect->setEnabled(false);
-        }
-        else
-        {
-            DBG_Printf(DBG_INFO_L2, "failed open com status: (%d), path: %s\n", ret, qPrintable(dev.path));
-            m_waitReconnectCount = WaitReconnectDuration2;
-            if (m_reconnectDevPath.isEmpty())
-            {
-                m_autoConnIdx++;
-            }
-        }
+        m_pendingConnectIdx = m_autoConnIdx;
+        m_pendingConnectAuto = true;
+        setState(StateConnecting, __LINE__);
+        DBG_Printf(DBG_INFO_L2, "auto connect com %s\n", qPrintable(devPath));
+        SendDeviceConnectMessage(devPath, dev.baudrate);
 
         m_connState = deCONZ::UnknownState;
     }

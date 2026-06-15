@@ -57,6 +57,7 @@ public:
     void setDeviceState(deCONZ::State state);
     void setDeviceFirmwareVersion(uint32_t fw) { m_deviceFirmwareVersion = fw; }
     void handleDeviceStateNotification(bool open, bool connected, deCONZ::State netState, int reason);
+    void handleConnectResponse(bool ok);
     void loadPlugIns();
     void openNodeContextMenu(uint64_t mac);
     void onNodeSelected();
@@ -164,6 +165,10 @@ private:
     QString m_reconnectDevPath;
     bool m_reconnectAfterFirmwareUpdate;
     deCONZ::ZclDataBase *m_zclDataBase;
+
+    // Pending connect request context (for async response handling)
+    int m_pendingConnectIdx;
+    bool m_pendingConnectAuto;
 
     // Cached device state from CORE_DEV via VFS
     bool m_deviceOpen = false;

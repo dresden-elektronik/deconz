@@ -1096,7 +1096,11 @@ static int CoreDev_MessageCallback(struct am_message *msg)
         if (msg->status != AM_MSG_STATUS_OK)
             return AM_CB_STATUS_INVALID;
 
-        int result = deCONZ::master()->openSerial(QString::fromLatin1(reinterpret_cast<const char*>(port.data)), baudrate);
+        if (port.data == nullptr || port.size == 0)
+            return AM_CB_STATUS_INVALID;
+
+        const QString serPort = QString::fromUtf8(reinterpret_cast<char*>(port.data), port.size);
+        int result = deCONZ::master()->openSerial(serPort, baudrate);
 
         struct am_message *rsp = am->msg_alloc();
         if (rsp)
