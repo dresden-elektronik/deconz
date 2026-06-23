@@ -76,7 +76,7 @@ public:
 
     bool ownsSocket(NodeSocket *socket) const;
 
-    enum { Type = UserType + deCONZ::GraphNodeType };
+    enum { Type = UserType + (int)deCONZ::GraphNodeType };
     int type() const override { return Type; }
     void toggleEndpointDropdown();
     void toggleConfigDropdown();

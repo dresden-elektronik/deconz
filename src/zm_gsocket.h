@@ -42,7 +42,7 @@ public:
 
 	Direction lookDirection() const { return look_direction; }
 
-    enum { Type = UserType + deCONZ::GraphSocketType };
+    enum { Type = UserType + (int)deCONZ::GraphSocketType };
 	int type() const { return Type; }
 
 private:
