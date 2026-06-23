@@ -94,11 +94,11 @@ void NodeLinkGroup::paint(QPainter *painter, const QRectF &rect)
 
     qreal startX = qFloor(d->sceneRect.x());
     qreal startY = qFloor(d->sceneRect.y());
-    for (;startX + TILE_SIZE < rr.x();)
-        startX += TILE_SIZE;
+    for (;startX + (qreal)TILE_SIZE < rr.x();)
+        startX += (qreal)TILE_SIZE;
 
-    for (;startY + TILE_SIZE < rr.y();)
-        startY += TILE_SIZE;
+    for (;startY + (qreal)TILE_SIZE < rr.y();)
+        startY += (qreal)TILE_SIZE;
 
     int nx = 1;
     for (;TILE_SIZE * nx < (int)rr.width() + TILE_SIZE;)
