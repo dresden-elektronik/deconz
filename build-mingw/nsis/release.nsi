@@ -29,17 +29,17 @@
   ; Define Destination directory
   !define DEST_DIR  "deCONZ"
 
-  ; Define Destination name 
-  !define DEST_NAME "deCONZ"
-  
-  ; Define Destination name 
-  !define FILE_VERSION "V2_05"
+  ; Application folder name
+  !define DEST_NAME    "deCONZ"
 
-  ; Define Destination name 
-  !define DISPL_NAME "deCONZ"
-  
-  ; Define Destination name 
-  !define APP_VERSION "2.05.69.0"
+  ; Installer filename version token
+  !define FILE_VERSION "V2_33_01"
+
+  ; Display name in UI and registry
+  !define DISPL_NAME   "deCONZ"
+
+  ; PE file version (major.minor.build.reserved)
+  !define APP_VERSION  "2.33.01.00"
   
   ; Define Header path which is shown at install/uninstall
   !define HEADER_PATH    "images"
@@ -58,7 +58,7 @@
   !define MULTIUSER_EXECUTIONLEVEL Highest
   !define MULTIUSER_MUI
   !define MULTIUSER_INSTALLMODE_COMMANDLINE
-  ; !define MULTIUSER_INSTALLMODE_DEFAULT_CURRENTUSER
+  !define MULTIUSER_INSTALLMODE_DEFAULT_CURRENTUSER
   !define MULTIUSER_INSTALLMODE_INSTDIR "${DEST_NAME}"
   !define MULTIUSER_INSTALLMODE_INSTDIR_REGISTRY_KEY  "Software\${DEST_NAME}"
 
@@ -80,13 +80,16 @@
   OutFile "deCONZ_Setup_Win32_${FILE_VERSION}.exe"
   
   ; Set the default Installation Directory
-  ;InstallDir "$LOCALAPPDATA\${DEST_NAME}"
+  InstallDir "$LOCALAPPDATA\${DEST_NAME}"
   
   ;Get installation folder from registry if available
   ;InstallDirRegKey HKLM "Software\${DEST_NAME}" ""
 
   ;Request application privileges for Windows Vista
-  RequestExecutionLevel user
+  RequestExecutionLevel highest
+
+  ShowInstDetails show
+  ShowUninstDetails show
 
   VIProductVersion ${APP_Version}
   VIAddVersionKey "ProductName" "deCONZ"
@@ -116,13 +119,13 @@
 ; ----------------------------------------------------------------------------------
 ; *********************************** PAGES ****************************************
 ; ----------------------------------------------------------------------------------
-;  !insertmacro MULTIUSER_PAGE_INSTALLMODE
+  !insertmacro MULTIUSER_PAGE_INSTALLMODE
   !insertmacro MUI_PAGE_LICENSE "${LICENSE_PATH}\${LICENSE_NAME}"
   !insertmacro MUI_PAGE_COMPONENTS
   !insertmacro MUI_PAGE_DIRECTORY
     
   ;Start Menu Folder Page Configuration
-  !define MUI_STARTMENUPAGE_REGISTRY_ROOT "HKLM" 
+  !define MUI_STARTMENUPAGE_REGISTRY_ROOT "SHCTX"
   !define MUI_STARTMENUPAGE_REGISTRY_KEY "Software\${DISPL_NAME}" 
   !define MUI_STARTMENUPAGE_REGISTRY_VALUENAME "Start Menu Folder"
   
@@ -173,53 +176,46 @@ Section "${DISPL_NAME}" SecApp
   File /r ${SRC_DIR}\devices
 
   ; write the zcldb initial file
-  SetOutPath "$LOCALAPPDATA\dresden-elektronik\${DEST_NAME}"
-  FileOpen $4 "zcldb.txt" w
-  FileWrite $4 "$INSTDIR\zcl\general.xml$\r$\n"
-  FileWrite $4 "$INSTDIR\zcl\bitcloud.xml"
-  FileWrite $4 "$\r$\n" ; we write an extra line
-  FileClose $4 ; and close the file
+; SetOutPath "$LOCALAPPDATA\dresden-elektronik\${DEST_NAME}"
+; FileOpen $4 "zcldb.txt" w
+; IfErrors 0 +2
+;   MessageBox MB_OK|MB_ICONSTOP "Cannot write zcldb.txt; installation may be incomplete."
+;   Abort
+; FileWrite $4 "$INSTDIR\zcl\general.xml$\r$\n"
+; FileWrite $4 "$INSTDIR\zcl\bitcloud.xml"
+; FileWrite $4 "$\r$\n" ; we write an extra line
+; FileClose $4 ; and close the file
   
   ; devices local user dir
-  IfFileExists "$LOCALAPPDATA\dresden-elektronik\deCONZ\devices" +1 0
-  CreateDirectory "$LOCALAPPDATA\dresden-elektronik\deCONZ\devices"
-
-  ; copy firmware
-  IfFileExists "$LOCALAPPDATA\dresden-elektronik\deCONZ\firmware" +2 0
-  CreateDirectory "$LOCALAPPDATA\dresden-elektronik\deCONZ\firmware"
-  CreateDirectory "$LOCALAPPDATA\dresden-elektronik\deCONZ\otau"
-
-  CopyFiles "$INSTDIR\firmware\*" "$LOCALAPPDATA\dresden-elektronik\deCONZ\firmware"
-  CopyFiles "$INSTDIR\otau\*" "$LOCALAPPDATA\dresden-elektronik\deCONZ\otau"
-  
-  RMDir /R "$INSTDIR\build"
+; IfFileExists "$LOCALAPPDATA\dresden-elektronik\deCONZ\devices" +1 0
+; CreateDirectory "$LOCALAPPDATA\dresden-elektronik\deCONZ\devices"
 
   ;Cleanup legacy installation folder
-  DeleteRegKey HKCU "Software\${DEST_NAME}"    
-  DeleteRegKey SHCTX "Software\${DEST_NAME}"
+  DeleteRegKey /ifempty HKCU "Software\${DEST_NAME}"
+  DeleteRegKey /ifempty SHCTX "Software\${DEST_NAME}"
 
   ;Store installation folder
-  WriteRegStr HKLM "Software\${DEST_NAME}" "" $INSTDIR
+  WriteRegStr SHCTX "Software\${DEST_NAME}" "" $INSTDIR
   
   ;Create uninstaller
   WriteUninstaller "$INSTDIR\Uninstall.exe"
 
   ;Cleanup legacy uninstaller
-  DeleteRegKey HKCU  "${UNINST_KEY}"
-  DeleteRegKey SHCTX  "${UNINST_KEY}"
+  DeleteRegKey /ifempty HKCU  "${UNINST_KEY}"
+  DeleteRegKey /ifempty SHCTX  "${UNINST_KEY}"
 
   ;Add uninstall information to Add/Remove Programs
  
-  WriteRegStr HKLM  "${UNINST_KEY}" "DisplayName" "${DISPL_NAME}"
-  WriteRegStr HKLM  "${UNINST_KEY}" "UninstallString" "$INSTDIR\Uninstall.exe"
-  WriteRegStr HKLM  "${UNINST_KEY}" "Publisher" "dresden elektronik ingenieurtechnik gmbh"
-  WriteRegStr HKLM  "${UNINST_KEY}" "URLUpdateInfo" "http://www.dresden-elektronik.de"
-  WriteRegStr HKLM  "${UNINST_KEY}" "InstallLocation" "$INSTDIR"
-  WriteRegStr HKLM  "${UNINST_KEY}" "DisplayIcon" "$INSTDIR\bin\deCONZ.exe"
-  WriteRegStr HKLM  "${UNINST_KEY}" "DisplayVersion" "${APP_VERSION}"
+  WriteRegStr SHCTX  "${UNINST_KEY}" "DisplayName" "${DISPL_NAME}"
+  WriteRegStr SHCTX  "${UNINST_KEY}" "UninstallString" "$INSTDIR\Uninstall.exe"
+  WriteRegStr SHCTX  "${UNINST_KEY}" "Publisher" "dresden elektronik ingenieurtechnik gmbh"
+  WriteRegStr SHCTX  "${UNINST_KEY}" "URLUpdateInfo" "http://www.dresden-elektronik.de"
+  WriteRegStr SHCTX  "${UNINST_KEY}" "InstallLocation" "$INSTDIR"
+  WriteRegStr SHCTX  "${UNINST_KEY}" "DisplayIcon" "$INSTDIR\bin\deCONZ.exe"
+  WriteRegStr SHCTX  "${UNINST_KEY}" "DisplayVersion" "${APP_VERSION}"
   ${GetSize} "$INSTDIR" "/S=0K" $0 $1 $2
   IntFmt $0 "0x%08X" $0
-  WriteRegDWORD HKLM  "${UNINST_KEY}" "EstimatedSize" "$0"
+  WriteRegDWORD SHCTX  "${UNINST_KEY}" "EstimatedSize" "$0"
   
   !insertmacro MUI_STARTMENU_WRITE_BEGIN Application
     
@@ -228,7 +224,7 @@ Section "${DISPL_NAME}" SecApp
     CreateDirectory "$SMPROGRAMS\$StartMenuFolder"
     CreateShortCut "$SMPROGRAMS\$StartMenuFolder\${DISPL_NAME}.lnk" "$INSTDIR\bin\deCONZ.exe"
     CreateShortCut "$SMPROGRAMS\$StartMenuFolder\User Manual.lnk" "$INSTDIR\doc\deCONZ-BHB-en.pdf"
-    CreateShortCut "$SMPROGRAMS\$StartMenuFolder\Uninstall.lnk" "control.exe" "appwiz.cpl"
+    CreateShortCut "$SMPROGRAMS\$StartMenuFolder\Uninstall.lnk" "$INSTDIR\Uninstall.exe"
   
   !insertmacro MUI_STARTMENU_WRITE_END
 SectionEnd
@@ -268,12 +264,12 @@ Section "Uninstall"
   RMDir "$SMPROGRAMS\$StartMenuFolder"
 
   ; remove legacy registry keys
-  DeleteRegKey SHCTX  "${UNINST_KEY}"
-  DeleteRegKey SHCTX "Software\${DEST_NAME}"
+  DeleteRegKey /ifempty SHCTX  "${UNINST_KEY}"
+  DeleteRegKey /ifempty SHCTX "Software\${DEST_NAME}"
 
   ; remove registry keys
-  DeleteRegKey /ifempty HKLM  "${UNINST_KEY}"
-  DeleteRegKey /ifempty HKLM "Software\${DEST_NAME}"
+  DeleteRegKey SHCTX  "${UNINST_KEY}"
+  DeleteRegKey SHCTX "Software\${DEST_NAME}"
 
 SectionEnd
 
