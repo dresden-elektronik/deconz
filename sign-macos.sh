@@ -1,6 +1,12 @@
 
 #!/usr/bin/env bash
 
+ARCH="${1:-}"
+if [ "$ARCH" != "arm64" ] && [ "$ARCH" != "x86_64" ]; then
+	echo "Usage: $0 [arm64|x86_64]"
+	exit 1
+fi
+
 if [ ! -e ./cred-macos ]; then
 	echo "cred-macos not found, abort"
 	echo "Must define DEVELOPER_ID_APPLICATION, TEAM_ID and PASS."
@@ -13,9 +19,9 @@ source ./cred-macos
 VERSION=$(grep project CMakeLists.txt \
 	| awk 'match($0, /[0-9]+.[0-9]+.[0-9]/) {print substr($0, RSTART, RLENGTH)}')
 
-ARCH=$(uname -m)
+#ARCH=$(uname -m)
 
-pushd build-macos
+pushd build-macos-$ARCH
 
 rm -fr dist
 mkdir dist

@@ -1,18 +1,16 @@
 #!/usr/bin/env bash
 
+ARCH="${1:-}"
+if [ "$ARCH" != "arm64" ] && [ "$ARCH" != "x86_64" ]; then
+	echo "Usage: $0 [arm64|x86_64]"
+	exit 1
+fi
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
 if [ ! -e ./cred-macos ]; then
 	echo "cred-macos not found:"
 	echo "for codesign define DEVELOPER_ID_APPLICATION, TEAM_ID and PASS in cred-macos file."
 #	exit 1
-fi
-
-# Homebrew is used only for OpenSSL (libssl/libcrypto); Qt comes from the
-# official aqtinstall monolithic install below.
-HOMEBREW_DIR=$(brew --prefix)
-
-if [ ! -e "$HOMEBREW_DIR/opt" ]; then
-	echo "homebrew installation not found, abort"
-	exit 1
 fi
 
 # Official Qt from aqtinstall (monolithic install: every Qt*.framework sits
@@ -59,7 +57,6 @@ source ./cred-macos
 VERSION=$(grep project CMakeLists.txt \
 	| awk 'match($0, /[0-9]+.[0-9]+.[0-9]/) {print substr($0, RSTART, RLENGTH)}')
 
-ARCH=$(uname -m)
 YEAR=$(date "+%Y")
 
 # create Info.plist
@@ -100,24 +97,27 @@ cat << EOF > Info.plist
 EOF
 
 
-rm -fr build-macos
-mkdir -p build-macos
+rm -fr "build-macos-$ARCH"
+mkdir -p "build-macos-$ARCH"
 
-pushd build-macos
+pushd "build-macos-$ARCH"
 
 mkdir -p deCONZ.app/Contents/Frameworks
 
 pushd deCONZ.app/Contents/Frameworks
 
-LIBCRYPTO=$(find $HOMEBREW_DIR/opt/openssl/lib -name 'libcrypto.3.dylib')
-LIBSSL=$(find $HOMEBREW_DIR/opt/openssl/lib -name 'libssl.3.dylib')
+"$SCRIPT_DIR/build-openssl-macos.sh" "$ARCH"
+OPENSSL_LIBDIR="$SCRIPT_DIR/openssl-macos-$ARCH/lib"
 
-cp $LIBCRYPTO $LIBSSL .
+LIBCRYPTO=$(find "$OPENSSL_LIBDIR" -name 'libcrypto.3.dylib')
+LIBSSL=$(find "$OPENSSL_LIBDIR" -name 'libssl.3.dylib')
 
-install_name_tool -change $HOMEBREW_DIR/opt/openssl/lib/libcrypto.3.dylib @loader_path/../Frameworks/libcrypto.3.dylib ./libssl.3.dylib
-install_name_tool -change $HOMEBREW_DIR/opt/openssl/lib/libssl.3.dylib @loader_path/../Frameworks/libssl.3.dylib ./libssl.3.dylib
+cp "$LIBCRYPTO" "$LIBSSL" .
 
-install_name_tool -change $HOMEBREW_DIR/opt/openssl/lib/libcrypto.3.dylib @loader_path/../Frameworks/libcrypto.3.dylib ./libcrypto.3.dylib
+install_name_tool -change "$OPENSSL_LIBDIR/libcrypto.3.dylib" @loader_path/../Frameworks/libcrypto.3.dylib ./libssl.3.dylib
+install_name_tool -change "$OPENSSL_LIBDIR/libssl.3.dylib" @loader_path/../Frameworks/libssl.3.dylib ./libssl.3.dylib
+
+install_name_tool -change "$OPENSSL_LIBDIR/libcrypto.3.dylib" @loader_path/../Frameworks/libcrypto.3.dylib ./libcrypto.3.dylib
 install_name_tool -id "@rpath/libssl.3.dylib" libssl.3.dylib
 install_name_tool -id "@rpath/libcrypto.3.dylib" libcrypto.3.dylib
 
@@ -145,11 +145,15 @@ popd
 # macdeployqt, which bundles the standard plugin set (cocoa, svg icon engine,
 # virtual keyboard, image formats, styles, tls, ...) independently of it.
 
+#OPENSSL_ROOT_ARGS=("-DOPENSSL_ROOT_DIR=$SCRIPT_DIR/openssl-macos-$ARCH")
+
+OPENSSL_ROOT_DIR=$SCRIPT_DIR/openssl-macos-$ARCH \
 cmake  -DCMAKE_MACOSX_BUNDLE=ON \
 	-DCMAKE_BUILD_TYPE=Release \
 	-DCMAKE_PREFIX_PATH=$QT_LOC \
 	-DUSE_QT6=ON \
 	-DQT_SKIP_AUTO_PLUGIN_INCLUSION=ON \
+	-DCMAKE_OSX_ARCHITECTURES="$ARCH" \
 	-G Ninja .. \
 	&& cmake --build . \
 	&& cmake --install . --prefix . \
