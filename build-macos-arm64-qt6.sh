@@ -105,7 +105,7 @@ popd
 
 # 	-DCMAKE_OSX_ARCHITECTURES=arm64 \
 # rpath workaround for macdeployqt
-# temporary move deCONZ.app into /opt/homebrew so macdeploayqt can find the libraries
+# temporary move deCONZ.app into $HOMEBREW_DIR so macdeploayqt can find the libraries
 # https://crazycraiz.livejournal.com/83608.html
 
 cmake  -DCMAKE_MACOSX_BUNDLE=ON \
@@ -115,11 +115,11 @@ cmake  -DCMAKE_MACOSX_BUNDLE=ON \
 	-G Ninja .. \
 	&& cmake --build . \
 	&& cmake --install . --prefix . \
-	&& mv deCONZ.app /opt/homebrew \
-	&& pushd /opt/homebrew \
+	&& mv deCONZ.app $HOMEBREW_DIR \
+	&& pushd $HOMEBREW_DIR \
 	&& $QT_LOC/bin/macdeployqt deCONZ.app \
 	&& popd \
-	&& mv /opt/homebrew/deCONZ.app .
+	&& mv $HOMEBREW_DIR/deCONZ.app .
 
 if [ -e ../cred-macos ]; then
 	# Plugins need to be signed separate due not found by --deep

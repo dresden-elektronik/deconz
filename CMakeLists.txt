@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.13)
 
 # min supported version macOS High Sierra
-set(CMAKE_OSX_DEPLOYMENT_TARGET "10.13" CACHE STRING "Minimum macOS deployment version")
+set(CMAKE_OSX_DEPLOYMENT_TARGET "15.0" CACHE STRING "Minimum macOS deployment version")
 
 # Phoscon App and WebApp 2016 are fetched as external zip files
 # and are then copied in the respective packages.
