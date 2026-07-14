@@ -64,18 +64,22 @@ PASS='insert password here'
 
 Run build script to compile via CMake
 
-```
-./build-macos.sh
-```
-
-Run sign script to sign deCONZ.app bundle
+The script supports native build for Apple Silicon as well as building for Intel x86_64.
+Platform selection: arm64 | x86_64
 
 ```
-./sign-macos.sh
+./build-macos-qt6.sh arm64
+```
+
+Run sign script to sign deCONZ.app bundle:
+Platform selection: arm64 | x86_64
+
+```
+./sign-macos.sh arm64
 ```
 
 Compressed final bundle
 
 ```
-build-macos/dist/deconz_1.23.4-macos_x86_64.zip
+build-macos-arm64/dist/deconz_3.33.1-macos_arm64.zip
 ```
