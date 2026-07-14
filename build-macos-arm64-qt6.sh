@@ -6,7 +6,8 @@ if [ ! -e ./cred-macos ]; then
 #	exit 1
 fi
 
-# Homebrew
+# Homebrew is used only for OpenSSL (libssl/libcrypto); Qt comes from the
+# official aqtinstall monolithic install below.
 HOMEBREW_DIR=$(brew --prefix)
 
 if [ ! -e "$HOMEBREW_DIR/opt" ]; then
@@ -14,19 +15,41 @@ if [ ! -e "$HOMEBREW_DIR/opt" ]; then
 	exit 1
 fi
 
-if [ ! -e "$HOMEBREW_DIR/opt/qt6" ]; then
-	echo "Qt6 not found, abort"
-	exit 1
+# Official Qt from aqtinstall (monolithic install: every Qt*.framework sits
+# under one lib/ and every plugin under one plugins/). Unlike Homebrew's
+# split cellar layout, this lets macdeployqt resolve a plugin's @rpath to a
+# framework the main binary doesn't directly link -- e.g. the SVG icon engine
+# plugin (libqsvgicon.dylib -> QtSvg.framework) and the virtual keyboard
+# plugin (libqtvirtualkeyboardplugin.dylib -> QtVirtualKeyboard.framework).
+AQT_QT_DIR="${AQT_QT_DIR:-$HOME/Qt}"
+QT_VERSION="${QT_VERSION:-6.11.1}"
+QT_LOC="$AQT_QT_DIR/$QT_VERSION/macos"
+
+if [ ! -e "$QT_LOC/bin/macdeployqt" ]; then
+	echo "Qt $QT_VERSION not found in $QT_LOC; installing via aqtinstall..."
+	AQT_VENV="${AQT_VENV:-$HOME/.aqt-venv}"
+	if [ ! -e "$AQT_VENV/bin/aqt" ]; then
+		echo "Creating aqtinstall venv in $AQT_VENV ..."
+		python3 -m venv "$AQT_VENV"
+		"$AQT_VENV/bin/pip" install --upgrade aqtinstall
+	fi
+	# qtsvg (QtSvg.framework + libqsvgicon) and qtdeclarative (QtQml/QtQuick,
+	# needed by the virtual keyboard plugin) ship in the default clang_64
+	# install. The add-on modules below are the ones deCONZ links or deploys:
+	# qtserialport/qtwebsockets/qt5compat are linked directly, qtvirtualkeyboard
+	# provides the VK plugin, qtimageformats provides the extra image-format
+	# plugins (jp2/mng/tga/tiff/webp). qtpdf is intentionally NOT installed
+	# (deCONZ doesn't use PDF); debug_info is skipped to keep the install small.
+	"$AQT_VENV/bin/aqt" install-qt mac desktop "$QT_VERSION" clang_64 \
+		-m qtserialport qtimageformats qtvirtualkeyboard qtwebsockets qt5compat \
+		-O "$AQT_QT_DIR"
+	if [ ! -e "$QT_LOC/bin/macdeployqt" ]; then
+		echo "aqtinstall failed to install Qt $QT_VERSION into $QT_LOC, abort"
+		exit 1
+	fi
 fi
 
-# look for Frameworks directory in version specific directory:
-#     $HOMEBREW_DIR/opt/qt6/<version>/Frameworks
-QT_LOC=$(find -L $HOMEBREW_DIR/opt/qt6 -name Frameworks -type d)
-if [  -z "${QT_LOC}" ]; then
-	echo "qt/<version> directory not found, abort"
-	exit 1
-fi
-QT_LOC=$(dirname "$QT_LOC") # -> $HOMEBREW_DIR/opt/qt6/<version>
+export PATH="$QT_LOC/bin:$PATH"
 
 source ./cred-macos
 
@@ -103,23 +126,80 @@ chmod 644 libcrypto.3.dylib
 
 popd
 
-# 	-DCMAKE_OSX_ARCHITECTURES=arm64 \
-# rpath workaround for macdeployqt
-# temporary move deCONZ.app into $HOMEBREW_DIR so macdeploayqt can find the libraries
-# https://crazycraiz.livejournal.com/83608.html
+# Deploy Qt into the bundle. The aqtinstall Qt is monolithic (all frameworks
+# under one lib/, all plugins under one plugins/), so macdeployqt resolves
+# every plugin's @rpath to its framework -- including ones the main binary
+# doesn't directly link (QtSvg for the SVG icon engine plugin,
+# QtVirtualKeyboard for the virtual keyboard plugin). No symlink/move hack.
+# -libpath is a harmless hint pointing macdeployqt at the Qt lib dir;
+# -always-overwrite lets repeated runs refresh the bundle in place.
+# -no-codesign disables macdeployqt's built-in ad-hoc signing + verification:
+# it rewrites the pre-staged OpenSSL dylib ids during deploy, which would
+# otherwise trip its own `codesign --verify` and print an ERROR. The real
+# signing (with the developer ID) is done by the dedicated block below.
+# https://doc.qt.io/qt-6/macos-deployment.html
+#
+# QT_SKIP_AUTO_PLUGIN_INCLUSION keeps Qt's CMake from auto-including plugin
+# targets at build time. It is harmless with the aqt Qt (qtpdf isn't
+# installed, so no QPdfPlugin error can occur either way) and does not affect
+# macdeployqt, which bundles the standard plugin set (cocoa, svg icon engine,
+# virtual keyboard, image formats, styles, tls, ...) independently of it.
 
 cmake  -DCMAKE_MACOSX_BUNDLE=ON \
 	-DCMAKE_BUILD_TYPE=Release \
 	-DCMAKE_PREFIX_PATH=$QT_LOC \
 	-DUSE_QT6=ON \
+	-DQT_SKIP_AUTO_PLUGIN_INCLUSION=ON \
 	-G Ninja .. \
 	&& cmake --build . \
 	&& cmake --install . --prefix . \
-	&& mv deCONZ.app $HOMEBREW_DIR \
-	&& pushd $HOMEBREW_DIR \
-	&& $QT_LOC/bin/macdeployqt deCONZ.app \
-	&& popd \
-	&& mv $HOMEBREW_DIR/deCONZ.app .
+	&& $QT_LOC/bin/macdeployqt deCONZ.app -always-overwrite -no-codesign -libpath="$QT_LOC/lib"
+
+# macdeployqt deploys the SVG *icon engine* (iconengines/libqsvgicon.dylib)
+# but not the SVG *image format* plugin (imageformats/libqsvg.dylib, from the
+# qtsvg module), since deCONZ doesn't load .svg files as QImages. Copy it in
+# too so the bundle carries full SVG support; the rpath normalization below
+# rewrites its QtSvg reference into the bundle and the codesign block signs it.
+cp "$QT_LOC/plugins/imageformats/libqsvg.dylib" deCONZ.app/Contents/PlugIns/imageformats/
+
+# macdeployqt with the official @rpath-based aqt Qt copies every framework
+# and plugin into the bundle but leaves the @rpath load commands and the
+# plugins' build-time LC_RPATH (@loader_path/../../lib, which points at
+# Contents/lib and doesn't exist in an .app). Plugins then only resolve at
+# runtime via dyld's rpath cascade from the main binary. Rewrite every
+# @rpath/Qt*.framework reference to an explicit @executable_path/../Frameworks
+# path (and fix the Qt framework install IDs) so the bundle is fully
+# self-contained and otool -L shows the in-bundle path directly. This mirrors
+# what macdeployqt does automatically for absolute-path (Homebrew) Qt.
+normalize_qt_rpaths() {
+	local f=$1 ref fw
+	for ref in $(otool -L "$f" 2>/dev/null | awk '{print $1}' \
+					| grep -E '^@rpath/Qt.*\.framework/' | sort -u); do
+		fw=${ref#@rpath/}
+		install_name_tool -change "$ref" "@executable_path/../Frameworks/$fw" "$f"
+	done
+}
+
+for f in deCONZ.app/Contents/MacOS/deCONZ \
+		 deCONZ.app/Contents/Frameworks/*.dylib \
+		 deCONZ.app/Contents/Frameworks/Qt*.framework/Versions/*/* \
+		 $(find deCONZ.app/Contents/PlugIns -type f -name '*.dylib'); do
+	[ -f "$f" ] || continue
+	normalize_qt_rpaths "$f"
+done
+
+# Fix Qt framework install IDs: @rpath/QtX -> @executable_path/../Frameworks/QtX
+for fwbin in deCONZ.app/Contents/Frameworks/Qt*.framework/Versions/*/*; do
+	[ -f "$fwbin" ] || continue
+	fwrel=${fwbin#deCONZ.app/Contents/Frameworks/}
+	install_name_tool -id "@executable_path/../Frameworks/$fwrel" "$fwbin"
+done
+
+# Ensure the OpenSSL dylib install IDs point into the bundle. macdeployqt
+# rewrites libcrypto's id but leaves libssl at @rpath (no binary links it by
+# load command -- the TLS backend dlopens it by name, resolved via rpath).
+install_name_tool -id "@executable_path/../Frameworks/libssl.3.dylib" deCONZ.app/Contents/Frameworks/libssl.3.dylib
+install_name_tool -id "@executable_path/../Frameworks/libcrypto.3.dylib" deCONZ.app/Contents/Frameworks/libcrypto.3.dylib
 
 if [ -e ../cred-macos ]; then
 	# Plugins need to be signed separate due not found by --deep
