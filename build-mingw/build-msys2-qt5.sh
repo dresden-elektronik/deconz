@@ -1,35 +1,35 @@
 #!/bin/env sh
 
-# THIS SCRIPT IS DEPRECATED NOW AND WILL BE REMOVED
-# use build-msys2-qt5.sh instead
+# Note: this script must be called from a MSYS2 MINGW32 shell!
 
 
-MINGW_DIR="/c/Qt/5.15.2/mingw81_32/bin"
+QT_VERS="5.15.2"
+MINGW_DIR="./qt5-bin/${QT_VERS}/mingw81_32/bin"
+MINGW_DIR_ABS=$(readlink -f $MINGW_DIR)
 ABS_PATH=$PWD
-GCF_VERSION=V4_08_00
+GCF_VERSION=V4_09_00
 GCF_FILE=GCFFlasher_Win_${GCF_VERSION}.zip
 BUILD_DIR=$ABS_PATH/build
 QT_DIR=$MINGW_DIR
-QT_PLUGINS_DIR=$MINGW_DIR/../plugins
+QT_PLUGINS_DIR=$(readlink -f "$MINGW_DIR/../plugins")
 DECONZ_DIR=$ABS_PATH/..
 NSI_SCRIPT=release.nsi
 NSIS="/c/msys64/mingw32/bin/makensis.exe"
 STAGE_DIR=$ABS_PATH/packwin32
-OPENSSL_DIR="$(PWD)/openssl-3/x86"
+OPENSSL_DIR=$(readlink -f ./openssl-win32-x86)
 
-CMAKE=/c/Qt/Tools/CMake_64/bin
+if [[ ! -d "$OPENSSL_DIR" ]]; then
+    # this only works in a MSYS2 32 shell for some reaseon (TODO)
+    ./build-openssl-win32.sh x86 || exit 2
+fi
 
-OPENSSL_ZIP=openssl-3.3.0.zip
-OPENSSL_URL="https://download.firedaemon.com/FireDaemon-OpenSSL/$OPENSSL_ZIP"
-
-if [[ ! -f "$OPENSSL_ZIP" ]]; then
-    curl -L -O $OPENSSL_URL
-    unzip $OPENSSL_ZIP
+if [[ ! -d "$MINGW_DIR" ]]; then
+    ./get_qt.sh || exit 3
 fi
 
 rm -rf build
 
-export PATH="$CMAKE:/c/Qt/Tools/mingw810_32/bin:$PATH"
+export PATH="$MINGW_DIR:$PATH"
 
 # copy applink.c to make OpenSSL BIO work on windows
 cp "$OPENSSL_DIR/include/openssl/applink.c" "../src"
@@ -37,10 +37,6 @@ cp "$OPENSSL_DIR/include/openssl/applink.c" "../src"
 cmake -DBUILD_CHANNEL="" \
     -GNinja \
     -DOPENSSL_ROOT_DIR=$OPENSSL_DIR \
-    -DCMAKE_C_COMPILER=/c/Qt/Tools/mingw810_32/bin/gcc.exe \
-    -DCMAKE_CXX_COMPILER=/c/Qt/Tools/mingw810_32/bin/g++.exe \
-    -DCMAKE_PREFIX_PATH=/c/Qt/5.15.2/mingw81_32 \
-    -DQt5_DIR=/c/Qt/5.15.2/mingw81_32/lib/cmake/Qt5 \
     -DCMAKE_BUILD_TYPE=Release -B build -S ..
 cmake --build build
 
@@ -97,16 +93,16 @@ cp -a \
 
 
 cp -a \
-    $MINGW_DIR/Qt5Core.dll \
-    $MINGW_DIR/Qt5Gui.dll \
-    $MINGW_DIR/Qt5Network.dll \
-    $MINGW_DIR/Qt5Qml.dll \
-    $MINGW_DIR/Qt5SerialPort.dll \
-    $MINGW_DIR/Qt5WebSockets.dll \
-    $MINGW_DIR/Qt5Widgets.dll \
-    $MINGW_DIR/libstdc++-6.dll \
-    $MINGW_DIR/libgcc_*.dll \
-    $MINGW_DIR/libwinpthread-1.dll \
+    $MINGW_DIR_ABS/Qt5Core.dll \
+    $MINGW_DIR_ABS/Qt5Gui.dll \
+    $MINGW_DIR_ABS/Qt5Network.dll \
+    $MINGW_DIR_ABS/Qt5Qml.dll \
+    $MINGW_DIR_ABS/Qt5SerialPort.dll \
+    $MINGW_DIR_ABS/Qt5WebSockets.dll \
+    $MINGW_DIR_ABS/Qt5Widgets.dll \
+    $MINGW_DIR_ABS/libstdc++-6.dll \
+    $MINGW_DIR_ABS/libgcc_*.dll \
+    $MINGW_DIR_ABS/libwinpthread-1.dll \
     $OPENSSL_DIR/bin/libcrypto*.dll \
     $OPENSSL_DIR/bin/libssl*.dll \
     . || exit 8

@@ -1,31 +1,34 @@
 #!/bin/env sh
-QT_VERS="6.9.1"
-MINGW_DIR="/c/Qt/${QT_VERS}/mingw_64/bin"
+
+# this only works in a git bash shell for some reaseon (TODO)
+
+QT_VERS="6.10.3"
+MINGW_DIR="./qt6-bin/${QT_VERS}/mingw_64/bin"
+MINGW_DIR_ABS=$(readlink -f $MINGW_DIR)
 ABS_PATH=$PWD
 GCF_VERSION=V4_09_00
 GCF_FILE=GCFFlasher_Win_${GCF_VERSION}.zip
 BUILD_DIR=$ABS_PATH/build
 QT_DIR=$MINGW_DIR
-QT_PLUGINS_DIR=$MINGW_DIR/../plugins
+QT_PLUGINS_DIR=$(readlink -f "$MINGW_DIR/../plugins")
 DECONZ_DIR=$ABS_PATH/..
 NSI_SCRIPT=release.nsi
 NSIS="/c/msys64/mingw32/bin/makensis.exe"
 STAGE_DIR=$ABS_PATH/packwin32
-OPENSSL_DIR="$(PWD)/openssl-3/x64"
+OPENSSL_DIR=$(readlink -f ./openssl-win32-x86_64)
 
-CMAKE=/c/Qt/Tools/CMake_64/bin
+if [[ ! -d "$OPENSSL_DIR" ]]; then
+    # this only works in a MSYS2 shell for some reaseon (TODO)
+    ./build-openssl-win32.sh x86_64 || exit 2
+fi
 
-OPENSSL_ZIP=openssl-3.3.0.zip
-OPENSSL_URL="https://download.firedaemon.com/FireDaemon-OpenSSL/$OPENSSL_ZIP"
-
-if [[ ! -f "$OPENSSL_ZIP" ]]; then
-    curl -L -O $OPENSSL_URL
-    unzip $OPENSSL_ZIP
+if [[ ! -d "$MINGW_DIR" ]]; then
+    ./get_qt.sh || exit 3
 fi
 
 rm -rf build
 
-export PATH="$CMAKE:/c/Qt/Tools/mingw1310_64/bin:$PATH"
+export PATH="$MINGW_DIR:$PATH"
 
 # copy applink.c to make OpenSSL BIO work on windows
 cp "$OPENSSL_DIR/include/openssl/applink.c" "../src"
@@ -34,15 +37,10 @@ cmake -DBUILD_CHANNEL="" \
     -GNinja \
     -DUSE_QT6=ON \
     -DOPENSSL_ROOT_DIR=$OPENSSL_DIR \
-    -DCMAKE_C_COMPILER=/c/Qt/Tools/mingw1310_64/bin/gcc.exe \
-    -DCMAKE_CXX_COMPILER=/c/Qt/Tools/mingw1310_64/bin/g++.exe \
-    -DCMAKE_PREFIX_PATH=/c/Qt/${QT_VERS}/mingw_64 \
     -DCMAKE_BUILD_TYPE=Release -B build -S ..
 cmake --build build
 
 rm -f "../src/applink.c"
-
-#     -DQt5_DIR=/c/Qt/${QT_VERS}/mingw_64/lib/cmake/Qt6 \
 
 # ------------------------------------------------
 
@@ -94,17 +92,17 @@ cp -a \
 
 
 cp -a \
-    $MINGW_DIR/Qt6Core.dll \
-    $MINGW_DIR/Qt6Gui.dll \
-    $MINGW_DIR/Qt6Network.dll \
-    $MINGW_DIR/Qt6Qml.dll \
-    $MINGW_DIR/Qt6SerialPort.dll \
-    $MINGW_DIR/Qt6WebSockets.dll \
-    $MINGW_DIR/Qt6Widgets.dll \
-    $MINGW_DIR/Qt6Core5Compat.dll \
-    $MINGW_DIR/libstdc++-6.dll \
-    $MINGW_DIR/libgcc_*.dll \
-    $MINGW_DIR/libwinpthread-1.dll \
+    $MINGW_DIR_ABS/Qt6Core.dll \
+    $MINGW_DIR_ABS/Qt6Gui.dll \
+    $MINGW_DIR_ABS/Qt6Network.dll \
+    $MINGW_DIR_ABS/Qt6Qml.dll \
+    $MINGW_DIR_ABS/Qt6SerialPort.dll \
+    $MINGW_DIR_ABS/Qt6WebSockets.dll \
+    $MINGW_DIR_ABS/Qt6Widgets.dll \
+    $MINGW_DIR_ABS/Qt6Core5Compat.dll \
+    $MINGW_DIR_ABS/libstdc++-6.dll \
+    $MINGW_DIR_ABS/libgcc_*.dll \
+    $MINGW_DIR_ABS/libwinpthread-1.dll \
     $OPENSSL_DIR/bin/libcrypto*.dll \
     $OPENSSL_DIR/bin/libssl*.dll \
     . || exit 8
