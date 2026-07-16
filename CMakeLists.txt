@@ -8,7 +8,7 @@ set(CMAKE_OSX_DEPLOYMENT_TARGET "15.0" CACHE STRING "Minimum macOS deployment ve
 set(PWA_URL http://deconz.dresden-elektronik.de/phoscon_app/phoscon_app_2025-08-29.zip)
 set(WEBAPP_URL http://deconz.dresden-elektronik.de/phoscon_app/webapp_2016.zip)
 
-project(deCONZ VERSION 2.33.1)
+project(deCONZ VERSION 2.33.2)
 
 if (NOT DEFINED BUILD_CHANNEL)
     set(BUILD_CHANNEL "")
