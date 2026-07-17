@@ -161,7 +161,7 @@ if (WIN32)
         #endif()
     endif()
     target_sources(${PROJECT_NAME} PRIVATE app.rc)
-    target_sources(${PROJECT_NAME} PRIVATE applink.c)
+#    target_sources(${PROJECT_NAME} PRIVATE applink.c)
 endif()
 
 # deCONZ library
@@ -335,6 +335,7 @@ endif()
 
 if (WIN32 AND CMAKE_HOST_WIN32)
     install(PROGRAMS ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.exe DESTINATION ${CMAKE_INSTALL_BINDIR} RENAME deCONZ.exe)
+    # TODO Qt6
     install(PROGRAMS C:/msys64/mingw32/share/qt5/plugins/platforms/qwindows.dll DESTINATION ${CMAKE_INSTALL_BINDIR}/platforms)
 else()
     if (NOT APPLE)
