@@ -520,7 +520,7 @@ static void CoreAps_ListDevicesNodeDirectoryRequest(struct am_message *m, am_ls_
 
 
         am->msg_put_u32(m, 0); /* dummy next index */
-        am->msg_put_u32(m, 2); /* dummy count */
+        am->msg_put_u32(m, 6); /* dummy count */
 
         /*******************************************/
 
@@ -531,6 +531,88 @@ static void CoreAps_ListDevicesNodeDirectoryRequest(struct am_message *m, am_ls_
         am->msg_put_cstring(m, "node_desc");
         am->msg_put_u16(m, 0); /* flags */
         am->msg_put_u16(m, 1); /* icon */
+
+        am->msg_put_cstring(m, "state");
+        am->msg_put_u16(m, 0); /* flags */
+        am->msg_put_u16(m, 1); /* icon */
+
+        am->msg_put_cstring(m, "zombie");
+        am->msg_put_u16(m, 0); /* flags */
+        am->msg_put_u16(m, 1); /* icon */
+
+        am->msg_put_cstring(m, "has_source_routes");
+        am->msg_put_u16(m, 0); /* flags */
+        am->msg_put_u16(m, 1); /* icon */
+
+        am->msg_put_cstring(m, "endpoints");
+        am->msg_put_u16(m, VFS_LS_DIR_ENTRY_FLAGS_IS_DIR); /* flags */
+        am->msg_put_u16(m, 1); /* icon */
+    }
+    else
+    {
+        am->msg_put_u8(m, AM_RESPONSE_STATUS_NOT_FOUND);
+    }
+}
+
+static void CoreAps_ListDeviceEndpointsRequest(struct am_message *m, am_ls_dir_req *req)
+{
+    U_ASSERT(req->url_parse.element_count >= 3);
+
+    uint64_t mac;
+
+    {
+        U_SStream ss;
+        am_string str_mac = AM_UrlElementAt(&req->url_parse, 1);
+        U_sstream_init(&ss, str_mac.data, str_mac.size);
+        mac = U_sstream_get_mac_address(&ss);
+        if (ss.status != U_SSTREAM_OK || mac == 0)
+        {
+            am->msg_put_u8(m, AM_RESPONSE_STATUS_NOT_FOUND);
+            return;
+        }
+    }
+
+    NodeInfo ni = _apsCtrl->nodeWithMac(mac);
+
+    if (!ni.isValid())
+    {
+        am->msg_put_u8(m, AM_RESPONSE_STATUS_NOT_FOUND);
+        return;
+    }
+
+    if (req->url_parse.element_count == 3 && req->req_index == 0)
+    {
+        am->msg_put_u8(m, AM_RESPONSE_STATUS_OK);
+        am->msg_put_u32(m, req->req_index);
+
+        uint32_t count = 0;
+        unsigned hdr_pos = m->pos;
+
+        am->msg_put_u32(m, 0); /* dummy next index */
+        am->msg_put_u32(m, 0); /* dummy count */
+
+        for (const auto &sd : ni.data->simpleDescriptors())
+        {
+            if (count >= req->max_count)
+                break;
+
+            uint8_t ep = sd.endpoint();
+            char buf[8];
+            snprintf(buf, sizeof(buf), "%02x", ep);
+
+            am->msg_put_cstring(m, buf);
+            am->msg_put_u16(m, 0); /* flags */
+            am->msg_put_u16(m, 1); /* icon */
+            count++;
+        }
+
+        unsigned pos1 = m->pos;
+        m->pos = hdr_pos;
+
+        am->msg_put_u32(m, 0); /* no next index */
+        am->msg_put_u32(m, count); /* count */
+
+        m->pos = pos1;
     }
     else
     {
@@ -589,6 +671,14 @@ static void CoreAps_ListDevicesDirectoryRequest(struct am_message *m, am_ls_dir_
         am->msg_put_u32(m, count); /* count */
 
         m->pos = pos1;
+    }
+    else if (req->url_parse.element_count >= 3)
+    {
+        am_string elem2 = AM_UrlElementAt(&req->url_parse, 2);
+        if (elem2 == "endpoints")
+            CoreAps_ListDeviceEndpointsRequest(m, req);
+        else
+            am->msg_put_u8(m, AM_RESPONSE_STATUS_NOT_FOUND);
     }
     else if (req->url_parse.element_count >= 2)
     {
@@ -726,6 +816,8 @@ static void Core_ReadEntryDevicesReq(struct am_message *m, am_read_entry_req *re
 
     uint64_t mac;
     NodeInfo ni = {};
+    uint32_t mode = VFS_ENTRY_MODE_READONLY;
+    uint64_t mtime = 0;
 
     U_ASSERT(req->url_parse.element_count >= 2);
 
@@ -745,8 +837,6 @@ static void Core_ReadEntryDevicesReq(struct am_message *m, am_read_entry_req *re
 
     if (req->url_parse.element_count == 3)
     {
-        uint32_t mode = VFS_ENTRY_MODE_READONLY;
-        uint64_t mtime = 0;
         am_string prop = AM_UrlElementAt(&req->url_parse, 2);
 
         if (prop == "nwk")
@@ -763,6 +853,57 @@ static void Core_ReadEntryDevicesReq(struct am_message *m, am_read_entry_req *re
             am->msg_put_u64(m, mtime);
             auto nd = ni.data->nodeDescriptor().toByteArray();
             am->msg_put_blob(m, (unsigned)nd.size(), (unsigned char*)nd.constData());
+        }
+        else if (prop == "state")
+        {
+            am->msg_put_cstring(m, "u8");
+            am->msg_put_u32(m, mode);
+            am->msg_put_u64(m, mtime);
+            am->msg_put_u8(m, static_cast<uint8_t>(ni.data->state()));
+        }
+        else if (prop == "zombie")
+        {
+            am->msg_put_cstring(m, "u8");
+            am->msg_put_u32(m, mode);
+            am->msg_put_u64(m, mtime);
+            am->msg_put_u8(m, ni.data->isZombie() ? 1 : 0);
+        }
+        else if (prop == "has_source_routes")
+        {
+            am->msg_put_cstring(m, "u8");
+            am->msg_put_u32(m, mode);
+            am->msg_put_u64(m, mtime);
+            am->msg_put_u8(m, !ni.data->sourceRoutes().empty() ? 1 : 0);
+        }
+    }
+    else if (req->url_parse.element_count >= 4)
+    {
+        am_string subdir = AM_UrlElementAt(&req->url_parse, 2);
+        if (subdir == "endpoints")
+        {
+            am_string epStr = AM_UrlElementAt(&req->url_parse, 3);
+            uint8_t ep = 0;
+            {
+                U_SStream ss;
+                U_sstream_init(&ss, epStr.data, epStr.size);
+                ep = U_sstream_get_hex_byte(&ss);
+            }
+
+            for (const auto &sd : ni.data->simpleDescriptors())
+            {
+                if (sd.endpoint() == ep)
+                {
+                    QByteArray blob;
+                    QDataStream stream(&blob, QIODevice::WriteOnly);
+                    sd.writeToStream(stream);
+
+                    am->msg_put_cstring(m, "blob");
+                    am->msg_put_u32(m, mode);
+                    am->msg_put_u64(m, mtime);
+                    am->msg_put_blob(m, static_cast<unsigned>(blob.size()), reinterpret_cast<unsigned char*>(blob.data()));
+                    break;
+                }
+            }
         }
     }
 }
@@ -3423,6 +3564,8 @@ void zmController::addSourceRoute(const std::vector<zmgNode *> gnodes)
         emit sourceRouteDeleted(sr.uuid());
     }
 
+    CoreNode_NotifyDeviceChanged(dest->data()->address().ext(), "has_source_routes");
+
     SourceRoute sr(createUuid(QLatin1String("user-")), 0, hops);
     for (size_t i = 0; i < sr.hops().size(); i++)
     {
@@ -3435,11 +3578,13 @@ void zmController::addSourceRoute(const std::vector<zmgNode *> gnodes)
         DBG_Printf(DBG_INFO, "source route added to %s\n", dest->data()->extAddressString().c_str());
         m_routes.push_back(sr);
         emit sourceRouteChanged(sr);
+        CoreNode_NotifyDeviceChanged(dest->data()->address().ext(), "has_source_routes");
     }
     else if (ret == 1)
     {
         DBG_Printf(DBG_INFO, "source route updated for %s\n", dest->data()->extAddressString().c_str());
         emit sourceRouteChanged(sr);
+        CoreNode_NotifyDeviceChanged(dest->data()->address().ext(), "has_source_routes");
     }
     else
     {
@@ -3449,6 +3594,7 @@ void zmController::addSourceRoute(const std::vector<zmgNode *> gnodes)
     if (ret == 0 || ret == 1)
     {
         emit sourceRouteCreated(sr);
+        CoreNode_NotifyDeviceChanged(dest->data()->address().ext(), "has_source_routes");
     }
 }
 
@@ -3470,6 +3616,7 @@ void zmController::removeSourceRoute(zmgNode *gnode)
     if (gnode->data()->removeSourceRoute(srHash) == 0)
     {
         emit sourceRouteDeleted(uuid);
+        CoreNode_NotifyDeviceChanged(gnode->data()->address().ext(), "has_source_routes");
     }
     else
     {
@@ -4340,6 +4487,7 @@ void zmController::onApsdeDataConfirm(const deCONZ::ApsDataConfirm &confirm)
                             else
                             {
                                 node->data->setState(deCONZ::IdleState);
+                                CoreNode_NotifyDeviceChanged(node->data->address().ext(), "state");
                             }
                         }
                     }
@@ -4894,6 +5042,7 @@ void zmController::onApsdeDataIndication(const deCONZ::ApsDataIndication &ind)
         case deCONZ::BusyState:
         {
             node->data->setState(deCONZ::IdleState);
+            CoreNode_NotifyDeviceChanged(node->data->address().ext(), "state");
         }
             break;
 
@@ -4935,6 +5084,7 @@ void zmController::onApsdeDataIndication(const deCONZ::ApsDataIndication &ind)
         if (node && node->data)
         {
             node->data->setState(deCONZ::IdleState);
+            CoreNode_NotifyDeviceChanged(node->data->address().ext(), "state");
         }
 
         if (ind.clusterId() & 0x8000)
@@ -6487,6 +6637,7 @@ void zmController::deleteNode(NodeInfo *node, NodeRemoveMode finally)
             }
 
             cpy.data->setZombieInternal(true);
+            CoreNode_NotifyDeviceChanged(cpy.data->address().ext(), "zombie");
 
             if (cpy.g)
             {
@@ -9871,6 +10022,7 @@ void zmController::zclReportAttributesIndication(NodeInfo *node, const deCONZ::A
             s.setProfileId(ind.profileId());
             s.setDeviceId(0xffff); // unknown
             node->data->simpleDescriptors().push_back(s);
+            CoreNode_NotifyDeviceChanged(node->data->address().ext(), "endpoints");
             std::vector<uint8_t> eps = node->data->endpoints();
             if (std::find(eps.begin(), eps.end(), ind.srcEndpoint()) == eps.end())
             {
@@ -10326,7 +10478,9 @@ void zmController::wakeNode(NodeInfo *node)
     if (node && node->data && node->g)
     {
         node->data->setState(deCONZ::IdleState);
+        CoreNode_NotifyDeviceChanged(node->data->address().ext(), "state");
         node->data->setZombieInternal(false);
+        CoreNode_NotifyDeviceChanged(node->data->address().ext(), "zombie");
         node->data->touch(m_steadyTimeRef);
         node->data->setFetched(deCONZ::ReqMgmtLqi, false);
         node->g->show();
