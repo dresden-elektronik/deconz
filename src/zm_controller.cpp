@@ -5921,13 +5921,13 @@ void zmController::onApsdeDataIndication(const deCONZ::ApsDataIndication &ind)
             addr = ind.srcAddress();
             node = getNode(addr, deCONZ::NoAddress);
 
+            uint8_t entries = 0;
+            uint8_t startIndex = 0;
+            uint8_t listCount = 0;
+
             if (node && (ind.asdu().size() > 4) && status == deCONZ::ZdpSuccess)
             {
                 auto &bindingTable = node->data->bindingTable();
-                uint8_t entries;
-                uint8_t startIndex;
-                uint8_t listCount;
-
                 stream >> entries;
                 stream >> startIndex;
                 stream >> listCount;
@@ -5974,6 +5974,11 @@ void zmController::onApsdeDataIndication(const deCONZ::ApsDataIndication &ind)
                 }
 
                 node->data->setFetched(deCONZ::ReqMgmtBind, true);
+            }
+
+            if (node)
+            {
+                deCONZ::bindDropBox()->mgmtBindRspCallback(ind.srcAddress().ext(), status, entries, startIndex, listCount, node->data->bindingTable());
             }
         }
             break;
@@ -6032,7 +6037,7 @@ void zmController::onApsdeDataIndication(const deCONZ::ApsDataIndication &ind)
 
                         DBG_Printf(DBG_ZDP, "  ED value: %d (0x%02X)\n", ed, uint8_t(ed & 0xFF));
                     }
-                }               
+                }
             }
         }
             break;
