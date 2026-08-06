@@ -55,6 +55,7 @@
 #include "zm_gnode.h"
 #include "zm_controller.h"
 #include "zm_cluster_info.h"
+#include "zm_discover_attributes.h"
 #include "zm_master.h"
 #include "zm_netedit.h"
 #include "zm_node.h"
@@ -537,6 +538,7 @@ MainWindow::MainWindow(QWidget *parent) :
     createMainToolbar();
 
     _clusterInfo = new zmClusterInfo(this);
+    m_discoverAttributes = new zmDiscoverAttributes(this);
     m_nodeInfo = new zmNodeInfo(this);
     _nodeInfo = m_nodeInfo;
     _nodeInfo->hide();
@@ -618,6 +620,14 @@ MainWindow::MainWindow(QWidget *parent) :
     addDockWidget(Qt::LeftDockWidgetArea, dockClusterInfo);
     m_menuPanels->addAction(dockClusterInfo->toggleViewAction());
 
+    // Dock Discover Attributes
+    auto *dockDiscoverAttributes = new QDockWidget(tr("Discover Attributes"), this);
+    dockDiscoverAttributes->setObjectName("DiscoverAttributesDock");
+    dockDiscoverAttributes->setTitleBarWidget(new QWidget()); // don't show title bar
+    dockDiscoverAttributes->setWidget(m_discoverAttributes);
+    addDockWidget(Qt::LeftDockWidgetArea, dockDiscoverAttributes);
+    m_menuPanels->addAction(dockDiscoverAttributes->toggleViewAction());
+
     // Dock BindDropbox
     auto *dockBinding = new QDockWidget(tr("Bind Dropbox"), this);
     dockBinding->setTitleBarWidget(new QWidget()); // don't show title bar
@@ -661,6 +671,7 @@ MainWindow::MainWindow(QWidget *parent) :
     tabifyDockWidget(dockNodeList, dockBinding);
     tabifyDockWidget(dockBinding, m_dockNodeInfo);
     tabifyDockWidget(m_dockNodeInfo, dockClusterInfo);
+    tabifyDockWidget(dockClusterInfo, dockDiscoverAttributes);
 
     if (config.contains("window/geometry")) {
         QByteArray arr = config.value("window/geometry").toByteArray();
@@ -688,7 +699,7 @@ MainWindow::MainWindow(QWidget *parent) :
         setGeometry(geo);
     }
 
-    auto docks = std::array<QDockWidget*, 5> { dockSourceRouting, dockNodeList, dockBinding, m_dockNodeInfo, dockClusterInfo };
+    auto docks = std::array<QDockWidget*, 6> { dockSourceRouting, dockNodeList, dockBinding, m_dockNodeInfo, dockClusterInfo, dockDiscoverAttributes };
 
     for (auto *dock : docks)
     {
@@ -1142,10 +1153,18 @@ void MainWindow::onSelectionChanged()
     if (nodes.isEmpty() || (nodes.size() > 1)) // only display one
     {
         m_nodeInfo->setNode(m_vfsModel, 0);
+        if (m_discoverAttributes)
+        {
+            m_discoverAttributes->setTargetNode(0);
+        }
     }
     else
     {
         m_nodeInfo->setNode(m_vfsModel, nodes.first()->address().ext());
+        if (m_discoverAttributes)
+        {
+            m_discoverAttributes->setTargetNode(nodes.first()->address().ext());
+        }
     }
 }
 

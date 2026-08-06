@@ -1700,6 +1700,8 @@ void zmController::setNetworkConfig(const zmNet &net, const uint8_t *items)
         {
             const QByteArray &key = net.networkKey();
 
+            DBG_Printf(DBG_ERROR, "CTRL network key: %s\n", qPrintable(net.networkKey().toHex()));
+
             if (key.size() == 16)
             {
                 buf[0] = 0x00; // key index 0
@@ -2214,7 +2216,7 @@ void zmController::nodeKeyPressed(uint64_t extAddr, int key)
 
             DBG_Printf(DBG_INFO, "send ZCL discover attributes req to node %s\n", node->data->extAddressString().c_str());
             uint8_t startIndex = 0;
-            if (sendZclDiscoverAttributesRequest(node, *sd, deCONZ::clusterInfo()->clusterId(), startIndex))
+            if (sendZclDiscoverAttributesRequest(node, *sd, deCONZ::clusterInfo()->clusterId(), startIndex, 16))
             {
             }
         }
@@ -7130,7 +7132,87 @@ bool zmController::sendEdScanRequest(NodeInfo *node, uint32_t channels)
     return false;
 }
 
-bool zmController::sendZclDiscoverAttributesRequest(NodeInfo *node, const deCONZ::SimpleDescriptor &sd, uint16_t clusterId, uint16_t startAttribute)
+bool zmController::startDiscoverAttributesRange(uint64_t extAddress, uint8_t endpoint, uint16_t clusterId,
+                                                uint16_t startAttribute, uint16_t endAttribute,
+                                                bool manufacturerSpecific, uint16_t manufacturerCode)
+{
+    if (startAttribute > endAttribute)
+    {
+        return false;
+    }
+
+    if (m_discoverAttributesState.active)
+    {
+        cancelDiscoverAttributesRange();
+    }
+
+    NodeInfo *node = nullptr;
+    for (NodeInfo &n : m_nodes)
+    {
+        if (n.data && n.data->address().ext() == extAddress)
+        {
+            node = &n;
+            break;
+        }
+    }
+
+    if (!node || !node->data)
+    {
+        return false;
+    }
+
+    const deCONZ::SimpleDescriptor *sd = node->data->getSimpleDescriptor(endpoint);
+    if (!sd || !sd->isValid())
+    {
+        return false;
+    }
+
+    m_discoverAttributesState.active = true;
+    m_discoverAttributesState.extAddress = extAddress;
+    m_discoverAttributesState.endpoint = endpoint;
+    m_discoverAttributesState.clusterId = clusterId;
+    m_discoverAttributesState.startAttribute = startAttribute;
+    m_discoverAttributesState.endAttribute = endAttribute;
+    m_discoverAttributesState.nextAttribute = startAttribute;
+    m_discoverAttributesState.manufacturerCode = manufacturerCode;
+    m_discoverAttributesState.manufacturerSpecific = manufacturerSpecific;
+
+    uint32_t remaining = (static_cast<uint32_t>(endAttribute) - startAttribute) + 1;
+    uint8_t maxAttributes = (remaining > 16) ? 16 : static_cast<uint8_t>(remaining);
+
+    if (!sendZclDiscoverAttributesRequest(node, *sd, clusterId, startAttribute, maxAttributes,
+        manufacturerSpecific, manufacturerCode))
+    {
+        m_discoverAttributesState.active = false;
+        return false;
+    }
+
+    emit discoverAttributesStarted(extAddress, endpoint, clusterId,
+                                   startAttribute, endAttribute,
+                                   manufacturerSpecific, manufacturerCode);
+    return true;
+}
+
+void zmController::cancelDiscoverAttributesRange()
+{
+    if (!m_discoverAttributesState.active)
+    {
+        return;
+    }
+
+    const auto state = m_discoverAttributesState;
+    m_discoverAttributesState.active = false;
+
+    emit discoverAttributesFinished(state.extAddress,
+                                    state.endpoint,
+                                    state.clusterId,
+                                    false,
+                                    QLatin1String("cancelled"));
+}
+
+bool zmController::sendZclDiscoverAttributesRequest(NodeInfo *node, const deCONZ::SimpleDescriptor &sd, uint16_t clusterId,
+                                                    uint16_t startAttribute, uint8_t maxAttributes,
+                                                    bool manufacturerSpecific, uint16_t manufacturerCode)
 {
     if (!node || !node->data)
     {
@@ -7157,14 +7239,22 @@ bool zmController::sendZclDiscoverAttributesRequest(NodeInfo *node, const deCONZ
 
     zclFrame.setSequenceNumber(m_steadyTimeRef.ref & 0xFF);
     zclFrame.setCommandId(deCONZ::ZclDiscoverAttributesId);
-    zclFrame.setFrameControl(deCONZ::ZclFCProfileCommand |
-                             deCONZ::ZclFCDirectionClientToServer /*| deCONZ::ZclFCManufacturerSpecific*/);
+    uint8_t frameControl = deCONZ::ZclFCProfileCommand |
+    deCONZ::ZclFCDirectionClientToServer;
+
+    if (manufacturerSpecific)
+    {
+        frameControl |= deCONZ::ZclFCManufacturerSpecific;
+        zclFrame.setManufacturerCode(manufacturerCode);
+    }
+
+    zclFrame.setFrameControl(frameControl);
 
     {
         QDataStream stream(&zclFrame.payload(), QIODevice::WriteOnly);
         stream.setByteOrder(QDataStream::LittleEndian);
         stream << startAttribute;
-        stream << (uint8_t)16; // max attributes
+        stream << maxAttributes;
     }
 
     {
@@ -7369,12 +7459,25 @@ void zmController::zclDiscoverAttributesResponse(NodeInfo *node, const ApsDataIn
 
     deCONZ::ZclClusterSide side = (zclFrame.frameControl() & deCONZ::ZclFCDirectionServerToClient) ? deCONZ::ServerCluster : deCONZ::ClientCluster;
     deCONZ::ZclCluster *cluster = node->data->getCluster(ind.srcEndpoint(), ind.clusterId(), side);
+    const uint16_t responseManufacturerCode =
+    (zclFrame.frameControl() & deCONZ::ZclFCManufacturerSpecific) ? zclFrame.manufacturerCode() : 0;
+
+    const bool rangeRequestActive =
+    m_discoverAttributesState.active &&
+    m_discoverAttributesState.extAddress == node->data->address().ext() &&
+    m_discoverAttributesState.endpoint == ind.srcEndpoint() &&
+    m_discoverAttributesState.clusterId == ind.clusterId() &&
+    (!m_discoverAttributesState.manufacturerSpecific ||
+    m_discoverAttributesState.manufacturerCode == responseManufacturerCode);
 
     QDataStream stream(zclFrame.payload());
     stream.setByteOrder(QDataStream::LittleEndian);
 
     uint8_t complete;
     stream >> complete;
+
+    bool seenAttribute = false;
+    uint32_t nextAttribute = m_discoverAttributesState.nextAttribute;
 
     DBG_Printf(DBG_INFO, "ZCL discover attributes response from %s (complete = %u)\n", node->data->extAddressString().c_str(), complete);
 
@@ -7391,17 +7494,40 @@ void zmController::zclDiscoverAttributesResponse(NodeInfo *node, const ApsDataIn
             break;
         }
 
+        seenAttribute = true;
+
         DBG_Printf(DBG_INFO, "\t attribute 0x%04X type 0x%02X\n", attrId, dataType);
+
+        if (rangeRequestActive && attrId >= m_discoverAttributesState.nextAttribute)
+        {
+            if (attrId < m_discoverAttributesState.endAttribute)
+            {
+                nextAttribute = attrId + 1;
+            }
+            else
+            {
+                nextAttribute = static_cast<uint32_t>(m_discoverAttributesState.endAttribute) + 1;
+            }
+        }
 
         if (!cluster)
         {
+            if (rangeRequestActive && attrId >= m_discoverAttributesState.startAttribute && attrId <= m_discoverAttributesState.endAttribute)
+            {
+                emit discoverAttributesAttributeDiscovered(node->data->address().ext(),
+                                                           ind.srcEndpoint(),
+                                                           ind.clusterId(),
+                                                           attrId,
+                                                           dataType,
+                                                           responseManufacturerCode);
+            }
             continue;
         }
 
-        bool found = false;;
+        bool found = false;
         for (deCONZ::ZclAttribute &attr : cluster->attributes())
         {
-            if (attr.id() == attrId)
+            if (attr.id() == attrId && attr.manufacturerCode() == responseManufacturerCode)
             {
                 attr.setAvailable(true);
                 found = true;
@@ -7411,12 +7537,93 @@ void zmController::zclDiscoverAttributesResponse(NodeInfo *node, const ApsDataIn
 
         if (!found)
         {
-            //deCONZ::ZclAttribute attr(attrId, dataType, QLatin1String("Unknown"), deCONZ::ZclReadWrite, false);
-            //cluster->attributes().push_back(attr);
+            deCONZ::ZclAttribute attr(attrId, dataType, QLatin1String("Unknown"), deCONZ::ZclReadWrite, false);
+            attr.setAvailable(true);
+
+            if (responseManufacturerCode != 0)
+            {
+                attr.setManufacturerCode(responseManufacturerCode);
+            }
+
+            cluster->attributes().push_back(attr);
+        }
+
+        if (rangeRequestActive && attrId >= m_discoverAttributesState.startAttribute && attrId <= m_discoverAttributesState.endAttribute)
+        {
+            emit discoverAttributesAttributeDiscovered(node->data->address().ext(),
+                                                       ind.srcEndpoint(),
+                                                       ind.clusterId(),
+                                                       attrId,
+                                                       dataType,
+                                                       responseManufacturerCode);
         }
     }
 
     deCONZ::clusterInfo()->refresh();
+
+    if (!rangeRequestActive)
+    {
+        return;
+    }
+
+    if (nextAttribute > m_discoverAttributesState.endAttribute || complete)
+    {
+        const auto state = m_discoverAttributesState;
+        m_discoverAttributesState.active = false;
+        emit discoverAttributesFinished(state.extAddress,
+                                        state.endpoint,
+                                        state.clusterId,
+                                        true,
+                                        QString());
+        return;
+    }
+
+    if (!seenAttribute)
+    {
+        const auto state = m_discoverAttributesState;
+        m_discoverAttributesState.active = false;
+        emit discoverAttributesFinished(state.extAddress,
+                                        state.endpoint,
+                                        state.clusterId,
+                                        false,
+                                        QLatin1String("empty response"));
+        return;
+    }
+
+    const deCONZ::SimpleDescriptor *sd = node->data->getSimpleDescriptor(m_discoverAttributesState.endpoint);
+    if (!sd || !sd->isValid())
+    {
+        const auto state = m_discoverAttributesState;
+        m_discoverAttributesState.active = false;
+        emit discoverAttributesFinished(state.extAddress,
+                                        state.endpoint,
+                                        state.clusterId,
+                                        false,
+                                        QLatin1String("invalid endpoint"));
+        return;
+    }
+
+    const uint32_t remaining = (static_cast<uint32_t>(m_discoverAttributesState.endAttribute) - nextAttribute) + 1;
+    const uint8_t maxAttributes = (remaining > 16) ? 16 : static_cast<uint8_t>(remaining);
+
+    if (!sendZclDiscoverAttributesRequest(node, *sd,
+        m_discoverAttributesState.clusterId,
+        static_cast<uint16_t>(nextAttribute),
+                                          maxAttributes,
+                                          m_discoverAttributesState.manufacturerSpecific,
+                                          m_discoverAttributesState.manufacturerCode))
+    {
+        const auto state = m_discoverAttributesState;
+        m_discoverAttributesState.active = false;
+        emit discoverAttributesFinished(state.extAddress,
+                                        state.endpoint,
+                                        state.clusterId,
+                                        false,
+                                        QLatin1String("failed to send next request"));
+        return;
+    }
+
+    m_discoverAttributesState.nextAttribute = static_cast<uint16_t>(nextAttribute);
 }
 
 bool zmController::zclReadReportConfigurationResponse(NodeInfo *node, const ApsDataIndication &ind, const deCONZ::ZclFrame &zclFrame)
