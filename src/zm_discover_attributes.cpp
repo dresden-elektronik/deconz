@@ -399,7 +399,7 @@ void zmDiscoverAttributes::updateXmlPreview()
             }
         }
 
-        xml += QString("  <attribute id=\"%1\" name=\"\" type=\"%2\" access=\"rw\" required=\"o\"")
+        xml += QString("  <attribute id=\"%1\" name=\"Unknown\" type=\"%2\" access=\"rw\" required=\"o\"")
                .arg(formatHex16(item.id))
                .arg(typeShortName);
 
