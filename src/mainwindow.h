@@ -31,6 +31,7 @@ namespace deCONZ {
 
 class ActorVfsModel;
 class DebugView;
+class zmDiscoverAttributes;
 class zmBindDropbox;
 class zmController;
 class zmNetEvent;
@@ -186,6 +187,7 @@ private:
     QDockWidget *m_dockOta = nullptr;
     QDockWidget *m_dockNodeInfo;
     zmNodeInfo *m_nodeInfo;
+    zmDiscoverAttributes *m_discoverAttributes = nullptr;
     QTableView *m_nodeTableView;
     zmBindDropbox *m_bindDropbox;
     bool m_devUpdateCanditate;

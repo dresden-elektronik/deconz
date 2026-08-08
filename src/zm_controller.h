@@ -234,6 +234,10 @@ public:
     void onNodeSelected(uint64_t mac);
     void onNodeDeselected(uint64_t mac);
     uint8_t nextRequestId();
+    bool startDiscoverAttributesRange(uint64_t extAddress, uint8_t endpoint, uint16_t clusterId,
+                                      uint16_t startAttribute, uint16_t endAttribute,
+                                      bool manufacturerSpecific, uint16_t manufacturerCode);
+    void cancelDiscoverAttributesRange();
 
 private slots:
     void onMasterStateChanged();
@@ -274,6 +278,13 @@ Q_SIGNALS:
     void sourceRouteMinLqiChanged(int sourceRouteMinLqi);
     void sourceRouteMaxHopsChanged(int sourceRouteMmaxHops);    
     void sourceRoutingEnabledChanged(bool sourceRoutingEnabled);
+    void discoverAttributesStarted(quint64 extAddress, quint8 endpoint, quint16 clusterId,
+                                   quint16 startAttribute, quint16 endAttribute,
+                                   bool manufacturerSpecific, quint16 manufacturerCode);
+    void discoverAttributesAttributeDiscovered(quint64 extAddress, quint8 endpoint, quint16 clusterId,
+                                               quint16 attributeId, quint8 dataType, quint16 manufacturerCode);
+    void discoverAttributesFinished(quint64 extAddress, quint8 endpoint, quint16 clusterId,
+                                    bool success, const QString &reason);
 
 protected:
     void timerEvent(QTimerEvent *event);
@@ -330,7 +341,9 @@ private:
     bool sendUpdateNetworkRequest(NodeInfo *node);
     bool sendSimpleDescriptorRequest(NodeInfo *node, uint8_t endpoint);
     bool sendEdScanRequest(NodeInfo *node, uint32_t channels);
-    bool sendZclDiscoverAttributesRequest(NodeInfo *node, const deCONZ::SimpleDescriptor &sd, uint16_t clusterId, uint16_t startAttribute);
+    bool sendZclDiscoverAttributesRequest(NodeInfo *node, const deCONZ::SimpleDescriptor &sd, uint16_t clusterId,
+                                          uint16_t startAttribute, uint8_t maxAttributes,
+                                          bool manufacturerSpecific = false, uint16_t manufacturerCode = 0);
     void zclReportAttributesIndication(NodeInfo *node, const deCONZ::ApsDataIndication &ind, const deCONZ::ZclFrame &zclFrame, deCONZ::NodeEvent &event);
     void zclReadAttributesResponse(NodeInfo *node, const deCONZ::ApsDataIndication &ind, deCONZ::ZclFrame &zclFrame, deCONZ::NodeEvent &event);
     void zclDiscoverAttributesResponse(NodeInfo *node, const deCONZ::ApsDataIndication &ind, deCONZ::ZclFrame &zclFrame);
@@ -421,6 +434,21 @@ private:
     bool m_sourceRouteRequired = false;
     bool m_fastDiscovery = false;
     int m_minLqiDisplay = 0;
+
+    struct DiscoverAttributesState
+    {
+        bool active = false;
+        uint64_t extAddress = 0;
+        uint8_t endpoint = 0;
+        uint16_t clusterId = 0;
+        uint16_t startAttribute = 0;
+        uint16_t endAttribute = 0;
+        uint16_t nextAttribute = 0;
+        uint16_t manufacturerCode = 0;
+        bool manufacturerSpecific = false;
+    };
+
+    DiscoverAttributesState m_discoverAttributesState;
 };
 
 #endif // ZM_CONTROLLER_H
