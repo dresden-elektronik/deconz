@@ -11,6 +11,7 @@
 #ifndef ZM_BINDDROPBOX_H
 #define ZM_BINDDROPBOX_H
 #include <QDebug>
+#include <QMap>
 #include <QWidget>
 #include <QSet>
 
@@ -112,7 +113,7 @@ private:
     quint8 m_dstEndpoint;
     quint16 m_cluster;
     quint64 m_selectedNodeAddr;
-    QSet<BindingEntry> m_bindingCache;
+    QMap<quint64, QSet<BindingEntry>> m_bindingCache;
 };
 
 #endif // ZM_BINDDROPBOX_H

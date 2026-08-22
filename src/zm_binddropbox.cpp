@@ -459,7 +459,16 @@ void zmBindDropbox::bindTimeout()
 
 void zmBindDropbox::mgmtBindRspCallback(quint64 srcAddr, quint8 status, quint8 entries, quint8 startIndex, quint8 listCount, const deCONZ::BindingTable &table)
 {
-    // Only process responses for the currently selected node
+    if (status == deCONZ::ZdpSuccess)
+    {
+        if (startIndex == 0)
+        {
+            m_bindingCache.remove(srcAddr);
+        }
+
+        updateBindingTableView(srcAddr, table);
+    }
+
     if (m_selectedNodeAddr == 0 || srcAddr != m_selectedNodeAddr)
     {
         return;
@@ -485,21 +494,13 @@ void zmBindDropbox::mgmtBindRspCallback(quint64 srcAddr, quint8 status, quint8 e
         m_bindingTableInfo->setText(tr("Binding table from %1 | status: %2 | entries: %3 | start: %4 | count: %5")
         .arg(formatAddress64(srcAddr), statusText, QString::number(entries), QString::number(startIndex), QString::number(listCount)));
     }
-
-    if (status == deCONZ::ZdpSuccess)
-    {
-        updateBindingTableView(srcAddr, table);
-    }
 }
 
 void zmBindDropbox::updateBindingTableView(quint64 srcAddr, const deCONZ::BindingTable &table)
 {
-    if (!m_bindingTableView)
-    {
-        return;
-    }
+    auto &cache = m_bindingCache[srcAddr];
 
-    // Add new entries to the cache (duplicates are ignored by QSet)
+    // Add new entries to the node cache (duplicates are ignored by QSet).
     for (auto i = table.cbegin(); i != table.cend(); ++i)
     {
         const auto &binding = *i;
@@ -511,10 +512,13 @@ void zmBindDropbox::updateBindingTableView(quint64 srcAddr, const deCONZ::Bindin
         entry.dstExtAddr = binding.dstAddress().ext();
         entry.dstGroupAddr = binding.dstAddress().group();
         entry.dstEndpoint = binding.dstEndpoint();
-        m_bindingCache.insert(entry);
+        cache.insert(entry);
     }
 
-    rebuildBindingTableView();
+    if (srcAddr == m_selectedNodeAddr)
+    {
+        rebuildBindingTableView();
+    }
 }
 
 void zmBindDropbox::rebuildBindingTableView()
@@ -524,10 +528,17 @@ void zmBindDropbox::rebuildBindingTableView()
         return;
     }
 
-    m_bindingTableView->setRowCount(m_bindingCache.size());
+    const auto cacheIt = m_bindingCache.constFind(m_selectedNodeAddr);
+    const int cacheSize = (cacheIt != m_bindingCache.cend()) ? cacheIt.value().size() : 0;
+    m_bindingTableView->setRowCount(cacheSize);
+
+    if (cacheIt == m_bindingCache.cend())
+    {
+        return;
+    }
 
     int row = 0;
-    for (const auto &entry : m_bindingCache)
+    for (const auto &entry : cacheIt.value())
     {
         const QString src = formatAddress64(entry.srcAddr);
         const QString srcEp = formatHex8(entry.srcEndpoint);
@@ -686,16 +697,31 @@ void zmBindDropbox::setSelectedNode(quint64 nodeAddr)
     if (m_selectedNodeAddr != nodeAddr)
     {
         m_selectedNodeAddr = nodeAddr;
-        m_bindingCache.clear();
-        if (m_bindingTableView)
+
+        if (nodeAddr != 0)
         {
-            m_bindingTableView->setRowCount(0);
+            const NodeInfo node = deCONZ::controller()->nodeWithMac(nodeAddr);
+
+            if (node.data)
+            {
+                updateBindingTableView(nodeAddr, node.data->bindingTable());
+            }
         }
+
+        rebuildBindingTableView();
+
         if (m_bindingTableInfo)
         {
             if (nodeAddr != 0)
             {
-                m_bindingTableInfo->setText(tr("Binding table: waiting for data from %1").arg(formatAddress64(nodeAddr)));
+                if (m_bindingCache.value(nodeAddr).isEmpty())
+                {
+                    m_bindingTableInfo->setText(tr("Binding table: waiting for data from %1").arg(formatAddress64(nodeAddr)));
+                }
+                else
+                {
+                    m_bindingTableInfo->setText(tr("Binding table: cached data for %1").arg(formatAddress64(nodeAddr)));
+                }
             }
             else
             {
