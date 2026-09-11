@@ -240,7 +240,6 @@ private:
     int m_readParamCount;
     uint16_t m_maxNodes;
     MasterEvent m_taskTimerEvent;
-    int m_taskTimerLine;
     QTimer *m_taskTimer;
     uint16_t m_devProtocolVersion;
     uint32_t m_devFirmwareVersion;

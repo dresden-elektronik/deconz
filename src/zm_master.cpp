@@ -2039,7 +2039,6 @@ void zmMaster::handleStateIdle(zmMaster::MasterEvent event)
     {
     case ACTION_PROCESS:
     {
-        unsigned wait_confirm0 = Master.q_items_wait_confirm;
         processQueue();
         sendNextCommand();
 
@@ -2290,7 +2289,6 @@ void zmMaster::startTaskTimer(zmMaster::MasterEvent event, int interval, int lin
 
     m_taskTimer->stop();
     m_taskTimerEvent = event;
-    m_taskTimerLine = line;
     m_taskTimer->start(interval);
 }
 
