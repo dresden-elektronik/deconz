@@ -131,9 +131,6 @@ public:
     enum MasterEvent
     {
         ACTION_PROCESS    = 0,
-        EVENT_GOT_DATA    = 1,
-        EVENT_GOT_STATUS  = 2,
-        EVENT_TIMEOUT     = 3,
         EVENT_ITEM_ADDED  = 4
     };
 
