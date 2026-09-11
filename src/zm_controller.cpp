@@ -1512,9 +1512,6 @@ zmController::zmController(zmMaster *master,
     connect(m_master, SIGNAL(deviceState()),
             this, SLOT(deviceStateChanged()));
 
-    connect(m_master, SIGNAL(deviceActivity()),
-            this, SLOT(deviceActivity()));
-
     connect(m_master, SIGNAL(deviceStateTimeOut()),
             this, SLOT(deviceStateTimeout()));
 
@@ -4033,11 +4030,6 @@ void zmController::deviceDisconnected(int reason)
 void zmController::deviceStateChanged()
 {
     Dev_SendDeviceStateNotification();
-}
-
-void zmController::deviceActivity()
-{
-    Dev_SendNotification(M_ID_DEV_ACTIVITY);
 }
 
 void zmController::deviceStateTimeout()

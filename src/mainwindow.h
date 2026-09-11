@@ -69,7 +69,6 @@ public Q_SLOTS:
     void onDeviceConnected();
     void onDeviceDisconnected(int reason);
     void onDeviceState();
-    void onDeviceActivity();
     void onDeviceStateTimeout();
 
 private Q_SLOTS:
