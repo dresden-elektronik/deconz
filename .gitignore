@@ -1,3 +1,4 @@
+audits/
 doc/html
 CMakeLists.txt.user
 *.pro.user*
