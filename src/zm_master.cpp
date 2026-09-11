@@ -57,13 +57,6 @@ enum MasterConfig
     MAX_APS_QUEUE_ITEMS = 16
 };
 
-enum QueItemState
-{
-    QUEUE_FREE,
-    QUEUE_PENDING,
-    QUEUE_RESERVED
-};
-
 static const int MaxUnconfirmed = 2;
 static const int MaxSendRetry = 1;
 static const int TimeoutDelay = 500;
