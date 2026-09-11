@@ -162,7 +162,6 @@ public:
     void handleStateIdle(MasterEvent event);
     void handleEventGotAck();
     void handleTimeouts();
-    void apsSendFailed(int id);
     deCONZ::State netState();
     bool hasFreeApsRequest();
     uint16_t deviceProtocolVersion() const { return m_devProtocolVersion; }
