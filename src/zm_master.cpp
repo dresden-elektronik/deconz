@@ -62,6 +62,7 @@ static const int MaxSendRetry = 1;
 static const int TimeoutDelay = 500;
 static const int SendDelay = 20;
 static const int MaxCommandFails = 10;
+static const int ApsRequestTimeoutMs = 60 * 1000; // expire q_aps entries not dispatched within 1 min
 static int needStatus = 1;
 static uint32_t fwDebugLevel = FW_DEBUG_LEVEL_DISABLED;
 static int64_t tSend;
@@ -87,6 +88,12 @@ typedef struct QueueItem
     int retries;
 } QueueItem_t;
 
+struct ApsQueueItem
+{
+    uint16_t id;
+    int64_t tref; // deCONZ::steadyTimeRef().ref
+};
+
 struct zm_master
 {
     unsigned char proto_id;
@@ -97,7 +104,7 @@ struct zm_master
     unsigned char _seq;
     int cmd_fails;
 
-    uint16_t q_aps[MAX_APS_QUEUE_ITEMS];
+    ApsQueueItem q_aps[MAX_APS_QUEUE_ITEMS];
     unsigned q_aps_rp;
     unsigned q_aps_wp;
 
@@ -422,7 +429,8 @@ static int QAPS_Push(unsigned id)
 
     Q_ASSERT(Master.q_aps_wp < MAX_APS_QUEUE_ITEMS);
 
-    Master.q_aps[Master.q_aps_wp] = (uint16_t)id;
+    Master.q_aps[Master.q_aps_wp].id = (uint16_t)id;
+    Master.q_aps[Master.q_aps_wp].tref = deCONZ::steadyTimeRef().ref;
     Master.q_aps_wp = (Master.q_aps_wp + 1) % MAX_APS_QUEUE_ITEMS;
 
     return 1;
@@ -437,7 +445,7 @@ static unsigned QAPS_Pop()
 
     Q_ASSERT(QAPS_Empty() == 0);
     Q_ASSERT(Master.q_aps_rp < MAX_APS_QUEUE_ITEMS);
-    result = Master.q_aps[Master.q_aps_rp];
+    result = Master.q_aps[Master.q_aps_rp].id;
     Master.q_aps_rp = (Master.q_aps_rp + 1) % MAX_APS_QUEUE_ITEMS;
     return result;
 }
@@ -1010,6 +1018,21 @@ void zmMaster::timerEvent(QTimerEvent *event)
         }
 
         uint64_t now = deCONZ::steadyTimeRef().ref;
+
+        // Expire q_aps entries not dispatched within ApsRequestTimeoutMs:
+        // report and drop only — never re-send, firmware without free APS slots would reject it.
+        for (;;)
+        {
+            if (QAPS_Empty() != 0)
+                break;
+
+            const int64_t tref = Master.q_aps[Master.q_aps_rp % MAX_APS_QUEUE_ITEMS].tref;
+            if ((now - tref) < ApsRequestTimeoutMs)
+                break;
+
+            const unsigned id = QAPS_Pop();
+            emit apsdeDataRequestDone(id, ZM_STATE_TIMEOUT);
+        }
 
         if (now - tSend > 60)
         {
