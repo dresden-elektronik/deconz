@@ -84,6 +84,7 @@ enum ComState
 struct TrxBuffer
 {
     uint16_t length;
+    bool raw = false; // raw bytes: written to the fd as-is, no zm/protocol framing
     uint8_t data[MAX_SEND_LENGTH];
 };
 
@@ -973,6 +974,7 @@ int SerialCom::send(zm_command *cmd)
         unsigned ins = TXQ_Push();
         TrxBuffer &buf = sendQueue[ins];
 
+        buf.raw = false;
         buf.length = zm_protocol_command2buffer(cmd, 0x1000, buf.data, sizeof(buf.data));
         len = buf.length;
 
@@ -995,6 +997,49 @@ int SerialCom::send(zm_command *cmd)
     }
 
     return -3;
+}
+
+int SerialCom::sendRaw(const uint8_t *data, uint16_t len)
+{
+    if (!data || len == 0 || len > MAX_SEND_LENGTH)
+    {
+        return -3;
+    }
+
+    {
+#ifndef USE_QSERIAL_PORT
+        if (!plThread)
+        {
+            return -5;
+        }
+
+        std::unique_lock<std::mutex> tx_lock(plThread->mtx_tx);
+#endif
+
+        if (TXQ_IsFull())
+        {
+            return -1;
+        }
+
+        unsigned ins = TXQ_Push();
+        TrxBuffer &buf = sendQueue[ins];
+
+        memcpy(buf.data, data, len);
+        buf.length = len;
+        buf.raw = true;
+    }
+
+#ifndef USE_QSERIAL_PORT
+    {
+        plThread->events |= TX_EVENT_ID;
+    }
+#endif
+
+#ifdef USE_QSERIAL_PORT
+    d->tx();
+#endif
+
+    return 0;
 }
 
 void SerialCom::readyRead()
@@ -1177,7 +1222,14 @@ int SerialComPrivate::tx()
 
         if (buf.length > 0)
         {
-            protocol_send(protId, buf.data, buf.length);
+            if (buf.raw)
+            {
+                PL_Write(buf.data, buf.length);
+            }
+            else
+            {
+                protocol_send(protId, buf.data, buf.length);
+            }
 #ifdef DBG_SERIAL
             DBG_Printf(DBG_WIRE, "\n");
 #endif
@@ -1229,7 +1281,7 @@ void SerialComPrivate::queryBootloader()
     DBG_Printf(DBG_PROT, "[COM] check bootloader\n");
 
     setState(ComStateWaitBootloader);
-    PL_Write("ID", 2);
+    q->sendRaw(reinterpret_cast<const uint8_t*>("ID"), 2);
     timer.start(1000);
 }
 
