@@ -276,10 +276,6 @@ static int GuiMainWindow_CoreDevMessageCallback(struct am_message *msg)
         return AM_CB_STATUS_OK;
     }
 
-    case M_ID_DEV_ACTIVITY:
-        _mainWindow->onDeviceActivity();
-        return AM_CB_STATUS_OK;
-
     case M_ID_DEV_TIMEOUT:
         _mainWindow->onDeviceStateTimeout();
         return AM_CB_STATUS_OK;
@@ -971,11 +967,6 @@ void MainWindow::handleConnectResponse(bool ok)
     }
     m_pendingConnectIdx = -1;
     m_pendingConnectAuto = false;
-}
-
-void MainWindow::onDeviceActivity()
-{
-    m_connTimeout = 0; // reset
 }
 
 void MainWindow::onDeviceStateTimeout()

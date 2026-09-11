@@ -1726,8 +1726,6 @@ void zmMaster::processPacked(const zm_command *cmd)
         startTaskTimer(ACTION_PROCESS, 0, __LINE__);
     //processQueue();
     //sendNextCommand();
-
-    emit deviceActivity();
 }
 
 /*!
