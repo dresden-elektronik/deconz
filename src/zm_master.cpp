@@ -60,7 +60,6 @@ enum MasterConfig
 static const int MaxUnconfirmed = 2;
 static const int MaxSendRetry = 1;
 static const int TimeoutDelay = 500;
-static const int StatusQueryDelay = 500;
 static const int SendDelay = 20;
 static const int MaxCommandFails = 10;
 static int needStatus = 1;
