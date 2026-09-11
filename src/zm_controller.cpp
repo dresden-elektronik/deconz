@@ -1512,9 +1512,6 @@ zmController::zmController(zmMaster *master,
     connect(m_master, SIGNAL(deviceState()),
             this, SLOT(deviceStateChanged()));
 
-    connect(m_master, SIGNAL(deviceStateTimeOut()),
-            this, SLOT(deviceStateTimeout()));
-
     connect(m_master, SIGNAL(apsdeDataRequestDone(uint8_t,uint8_t)),
             this, SLOT(apsdeDataRequestDone(uint8_t,uint8_t)));
 
@@ -4030,11 +4027,6 @@ void zmController::deviceDisconnected(int reason)
 void zmController::deviceStateChanged()
 {
     Dev_SendDeviceStateNotification();
-}
-
-void zmController::deviceStateTimeout()
-{
-    Dev_SendNotification(M_ID_DEV_TIMEOUT);
 }
 
 int zmController::apsQueueSize()

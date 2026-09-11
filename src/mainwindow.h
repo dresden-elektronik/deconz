@@ -69,7 +69,6 @@ public Q_SLOTS:
     void onDeviceConnected();
     void onDeviceDisconnected(int reason);
     void onDeviceState();
-    void onDeviceStateTimeout();
 
 private Q_SLOTS:
     void loadPluginsStage2();
@@ -159,7 +158,6 @@ private:
     deCONZ::State m_connState;
     int m_fetchTimer;
     int m_waitReconnectCount;
-    int m_connTimeout;
     QElapsedTimer m_firmwareUpdateTime;
     QString m_reconnectDevPath;
     bool m_reconnectAfterFirmwareUpdate;

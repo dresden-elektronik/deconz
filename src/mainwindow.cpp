@@ -106,8 +106,6 @@ QAction *editDDFAction = nullptr;
 static const int MainTickMs = 1000;
 static const int WaitReconnectDuration = 15; // seconds
 static const int WaitReconnectDuration2 = 5; // seconds
-static const int MaxConnectionTimeout = 12;
-static const int MaxConnectionTimeoutBootloaderOnly = 60;
 
     // provide global access
 static SourceRouteInfo *_sourceRouteInfo = nullptr;
@@ -275,10 +273,6 @@ static int GuiMainWindow_CoreDevMessageCallback(struct am_message *msg)
 
         return AM_CB_STATUS_OK;
     }
-
-    case M_ID_DEV_TIMEOUT:
-        _mainWindow->onDeviceStateTimeout();
-        return AM_CB_STATUS_OK;
 
     case AM_MESSAGE_ID_MAKE_RESPONSE(M_ID_DEV_CONNECT_REQ):
     {
@@ -523,7 +517,6 @@ MainWindow::MainWindow(QWidget *parent) :
     // Network state changes are now handled via M_ID_DEV_STATE notification
     // in GuiMainWindow_CoreDevMessageCallback, which calls setDeviceState()
 
-    m_connTimeout = -1;
     m_waitReconnectCount = 0;
     m_connState = deCONZ::UnknownState;
     m_reconnectAfterFirmwareUpdate = false;
@@ -842,7 +835,6 @@ void MainWindow::onControllerEvent(const zmNetEvent &event)
     case deCONZ::NodeDataChanged:
         m_nodeInfo->dataChanged(m_vfsModel, event.node()->address().ext());
         setNodesOnline();
-        m_connTimeout = MaxConnectionTimeout;
         break;
 
     default: break;
@@ -851,7 +843,6 @@ void MainWindow::onControllerEvent(const zmNetEvent &event)
 
 void MainWindow::onDeviceConnected()
 {
-    m_connTimeout = 0;
     setState(StateConnected, __LINE__);
     deCONZ::controller()->setParameter(deCONZ::ParamDeviceName, m_devEntry.friendlyName);
 
@@ -881,9 +872,6 @@ void MainWindow::onDeviceDisconnected(int reason)
 
 void MainWindow::onDeviceState()
 {
-    // reset timeout
-    m_connTimeout = 0;
-
     if (m_deviceConnected)
     {
         if (ui->stackedView->currentWidget() == ui->pageOffline)
@@ -967,65 +955,6 @@ void MainWindow::handleConnectResponse(bool ok)
     }
     m_pendingConnectIdx = -1;
     m_pendingConnectAuto = false;
-}
-
-void MainWindow::onDeviceStateTimeout()
-{
-    m_connTimeout++;
-
-    if (m_deviceFirmwareVersion == FW_ONLY_AVR_BOOTLOADER)
-    {
-        if (m_connTimeout < MaxConnectionTimeoutBootloaderOnly)
-        {
-            return; // try longer, wait fw update
-        }
-    }
-
-    if (m_connTimeout >= MaxConnectionTimeout)
-    {
-        DBG_Printf(DBG_INFO, "device state timeout (handled)\n");
-        m_connTimeout = 0;
-
-        if (deCONZ::appArgumentNumeric("--auto-connect", 1) == 1)
-        {
-            if (m_devs.size() > 0)
-            {
-                if (m_autoConnIdx < m_devs.size())
-                {
-                    deCONZ::DeviceEntry &dev = m_devs[m_autoConnIdx];
-                    dev.failedConnects++;
-
-#if 0
-// TODO causes problems on RaspBee II (and ConBee II?)
-// FIXME reimplement with proper checks and state machine
-                    // tried all devices
-                    if (m_state == StateConnecting)
-                    {
-                        if ((m_devs.size() - 1) == m_autoConnIdx)
-                        {
-                            if (m_restPlugin && deCONZ::controller()->getParameter(deCONZ::ParamFirmwareUpdateActive) == deCONZ::FirmwareUpdateReadyToStart)
-                            {
-                                m_devUpdateCanditate = true;
-                            }
-
-                            if (m_devUpdateCanditate)
-                            {
-                                setState(StateFirmwareNeedUpdate, __LINE__);
-                            }
-                        }
-                    }
-#endif
-                }
-            }
-        }
-
-        // mimic user disconnect
-        devDisconnectClicked();
-    }
-    else
-    {
-        DBG_Printf(DBG_INFO_L2, "device state timeout ignored in state %d\n", m_state);
-    }
 }
 
 void MainWindow::timerEvent(QTimerEvent *event)
@@ -1715,8 +1644,6 @@ void MainWindow::initAutoConnectManager()
         }
 
         const deCONZ::DeviceEntry &dev = m_devs[m_autoConnIdx];
-
-        m_connTimeout = 0;
 
         QString devPath = deCONZ::DEV_ResolvedDevicePath(dev.path);
         if (devPath.isEmpty())

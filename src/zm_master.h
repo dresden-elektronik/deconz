@@ -170,7 +170,6 @@ Q_SIGNALS:
     void deviceConnected();
     void deviceDisconnected(int);
     void deviceState();
-    void deviceStateTimeOut();
     void apsdeDataIndication(const deCONZ::ApsDataIndication&);
     void apsdeDataConfirm(const deCONZ::ApsDataConfirm&);
     void commandQueueEmpty();

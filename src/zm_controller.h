@@ -243,7 +243,6 @@ private slots:
     void deviceConnected();
     void deviceDisconnected(int);
     void deviceStateChanged();
-    void deviceStateTimeout();
     void emitApsDataConfirm(uint8_t id, uint8_t status);
     void onMacPoll(const deCONZ::Address &address, uint32_t lifeTime);
     void onBeacon(const deCONZ::Beacon &beacon);
