@@ -160,7 +160,6 @@ public:
     bool isOpen();
     void taskHandler(MasterEvent event);
     void handleStateIdle(MasterEvent event);
-    void handleEventGotAck();
     void handleTimeouts();
     deCONZ::State netState();
     bool hasFreeApsRequest();
