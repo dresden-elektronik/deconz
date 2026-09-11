@@ -45,6 +45,10 @@ public:
     int open(const QString &port, int baudrate);
     int close();
     int send(zm_command *cmd);
+    /*! Queue raw bytes for writing to the device without zm/protocol framing.
+        Internal use only; must be called while the port is open
+        (isOpen() == true). The write is performed by the com thread. */
+    int sendRaw(const uint8_t *data, uint16_t len);
     bool isOpen();
     bool isApplicationConnected();
 
