@@ -221,11 +221,19 @@ static int GuiMainWindow_GuiNodeMessageCallback(struct am_message *msg)
     if (msg->id == M_ID_GUI_NODE_SELECTED)
     {
         _mainWindow->onNodeSelected();
+        if (_bindDropBox)
+        {
+            _bindDropBox->setSelectedNode(extaddr);
+        }
         return AM_CB_STATUS_OK;
     }
     else if (msg->id == M_ID_GUI_NODE_DESELECTED)
     {
         _mainWindow->onNodeDeselected();
+        if (_bindDropBox)
+        {
+            _bindDropBox->setSelectedNode(0);
+        }
         return AM_CB_STATUS_OK;
     }
     else if (msg->id == M_ID_GUI_NODE_CONTEXT_MENU)

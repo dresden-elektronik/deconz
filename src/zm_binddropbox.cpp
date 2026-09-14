@@ -10,9 +10,11 @@
 
 #include <QButtonGroup>
 #include <QDragEnterEvent>
-#include <QUrl>
-#include <QTimer>
+#include <QHeaderView>
 #include <QMimeData>
+#include <QTableWidget>
+#include <QTimer>
+#include <QUrl>
 #include <QUrlQuery>
 
 #include "zm_binddropbox.h"
@@ -26,13 +28,49 @@ zmBindDropbox::zmBindDropbox(QWidget *parent) :
     m_hasSrcData(false),
     m_srcAddr(0),
     m_dstAddr(0),
+    m_dstGroupAddr(0),
     m_binderAddr(0),
     m_srcEndpoint(0),
     m_dstEndpoint(0),
-    m_cluster(0)
+    m_cluster(0),
+    m_bindingTableInfo(nullptr),
+    m_bindingTableView(nullptr),
+    m_selectedNodeAddr(0)
 {
     ui->setupUi(this);
     setAcceptDrops(true);
+
+    m_bindingTableInfo = new QLabel(this);
+    m_bindingTableInfo->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+    ui->bindingTableLayout->addWidget(m_bindingTableInfo);
+
+    m_bindingTableView = new QTableWidget(this);
+    m_bindingTableView->setColumnCount(7);
+    m_bindingTableView->setHorizontalHeaderLabels({
+        tr("Src"),
+        tr("Src EP"),
+        tr("Cluster"),
+        tr("Address Mode"),
+        tr("Dst"),
+        tr("Dst EP"),
+        tr("Cluster Name")
+    });
+    m_bindingTableView->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    m_bindingTableView->setSelectionBehavior(QAbstractItemView::SelectRows);
+    m_bindingTableView->setSelectionMode(QAbstractItemView::SingleSelection);
+    m_bindingTableView->setAlternatingRowColors(true);
+    m_bindingTableView->verticalHeader()->setVisible(false);
+    m_bindingTableView->horizontalHeader()->setStretchLastSection(true);
+    m_bindingTableView->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
+    m_bindingTableView->horizontalHeader()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
+    m_bindingTableView->horizontalHeader()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
+    m_bindingTableView->horizontalHeader()->setSectionResizeMode(3, QHeaderView::ResizeToContents);
+    m_bindingTableView->horizontalHeader()->setSectionResizeMode(4, QHeaderView::ResizeToContents);
+    m_bindingTableView->horizontalHeader()->setSectionResizeMode(5, QHeaderView::ResizeToContents);
+    m_bindingTableView->horizontalHeader()->setSectionResizeMode(6, QHeaderView::ResizeToContents);
+    m_bindingTableView->setMinimumHeight(140);
+    ui->bindingTableLayout->addWidget(m_bindingTableView);
+
     clear();
 
     connect(ui->bindButton, SIGNAL(clicked()),
@@ -271,6 +309,14 @@ void zmBindDropbox::clear()
     ui->binderExtAddress->clear();
     ui->bindButton->setEnabled(false);
     ui->unbindButton->setEnabled(false);
+    if (m_bindingTableInfo)
+    {
+        m_bindingTableInfo->setText(tr("Binding table: no data"));
+    }
+    if (m_bindingTableView)
+    {
+        m_bindingTableView->setRowCount(0);
+    }
     m_hasSrcData = false;
 }
 
@@ -411,6 +457,171 @@ void zmBindDropbox::bindTimeout()
     checkButtons();
 }
 
+void zmBindDropbox::mgmtBindRspCallback(quint64 srcAddr, quint8 status, quint8 entries, quint8 startIndex, quint8 listCount, const deCONZ::BindingTable &table)
+{
+    if (status == deCONZ::ZdpSuccess)
+    {
+        if (startIndex == 0)
+        {
+            m_bindingCache.remove(srcAddr);
+        }
+
+        updateBindingTableView(srcAddr, table);
+    }
+
+    if (m_selectedNodeAddr == 0 || srcAddr != m_selectedNodeAddr)
+    {
+        return;
+    }
+
+    QString statusText;
+
+    if (status == deCONZ::ZdpSuccess)
+    {
+        statusText = tr("success");
+    }
+    else if (status == deCONZ::ZdpNotSupported)
+    {
+        statusText = tr("failed: not supported");
+    }
+    else
+    {
+        statusText = tr("failed: 0x%1").arg(status, 2, 16, QLatin1Char('0')).toUpper();
+    }
+
+    if (m_bindingTableInfo)
+    {
+        m_bindingTableInfo->setText(tr("Binding table from %1 | status: %2 | entries: %3 | start: %4 | count: %5")
+        .arg(formatAddress64(srcAddr), statusText, QString::number(entries), QString::number(startIndex), QString::number(listCount)));
+    }
+}
+
+void zmBindDropbox::updateBindingTableView(quint64 srcAddr, const deCONZ::BindingTable &table)
+{
+    auto &cache = m_bindingCache[srcAddr];
+
+    // Add new entries to the node cache (duplicates are ignored by QSet).
+    for (auto i = table.cbegin(); i != table.cend(); ++i)
+    {
+        const auto &binding = *i;
+        BindingEntry entry;
+        entry.srcAddr = srcAddr;
+        entry.srcEndpoint = binding.srcEndpoint();
+        entry.clusterId = binding.clusterId();
+        entry.dstAddrMode = static_cast<quint8>(binding.dstAddressMode());
+        entry.dstExtAddr = binding.dstAddress().ext();
+        entry.dstGroupAddr = binding.dstAddress().group();
+        entry.dstEndpoint = binding.dstEndpoint();
+        cache.insert(entry);
+    }
+
+    if (srcAddr == m_selectedNodeAddr)
+    {
+        rebuildBindingTableView();
+    }
+}
+
+void zmBindDropbox::rebuildBindingTableView()
+{
+    if (!m_bindingTableView)
+    {
+        return;
+    }
+
+    const auto cacheIt = m_bindingCache.constFind(m_selectedNodeAddr);
+    const int cacheSize = (cacheIt != m_bindingCache.cend()) ? cacheIt.value().size() : 0;
+    m_bindingTableView->setRowCount(cacheSize);
+
+    if (cacheIt == m_bindingCache.cend())
+    {
+        return;
+    }
+
+    int row = 0;
+    for (const auto &entry : cacheIt.value())
+    {
+        const QString src = formatAddress64(entry.srcAddr);
+        const QString srcEp = formatHex8(entry.srcEndpoint);
+        const QString cluster = formatHex16(entry.clusterId);
+        QString addrMode = tr("Unknown (%1)").arg(formatHex8(entry.dstAddrMode));
+        QString dstAddr;
+        QString dstEp = QLatin1String("-");
+
+        if (entry.dstAddrMode == deCONZ::ApsExtAddress)
+        {
+            addrMode = tr("IEEE");
+            dstAddr = formatAddress64(entry.dstExtAddr);
+            dstEp = formatHex8(entry.dstEndpoint);
+        }
+        else if (entry.dstAddrMode == deCONZ::ApsGroupAddress)
+        {
+            addrMode = tr("Group");
+            dstAddr = formatHex16(entry.dstGroupAddr);
+        }
+
+        const QString clName = clusterName(entry.srcAddr, entry.srcEndpoint, entry.clusterId);
+
+        m_bindingTableView->setItem(row, 0, new QTableWidgetItem(src));
+        m_bindingTableView->setItem(row, 1, new QTableWidgetItem(srcEp));
+        m_bindingTableView->setItem(row, 2, new QTableWidgetItem(cluster));
+        m_bindingTableView->setItem(row, 3, new QTableWidgetItem(addrMode));
+        m_bindingTableView->setItem(row, 4, new QTableWidgetItem(dstAddr));
+        m_bindingTableView->setItem(row, 5, new QTableWidgetItem(dstEp));
+        m_bindingTableView->setItem(row, 6, new QTableWidgetItem(clName));
+
+        row++;
+    }
+}
+
+QString zmBindDropbox::formatAddress64(quint64 value) const
+{
+    return QString(QLatin1String("0x%1")).arg(value, 16, 16, QLatin1Char('0')).toUpper();
+}
+
+QString zmBindDropbox::formatHex16(quint16 value) const
+{
+    return QString(QLatin1String("0x%1")).arg(value, 4, 16, QLatin1Char('0')).toUpper();
+}
+
+QString zmBindDropbox::formatHex8(quint8 value) const
+{
+    return QString(QLatin1String("0x%1")).arg(value, 2, 16, QLatin1Char('0')).toUpper();
+}
+
+QString zmBindDropbox::clusterName(quint64 srcAddr, quint8 srcEndpoint, quint16 clusterId) const
+{
+    const NodeInfo node = deCONZ::controller()->nodeWithMac(srcAddr);
+
+    if (!node.data)
+    {
+        return tr("Unknown");
+    }
+
+    const auto *sd = node.data->getSimpleDescriptor(srcEndpoint);
+    if (!sd)
+    {
+        return tr("Unknown");
+    }
+
+    for (const auto &cl : sd->inClusters())
+    {
+        if (cl.id() == clusterId)
+        {
+            return cl.name();
+        }
+    }
+
+    for (const auto &cl : sd->outClusters())
+    {
+        if (cl.id() == clusterId)
+        {
+            return cl.name();
+        }
+    }
+
+    return tr("Unknown");
+}
+
 void zmBindDropbox::dstRadioButtonClicked(QAbstractButton *button)
 {
     Q_UNUSED(button);
@@ -479,4 +690,43 @@ void zmBindDropbox::dstGroupTextChanged(const QString &text)
 {
     Q_UNUSED(text);
     checkButtons();
+}
+
+void zmBindDropbox::setSelectedNode(quint64 nodeAddr)
+{
+    if (m_selectedNodeAddr != nodeAddr)
+    {
+        m_selectedNodeAddr = nodeAddr;
+
+        if (nodeAddr != 0)
+        {
+            const NodeInfo node = deCONZ::controller()->nodeWithMac(nodeAddr);
+
+            if (node.data)
+            {
+                updateBindingTableView(nodeAddr, node.data->bindingTable());
+            }
+        }
+
+        rebuildBindingTableView();
+
+        if (m_bindingTableInfo)
+        {
+            if (nodeAddr != 0)
+            {
+                if (m_bindingCache.value(nodeAddr).isEmpty())
+                {
+                    m_bindingTableInfo->setText(tr("Binding table: waiting for data from %1").arg(formatAddress64(nodeAddr)));
+                }
+                else
+                {
+                    m_bindingTableInfo->setText(tr("Binding table: cached data for %1").arg(formatAddress64(nodeAddr)));
+                }
+            }
+            else
+            {
+                m_bindingTableInfo->setText(tr("Binding table: no node selected"));
+            }
+        }
+    }
 }
