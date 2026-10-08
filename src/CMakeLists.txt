@@ -55,6 +55,7 @@ set(PUB_INCLUDE_FILES
     zm_cluster_info.h
     zm_command_info.h
     zm_controller.h
+    zm_discover_attributes.h
     zm_gcheckbox.h
     zm_gcluster.h
     zm_gendpoint.h
@@ -129,6 +130,7 @@ add_executable(${PROJECT_NAME}
     zm_cluster_info.cpp
     zm_command_info.cpp
     zm_controller.cpp
+    zm_discover_attributes.cpp
     zm_gcheckbox.cpp
     zm_gcluster.cpp
     zm_gendpoint.cpp

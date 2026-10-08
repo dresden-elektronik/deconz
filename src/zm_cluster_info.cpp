@@ -746,13 +746,12 @@ void zmClusterInfo::showAttributes()
         return;
     }
 
-    if (!m_init)
-    {
-        m_attrModel->setRowCount(0);
-        //m_attrModel->setRowCount(m_cluster.attributes().size() + m_cluster.attributeSets().size());
-        m_attrModel->setColumnCount(6);
-        ui->attrTableView->horizontalHeader()->stretchLastSection();
-    }
+    // Rebuild the model on every refresh because discovery can append attributes,
+    // which invalidates previous row assumptions.
+    m_attrModel->setRowCount(0);
+    m_attrModel->setColumnCount(6);
+    ui->attrTableView->clearSpans();
+    ui->attrTableView->horizontalHeader()->stretchLastSection();
 
     int row = 0;
     QVariant data;
@@ -787,10 +786,7 @@ void zmClusterInfo::showAttributes()
 
             if (!attrSet.description().isEmpty())
             {
-                if (!m_init)
-                {
-                    m_attrModel->setRowCount(m_attrModel->rowCount() + 1);
-                }
+                m_attrModel->setRowCount(m_attrModel->rowCount() + 1);
 
                 m_attrModel->setData(m_attrModel->index(row, 0), QString::number((uint)attrSet.id(), 16));
                 m_attrModel->setData(m_attrModel->index(row, 1), attrSet.description());
@@ -832,10 +828,7 @@ void zmClusterInfo::showAttributes()
                     const deCONZ::ZclDataType &dataType = deCONZ::zclDataBase()->dataType(attr.dataType());
                     QString aid = "0x" + QString("%1").arg(attr.id(), 4, 16, QLatin1Char('0')).toUpper();
 
-                    if (!m_init)
-                    {
-                        m_attrModel->setRowCount(m_attrModel->rowCount() + 1);
-                    }
+                    m_attrModel->setRowCount(m_attrModel->rowCount() + 1);
 
                     m_attrModel->setData(m_attrModel->index(row, 0), aid);
                     m_attrModel->item(row, 0)->setData((uint)attr.id());
@@ -882,10 +875,7 @@ void zmClusterInfo::showAttributes()
             const deCONZ::ZclDataType &dataType = deCONZ::zclDataBase()->dataType(attr.dataType());
             QString aid = "0x" + QString("%1").arg(attr.id(), 4, 16, QLatin1Char('0')).toUpper();
 
-            if (!m_init)
-            {
-                m_attrModel->setRowCount(m_attrModel->rowCount() + 1);
-            }
+            m_attrModel->setRowCount(m_attrModel->rowCount() + 1);
 
             m_attrModel->setData(m_attrModel->index(row, 0), aid);
             m_attrModel->item(row, 0)->setData((uint)attr.id());
