@@ -59,6 +59,17 @@ if (${CMAKE_HOST_SYSTEM_NAME} MATCHES "Linux")
     set_target_properties( GCFFlasher PROPERTIES OUTPUT_NAME "GCFFlasher_internal" )
 endif()
 
+# --- tests (cmake -DDECONZ_BUILD_TESTS=ON, then ctest) ----------------
+option(DECONZ_BUILD_TESTS "Build standalone unit tests" OFF)
+if (DECONZ_BUILD_TESTS AND UNIX)
+    enable_testing()
+    find_package(Threads REQUIRED)
+    add_executable(serial_wakeup_test tests/serial/wakeup.cpp)
+    target_include_directories(serial_wakeup_test PRIVATE src)
+    target_link_libraries(serial_wakeup_test PRIVATE Threads::Threads)
+    add_test(NAME serial_wakeup COMMAND serial_wakeup_test)
+endif()
+
 # --- packageing ------------------------------------------------------
 
 if (APPLE)

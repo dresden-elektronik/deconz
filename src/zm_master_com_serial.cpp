@@ -24,6 +24,7 @@
 #ifdef PL_UNIX
 // native calls
 #include <poll.h>
+#include "serial_wakeup.h"
 #include <fcntl.h> /* open() */
 #include <unistd.h> /* close() */
 #include <sys/types.h>
@@ -261,6 +262,7 @@ struct PL_Thread
     std::mutex mtx_tx;
 
     std::condition_variable cv;
+    SerialWakeup wakeup;
 
     // circular buffer pointers
     unsigned rx_a; // read pointer
@@ -273,22 +275,15 @@ static PL_Thread *plThread;
 
 static void PL_Thread0()
 {
-    {
-        std::lock_guard<std::mutex> lock(plThread->mtx_fd);
-        plThread->running = true;
-        plThread->rx_a = 0;
-        plThread->rx_b = 0;
-        plThread->events = 0;
-    }
-
     using namespace std::chrono_literals;
 
     M_ASSERT(platform.fd != 0);
 
-    struct pollfd fds;
+    struct pollfd fds[2];
 
     int nread = 0;
-    int timeout = 2;
+    const auto txInterval = 2ms;
+    auto lastTx = std::chrono::steady_clock::time_point{};
 
     for (;;)
     {
@@ -298,7 +293,9 @@ static void PL_Thread0()
             if (!plThread->running)
                 break;
 
-            if (plThread->events & TX_EVENT_ID)
+            int timeout = -1;
+            if ((plThread->events & TX_EVENT_ID) &&
+                !(plThread->events & ERR_EVENT_ID))
             {
                 std::unique_lock<std::mutex> tx_lock(plThread->mtx_tx);
 
@@ -308,47 +305,64 @@ static void PL_Thread0()
                 }
                 else
                 {
-                    ComPriv->tx();
+                    // Keep the original 2 ms pacing for a TX burst, also when
+                    // new sends wake the worker before the interval elapsed.
+                    const auto now = std::chrono::steady_clock::now();
+                    if (now - lastTx < txInterval)
+                    {
+                        const auto us = std::chrono::duration_cast<std::chrono::microseconds>(txInterval - (now - lastTx)).count();
+                        timeout = int((us + 999) / 1000);
+                    }
+                    else
+                    {
+                        ComPriv->tx();
+                        lastTx = now;
+                        if (!TXQ_IsEmpty())
+                            timeout = int(txInterval.count());
+                        else
+                            plThread->events &= ~TX_EVENT_ID;
+                    }
                 }
             }
 
-            fds.events = POLLIN;
-            fds.fd = platform.fd;
-            ret = poll(&fds, 1 /* nfds*/ , timeout); // ret == 0: timeout | < 0 error
+            unsigned rxFree;
+            {
+                std::lock_guard<std::mutex> rx_lock(plThread->mtx_rx);
+                rxFree = (TH_RX_BUFFER_SIZE - 1) - (plThread->rx_b - plThread->rx_a);
+            }
+
+            fds[0].events = POLLIN;
+            // After a device error, wait for main-thread disconnect without
+            // repeatedly polling an fd which permanently reports POLLHUP.
+            // With a full RX buffer, wait until the main thread consumed data
+            // instead of spinning on a readable fd.
+            fds[0].fd = ((plThread->events & ERR_EVENT_ID) || rxFree == 0) ? -1 : platform.fd;
+            fds[1].events = POLLIN;
+            fds[1].fd = plThread->wakeup.descriptor();
+            ret = poll(fds, 2 /* nfds */, timeout); // ret == 0: timeout | < 0 error
+
+            // Drain before checking state again: a concurrent producer sets its
+            // state before notifying, so it is either observed on the next
+            // iteration or leaves a readable notification.
+            if (ret > 0 && (fds[1].revents & POLLIN))
+            {
+                plThread->wakeup.drain();
+            }
 
             if (ret > 0)
             {
-                if (fds.revents & (POLLHUP | POLLERR | POLLNVAL))
+                if (fds[0].revents & (POLLHUP | POLLERR | POLLNVAL))
                 {
                     plThread->events |= ERR_EVENT_ID;
                 }
-                else if (fds.revents & POLLIN)
+                else if (fds[0].revents & POLLIN)
                 {
                     unsigned maxsize = 0;
 
                     {
-                        std::unique_lock<std::mutex> tx_lock(plThread->mtx_rx);
-                        unsigned rxa = plThread->rx_a;
-                        unsigned rxb = plThread->rx_b;
-
-                        if (rxa == rxb)
-                        {
-                            maxsize = sizeof(plThread->rxbuf);
-                        }
-                        else
-                        {
-                            for (;(rxb + 1) != rxa; rxb++)
-                            {
-                                maxsize++;
-                                if (maxsize == sizeof(plThread->rxbuf))
-                                        break;
-
-                                if (maxsize == 128)
-                                    break;
-                            }
-
-                            M_ASSERT(maxsize <= sizeof(plThread->rxbuf));
-                        }
+                        std::lock_guard<std::mutex> rx_lock(plThread->mtx_rx);
+                        maxsize = (TH_RX_BUFFER_SIZE - 1) - (plThread->rx_b - plThread->rx_a);
+                        M_ASSERT(maxsize < sizeof(plThread->rxbuf));
                     }
 
                     if (maxsize > 0)
@@ -604,8 +618,16 @@ static int PL_Connect(const char *path, int baudrate)
     plThread = new PL_Thread;
     plThread->rx_a = 0;
     plThread->rx_b = 0;
-    plThread->running = false;
+    plThread->running = true;
     plThread->events = 0;
+    if (!plThread->wakeup.init())
+    {
+        delete plThread;
+        plThread = nullptr;
+        close(platform.fd);
+        platform.fd = 0;
+        return 0;
+    }
     plThread->th = std::thread(PL_Thread0);
 
     return 1;
@@ -619,6 +641,7 @@ static void PL_Disconnect()
     {
 //        std::lock_guard<std::mutex> lock(plThread->mtx_fd);
         plThread->running = false;
+        plThread->wakeup.notify();
     }
 
     plThread->th.join();
@@ -787,6 +810,10 @@ static void SER_ProcessEvents()
     std::lock_guard<std::mutex> rx_lock(plThread->mtx_rx);
 
     plThread->events &= ~TH0_EVENT_ID;
+    // The worker only signals while TH0_EVENT_ID is clear and otherwise
+    // sleeps in poll(). Wake it so it re-checks events raised meanwhile
+    // (e.g. ERR_EVENT_ID) and resumes reading once RX space is freed.
+    plThread->wakeup.notify();
 
     if (plThread->events == 0)
         return;
@@ -991,6 +1018,7 @@ int SerialCom::send(zm_command *cmd)
     {
 //        std::unique_lock<std::mutex> fd_lock(plThread->mtx_fd);
         plThread->events |= TX_EVENT_ID;
+        plThread->wakeup.notify();
     }
 #endif
         return 0;
@@ -1032,6 +1060,7 @@ int SerialCom::sendRaw(const uint8_t *data, uint16_t len)
 #ifndef USE_QSERIAL_PORT
     {
         plThread->events |= TX_EVENT_ID;
+        plThread->wakeup.notify();
     }
 #endif
 
@@ -1165,6 +1194,11 @@ int SerialComPrivate::open(int baudrate)
 
 int SerialComPrivate::close()
 {
+    if (PL_IsConnected())
+    {
+        PL_Disconnect();
+    }
+
     if (protId != PROTO_NO_PROTOCOL)
     {
         protocol_remove(protId);
@@ -1176,11 +1210,6 @@ int SerialComPrivate::close()
     sendPos = 0;
 
     closeReason = deCONZ::DeviceDisconnectNormal;
-
-    if (PL_IsConnected())
-    {
-        PL_Disconnect();
-    }
 
     if (comState != ComStateOff)
     {
