@@ -79,6 +79,8 @@ public:
     QFileSystemWatcher *fsWatcher = nullptr;
     U_Thread thread;
     U_Mutex mutex;
+    bool threadStarted = false;
+    bool mutexInitialized = false;
     // following are protected by <mutex>
     unsigned qrp = 0;
     unsigned qwp = 0;
@@ -442,8 +444,6 @@ HttpServer::HttpServer(QObject *parent) :
 
     U_memset(&d->httpsSock, 0, sizeof(d->httpsSock));
 
-    U_thread_create(&d->thread, httpThreadFunc, d);
-
 #if 0 // TODO this is only a local test setup for new TCP implementation
     {
         if (N_TcpInit(&d->httpsSock.tcp, N_AF_IPV6))
@@ -484,12 +484,29 @@ HttpServer::HttpServer(QObject *parent) :
             }
 
             N_SslInit();
-            U_thread_mutex_init(&d->mutex);
+            if (!U_thread_mutex_init(&d->mutex))
+            {
+                DBG_Printf(DBG_ERROR, "HTTPS mutex initialization failed\n");
+                d->httpsPort = 0;
+                return;
+            }
+            d->mutexInitialized = true;
             connect(this, &HttpServer::threadMessage, this, &HttpServer::processClients, Qt::QueuedConnection);
 
             if (N_SslServerInit(&d->httpsSock, &addr, d->httpsPort, certPath.toStdString().c_str(), keyPath.toStdString().c_str()))
             {
-                DBG_Printf(DBG_INFO, "HTTPS server listening on port: %d\n", d->httpsPort);
+                d->threadStarted = U_thread_create(&d->thread, httpThreadFunc, d) != 0;
+                if (d->threadStarted)
+                {
+                    DBG_Printf(DBG_INFO, "HTTPS server listening on port: %d\n", d->httpsPort);
+                }
+                else
+                {
+                    DBG_Printf(DBG_ERROR, "HTTPS worker creation failed\n");
+                    // N_Ssl has no API to free the server SSL_CTX, same as on regular shutdown.
+                    N_TcpClose(&d->httpsSock.tcp);
+                    d->httpsPort = 0;
+                }
             }
             else
             {
@@ -497,20 +514,30 @@ HttpServer::HttpServer(QObject *parent) :
                 d->httpsPort = 0;
             }
         }
+        else
+        {
+            d->httpsPort = 0;
+        }
     }
 }
 
 HttpServer::~HttpServer()
 {
-    // shutdown thread
-    U_thread_mutex_lock(&d->mutex);
-    d->qrp = d->qwp = 0;
-    queuePut(d, TH_MSG_SHUTDOWN);
-    U_thread_mutex_unlock(&d->mutex);
-    U_thread_join(&d->thread);
+    // Plain HTTP uses Qt sockets and does not need the HTTPS worker.
+    if (d->threadStarted)
+    {
+        U_thread_mutex_lock(&d->mutex);
+        d->qrp = d->qwp = 0;
+        queuePut(d, TH_MSG_SHUTDOWN);
+        U_thread_mutex_unlock(&d->mutex);
+        U_thread_join(&d->thread);
+    }
 
     N_TcpClose(&d->httpsSock.tcp);
-    U_thread_mutex_destroy(&d->mutex);
+    if (d->mutexInitialized)
+    {
+        U_thread_mutex_destroy(&d->mutex);
+    }
     httpInstance = nullptr;
     privHttpInstance = nullptr;
     delete d;
