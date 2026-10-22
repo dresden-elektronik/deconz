@@ -15,6 +15,7 @@
 #include <vector>
 #include "deconz/dbg_trace.h"
 #include "gui/theme.h"
+#include "zm_app.h"
 #include "zm_glink.h"
 #include "gnode_link_group.h"
 #include "zm_graphicsview.h"
@@ -61,8 +62,11 @@ NodeLinkGroup::NodeLinkGroup(zmGraphicsView *view) :
     for (size_t i = 0; i < d->tiles.size(); i++)
     {
         d->tiles[i].paintAge = 0;
-        d->tiles[i].pm = QPixmap(TILE_SIZE, TILE_SIZE);
-        d->tiles[i].pm.fill(Qt::yellow);
+        if (!gHeadlessVersion)
+        {
+            d->tiles[i].pm = QPixmap(TILE_SIZE, TILE_SIZE);
+            d->tiles[i].pm.fill(Qt::yellow);
+        }
     }
 }
 
@@ -75,6 +79,12 @@ NodeLinkGroup::~NodeLinkGroup()
 
 void NodeLinkGroup::paint(QPainter *painter, const QRectF &rect)
 {
+    // Keep the logical link group, but headless mode has no pixel cache.
+    if (gHeadlessVersion)
+    {
+        return;
+    }
+
     const QBrush sceneColor(Theme_Color(ColorNodeViewBackground));
 
     d->paintAge++;
